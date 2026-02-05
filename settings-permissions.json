@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash($HOME/.claude/skills/pk-tmux/tmux-run.sh:*)",
+      "Bash($HOME/.claude/skills/pk-tmux/tmux-status.sh:*)",
+      "Bash($HOME/.claude/skills/pk-tmux/tmux-create.sh:*)",
+      "Bash($HOME/.claude/skills/pk-tmux/tmux-wait.sh:*)",
+      "Bash($HOME/.claude/skills/sandbox/sandbox-create.sh:*)",
+      "Bash($HOME/.claude/skills/sandbox/sandbox-finish.sh:*)"
+    ]
+  }
+}
