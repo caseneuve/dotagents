@@ -9,9 +9,10 @@ while [[ $# -gt 0 ]]; do
         --force) FORCE=true; shift ;;
         --claude) MODE="claude"; shift ;;
         --agents) MODE="agents"; shift ;;
+        --pi) MODE="pi"; shift ;;
         --all) MODE="all"; shift ;;
         *)
-            echo "Usage: $0 [--claude|--agents|--all] [--force]" >&2
+            echo "Usage: $0 [--claude|--agents|--pi|--all] [--force]" >&2
             exit 1
             ;;
     esac
@@ -20,6 +21,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_SOURCE_DIR="$SCRIPT_DIR/claude"
 AGENTS_SOURCE_DIR="$SCRIPT_DIR/agents"
+PI_SOURCE_DIR="$SCRIPT_DIR/pi"
 SHARED_DIR="$SCRIPT_DIR/shared"
 
 if [[ ! -d "$SHARED_DIR" ]]; then
@@ -268,6 +270,26 @@ bootstrap_agents() {
     echo "Agent bootstrap done."
 }
 
+bootstrap_pi() {
+    local target_dir="$HOME/.pi/agent"
+
+    [[ -d "$PI_SOURCE_DIR" ]] || {
+        echo "Error: Pi source directory '$PI_SOURCE_DIR' does not exist" >&2
+        exit 1
+    }
+
+    echo "Bootstrapping Pi dotfiles..."
+    echo "Source: $PI_SOURCE_DIR"
+    echo "Target: $target_dir"
+    [[ "$FORCE" == true ]] && echo "Force mode: enabled"
+    echo
+
+    link_tree "$PI_SOURCE_DIR" "$target_dir"
+
+    echo
+    echo "Pi bootstrap done."
+}
+
 case "$MODE" in
     claude)
         bootstrap_claude
@@ -275,10 +297,15 @@ case "$MODE" in
     agents)
         bootstrap_agents
         ;;
+    pi)
+        bootstrap_pi
+        ;;
     all)
         bootstrap_claude
         echo
         bootstrap_agents
+        echo
+        bootstrap_pi
         ;;
 esac
 
