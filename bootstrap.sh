@@ -3,17 +3,30 @@ set -euo pipefail
 
 FORCE=false
 MODE="all"
+PI_PROJECT_TARGET=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --force) FORCE=true; shift ;;
-        --claude) MODE="claude"; shift ;;
-        --agents) MODE="agents"; shift ;;
-        --pi) MODE="pi"; shift ;;
-        --all) MODE="all"; shift ;;
+        --force)
+            FORCE=true
+            shift
+            ;;
+        claude|agents|pi|all)
+            if [[ "$MODE" != "all" ]]; then
+                echo "Error: mode already set to '$MODE'" >&2
+                exit 1
+            fi
+            MODE="$1"
+            shift
+            ;;
         *)
-            echo "Usage: $0 [--claude|--agents|--pi|--all] [--force]" >&2
-            exit 1
+            if [[ "$MODE" == "pi" && -z "$PI_PROJECT_TARGET" ]]; then
+                PI_PROJECT_TARGET="$1"
+                shift
+            else
+                echo "Usage: $0 [claude|agents|pi [target-dir]|all] [--force]" >&2
+                exit 1
+            fi
             ;;
     esac
 done
@@ -173,6 +186,32 @@ link_single_file() {
     fi
 }
 
+copy_single_file() {
+    local source_file="$1"
+    local target_file="$2"
+
+    [[ -f "$source_file" ]] || return 0
+
+    ensure_dir "$(dirname "$target_file")"
+
+    if [[ -L "$target_file" ]]; then
+        existing_link="$(readlink "$target_file")"
+        echo "Removing stale symlink: $target_file -> $existing_link"
+        rm "$target_file"
+    elif [[ -e "$target_file" ]]; then
+        if [[ "$FORCE" == true ]]; then
+            echo "Removing existing file (--force): $target_file"
+            rm -rf "$target_file"
+        else
+            echo "Warning: $target_file exists, skipping copy (use --force to overwrite)"
+            return 0
+        fi
+    fi
+
+    echo "Copying: $(basename "$target_file")"
+    cp "$source_file" "$target_file"
+}
+
 merge_claude_settings() {
     local target_dir="$1"
     local hooks_config="$SCRIPT_DIR/settings-hooks.json"
@@ -271,12 +310,39 @@ bootstrap_agents() {
 }
 
 bootstrap_pi() {
-    local target_dir="$HOME/.pi/agent"
-
     [[ -d "$PI_SOURCE_DIR" ]] || {
         echo "Error: Pi source directory '$PI_SOURCE_DIR' does not exist" >&2
         exit 1
     }
+
+    if [[ -n "$PI_PROJECT_TARGET" ]]; then
+        local target_dir
+        target_dir="$(cd "$PI_PROJECT_TARGET" 2>/dev/null && pwd || true)"
+        if [[ -z "$target_dir" ]]; then
+            target_dir="$PI_PROJECT_TARGET"
+        fi
+
+        echo "Bootstrapping Pi project helpers..."
+        echo "Source: $PI_SOURCE_DIR"
+        echo "Target: $target_dir"
+        [[ "$FORCE" == true ]] && echo "Force mode: enabled"
+        echo
+
+        ensure_dir "$target_dir"
+        link_single_file "$PI_SOURCE_DIR/justfile" "$target_dir/justfile"
+
+        if [[ -f "$HOME/.pi/.env" ]]; then
+            copy_single_file "$HOME/.pi/.env" "$target_dir/.env"
+        else
+            echo "Warning: $HOME/.pi/.env does not exist, skipping .env copy"
+        fi
+
+        echo
+        echo "Pi project bootstrap done."
+        return 0
+    fi
+
+    local target_dir="$HOME/.pi/agent"
 
     echo "Bootstrapping Pi dotfiles..."
     echo "Source: $PI_SOURCE_DIR"
@@ -301,6 +367,10 @@ case "$MODE" in
         bootstrap_pi
         ;;
     all)
+        if [[ -n "$PI_PROJECT_TARGET" ]]; then
+            echo "Error: a target directory is only supported with --pi" >&2
+            exit 1
+        fi
         bootstrap_claude
         echo
         bootstrap_agents

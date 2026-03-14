@@ -7,6 +7,7 @@ Personal agent configuration. The repo keeps the original Claude-oriented setup 
 ```text
 claude/   # Original ~/.claude tree
 agents/   # Ported ~/.agents tree
+pi/       # Shared Pi defaults (global config + project launcher files)
 shared/   # Shared hooks and helper scripts used by both
 ```
 
@@ -24,10 +25,12 @@ The `shared/` tree holds the common helper scripts and hooks so both platforms u
 ./bootstrap.sh
 ```
 
-- `bootstrap.sh --claude` symlinks the Claude setup into `~/.claude/`
-- `bootstrap.sh --agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
-- `bootstrap.sh` defaults to `--all`
-- both accept `--force` to overwrite existing non-symlink files
+- `bootstrap.sh claude` symlinks the Claude setup into `~/.claude/`
+- `bootstrap.sh agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
+- `bootstrap.sh pi` symlinks the Pi config into `~/.pi/agent/`
+- `bootstrap.sh pi <target-dir>` links `pi/justfile` into `<target-dir>/justfile` and copies `~/.pi/.env` to `<target-dir>/.env`
+- `bootstrap.sh` defaults to `all`
+- all modes accept `--force` to overwrite existing non-symlink files
 
 Both scripts preserve directory structure, skip already-correct links, replace stale symlinks, and avoid overwriting regular files unless forced.
 
