@@ -27,6 +27,30 @@ if [[ ! -d "$SHARED_DIR" ]]; then
     exit 1
 fi
 
+ensure_dir() {
+    local path="$1"
+
+    if [[ -d "$path" ]]; then
+        return 0
+    fi
+
+    if [[ -L "$path" ]]; then
+        local link_target
+        link_target="$(readlink "$path")"
+
+        if [[ "$link_target" != /* ]]; then
+            link_target="$(cd "$(dirname "$path")" && pwd)/$link_target"
+        fi
+
+        echo "Creating symlink target directory: $link_target"
+        mkdir -p "$link_target"
+        return 0
+    fi
+
+    echo "Creating directory: $path"
+    mkdir -p "$path"
+}
+
 link_tree() {
     local source_dir="$1"
     local target_dir="$2"
@@ -38,10 +62,7 @@ link_tree() {
         target_file="$target_dir/$rel_path"
         target_parent="$(dirname "$target_file")"
 
-        if [[ ! -d "$target_parent" ]]; then
-            echo "Creating directory: $target_parent"
-            mkdir -p "$target_parent"
-        fi
+        ensure_dir "$target_parent"
 
         if [[ -L "$target_file" ]]; then
             existing_link="$(readlink "$target_file")"
@@ -87,10 +108,7 @@ link_skill_tree() {
             rm "$target_dir"
         fi
 
-        if [[ ! -d "$target_parent" ]]; then
-            echo "Creating directory: $target_parent"
-            mkdir -p "$target_parent"
-        fi
+        ensure_dir "$target_parent"
 
         if [[ -L "$target_file" ]]; then
             existing_link="$(readlink "$target_file")"
@@ -127,7 +145,7 @@ link_single_file() {
 
     [[ -f "$source_file" ]] || return 0
 
-    mkdir -p "$(dirname "$target_file")"
+    ensure_dir "$(dirname "$target_file")"
 
     if [[ -L "$target_file" ]]; then
         existing_link="$(readlink "$target_file")"
