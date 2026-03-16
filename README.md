@@ -1,14 +1,16 @@
 # dotagents
 
-Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, and shared helper implementations under `shared/`.
+Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, shared helper implementations under `shared/`, and Pi extensions/themes under `pi/`.
 
 ## Contents
 
 ```text
 claude/   # Original ~/.claude tree
 agents/   # Ported ~/.agents tree
-pi/       # Shared Pi defaults (global config + project launcher files)
+pi/       # Pi extensions and themes
 shared/   # Shared hooks and helper scripts used by both
+scripts/  # Repo-local Babashka scripts (e.g. bootstrap)
+test/     # Unit and E2E tests
 ```
 
 The `agents/` tree includes:
@@ -21,18 +23,37 @@ The `shared/` tree holds the common helper scripts and hooks so both platforms u
 
 ## Installation
 
+Run via the Babashka task:
+
 ```bash
-./bootstrap.sh
+bb bootstrap
 ```
 
-- `bootstrap.sh claude` symlinks the Claude setup into `~/.claude/`
-- `bootstrap.sh agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
-- `bootstrap.sh pi` symlinks the Pi config into `~/.pi/agent/`
-- `bootstrap.sh pi <target-dir>` links `pi/justfile` into `<target-dir>/justfile` and copies `~/.pi/.env` to `<target-dir>/.env`
-- `bootstrap.sh` defaults to `all`
-- all modes accept `--force` to overwrite existing non-symlink files
+Modes:
 
-Both scripts preserve directory structure, skip already-correct links, replace stale symlinks, and avoid overwriting regular files unless forced.
+- `bb bootstrap claude` links the Claude setup into `~/.claude/` and merges Claude settings fragments into `~/.claude/settings.json`
+- `bb bootstrap agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
+- `bb bootstrap pi` links only Pi extensions and themes into `~/.pi/agent/`
+- `bb bootstrap` defaults to `all`
+- all modes accept `--force` to overwrite existing non-symlink files
+- all modes accept `--dry-run` to print planned changes without writing
+
+Behavior:
+
+- preserve directory structure
+- skip already-correct links
+- replace stale symlinks
+- avoid overwriting regular files unless forced
+
+## Testing
+
+Tests run in podman so they do not touch the host environment.
+
+```bash
+bb test
+bb test:unit
+bb test:e2e
+```
 
 ## Port Assessment
 
