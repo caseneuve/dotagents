@@ -4,7 +4,7 @@
  {:init
   (do
     (require '[clojure.string :as str])
-    (def end2edn-root "/home/piotr/git/end2edn")
+    (def end2edn-root (str (System/getenv "HOME") "/git/end2edn"))
     (def podman-base
       (str "podman run --rm "
            "--network none "
