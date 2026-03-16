@@ -129,20 +129,27 @@ function computeBranchTrail(ctx: ExtensionContext): string[] {
   return uniqueSegments(segments);
 }
 
+function countLabels(ctx: ExtensionContext): number {
+  const entries = ctx.sessionManager.getEntries() as SessionEntryLike[];
+  let count = 0;
+
+  for (const entry of entries) {
+    if (ctx.sessionManager.getLabel(entry.id)) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 function renderStatus(ctx: ExtensionContext): string {
   const theme = ctx.ui.theme;
   const trail = computeBranchTrail(ctx);
-  if (trail.length === 0) {
-    return theme.fg("dim", "main");
-  }
+  const labelCount = countLabels(ctx);
+  const branchText = trail.join(" →  ");
+  const suffix = labelCount > 0 ? ` (${labelCount})` : "";
 
-  const [current, ...ancestors] = trail;
-  const currentBadge = `\x1b[7m${theme.fg("dim", ` ${current} `)}\x1b[27m`;
-  if (ancestors.length === 0) {
-    return currentBadge;
-  }
-
-  return `${currentBadge}${theme.fg("dim", " -> ")}${ancestors.join(theme.fg("dim", " ->  "))}`;
+  return theme.fg("dim", `[⋔ ${branchText}]${suffix}`);
 }
 
 function updateStatus(ctx: ExtensionContext, lastRendered?: string): string {

@@ -15,7 +15,7 @@ These resources are intended to be linked into Pi's default discovery locations 
 ## Extensions
 
 ### `extensions/branch-status.ts`
-Shows the current branch context in the status area.
+Shows the current conversational branch context in the status area.
 
 What it does:
 - infers the current branch path from the active session leaf
@@ -27,6 +27,19 @@ What it does:
 Why it exists:
 - make tree navigation and branching more legible during long sessions
 - surface the current conversational branch without opening `/tree`
+
+### `extensions/runtime-footer.ts`
+Replaces the default footer with a denser single-line runtime status.
+
+What it does:
+- keeps cwd and git branch on the left side
+- keeps model, rounded cost, and context percentage on the right side
+- removes the noisier token counters from the default footer
+- keeps the layout on a single line with lightweight color emphasis
+
+Why it exists:
+- fit the most useful runtime context into one readable line
+- reduce footer noise while keeping model, cost, and context pressure visible
 
 ### `extensions/bookmark.ts`
 Adds a `/bookmark` command for quickly labeling a prompt on the current branch.
