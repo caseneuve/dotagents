@@ -59,6 +59,36 @@ Notes:
 - prompt selection is restricted to the current branch path
 - labels can later be edited or removed in the standard `/tree` UI
 
+### `extensions/repo-todos.ts`
+Adds a `/repo-todos` command for browsing repository todos stored in `./todos/`.
+
+What it does:
+- scans the current repo `./todos` directory for todo markdown files
+- groups parent items and sub-tasks into a navigable tree
+- treats `done`, `closed`, and `completed` as completed state for filtering
+- shows a side-by-side list and preview in a centered framed overlay
+- supports summary and markdown preview modes
+- stays read-only in this first iteration
+
+Usage:
+- `/repo-todos`
+
+Keybindings:
+- `↑/↓` or `j/k` — move selection / scroll preview
+- `←/→` or `h/l` — collapse/expand in the todo tree
+- `gg` / `G` — jump to top/bottom
+- `tab` — switch focus between list and preview
+- `s` — toggle sort mode
+- `d` — hide/show completed items
+- `m` — toggle summary/markdown preview
+- `r` — rescan todos
+- `esc` — close
+
+Notes:
+- operates on the current working directory only
+- intended for todo files following the add-todo-style frontmatter schema
+- epics and parents with children can be folded and unfolded
+
 ## Design Notes
 
 These extensions are intentionally small and composable.

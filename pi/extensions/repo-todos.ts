@@ -1,0 +1,876 @@
+import { getMarkdownTheme, type ExtensionAPI, type Theme } from "@mariozechner/pi-coding-agent";
+import {
+  Key,
+  Markdown,
+  matchesKey,
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
+type SortMode = "number" | "state";
+type PreviewMode = "summary" | "markdown";
+type FocusPane = "list" | "preview";
+
+type TodoFrontmatter = {
+  title: string;
+  status: string;
+  priority: string;
+  type: string;
+  created: string;
+  parent: string | null;
+  blockedBy: string[];
+  blocks: string[];
+};
+
+type TodoRecord = {
+  id: string;
+  slug: string;
+  path: string;
+  filename: string;
+  frontmatter: TodoFrontmatter;
+  body: string;
+  sections: Map<string, string>;
+  children: TodoRecord[];
+  warnings: string[];
+  valid: boolean;
+};
+
+type FlattenedRow = {
+  todo: TodoRecord;
+  depth: number;
+};
+
+const COMMAND_NAME = "repo-todos";
+const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
+const REQUIRED_FIELDS = [
+  "title",
+  "status",
+  "priority",
+  "type",
+  "created",
+  "parent",
+  "blocked-by",
+  "blocks",
+] as const;
+const STATUS_ORDER = new Map<string, number>([
+  ["in_progress", 0],
+  ["open", 1],
+  ["blocked", 2],
+  ["done", 3],
+]);
+
+function stripQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseArrayValue(value: string): string[] {
+  const trimmed = value.trim();
+  if (trimmed === "[]") return [];
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner
+      .split(",")
+      .map((item) => stripQuotes(item))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [stripQuotes(trimmed)].filter(Boolean);
+}
+
+function normalizeStatus(status: string): string {
+  const normalized = stripQuotes(status).trim().toLowerCase();
+  if (normalized === "closed" || normalized === "completed") {
+    return "done";
+  }
+  return normalized;
+}
+
+function normalizeParent(value: string): string | null {
+  const normalized = stripQuotes(value).trim();
+  if (!normalized || normalized.toLowerCase() === "null") {
+    return null;
+  }
+  return normalized;
+}
+
+function parseFrontmatter(content: string): {
+  raw: Map<string, string>;
+  body: string;
+} | null {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!match) {
+    return null;
+  }
+
+  const rawBlock = match[1];
+  const body = match[2] ?? "";
+  const raw = new Map<string, string>();
+
+  for (const line of rawBlock.split(/\r?\n/)) {
+    const lineMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!lineMatch) continue;
+    raw.set(lineMatch[1], lineMatch[2]);
+  }
+
+  return { raw, body };
+}
+
+function parseSections(body: string): Map<string, string> {
+  const sections = new Map<string, string>();
+  const lines = body.split(/\r?\n/);
+  let current = "";
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (!current) return;
+    sections.set(current, buffer.join("\n").trim());
+  };
+
+  for (const line of lines) {
+    const heading = line.match(/^##\s+(.+)$/);
+    if (heading) {
+      flush();
+      current = heading[1].trim();
+      buffer = [];
+      continue;
+    }
+    if (current) buffer.push(line);
+  }
+
+  flush();
+  return sections;
+}
+
+function compareIds(a: string, b: string): number {
+  const parse = (id: string) => id.split(".").map((part) => Number(part));
+  const aa = parse(a);
+  const bb = parse(b);
+  const max = Math.max(aa.length, bb.length);
+  for (let i = 0; i < max; i += 1) {
+    const av = aa[i] ?? -1;
+    const bv = bb[i] ?? -1;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
+
+function compareTodos(a: TodoRecord, b: TodoRecord, sortMode: SortMode): number {
+  if (sortMode === "state") {
+    const aState = STATUS_ORDER.get(a.frontmatter.status) ?? 99;
+    const bState = STATUS_ORDER.get(b.frontmatter.status) ?? 99;
+    if (aState !== bState) return aState - bState;
+  }
+  return compareIds(a.id, b.id);
+}
+
+function hasActiveDescendant(todo: TodoRecord): boolean {
+  if (todo.frontmatter.status !== "done") return true;
+  return todo.children.some((child) => hasActiveDescendant(child));
+}
+
+function collectDescendantIds(todo: TodoRecord): string[] {
+  const ids: string[] = [];
+  for (const child of todo.children) {
+    ids.push(child.id, ...collectDescendantIds(child));
+  }
+  return ids;
+}
+
+function renderState(theme: Theme, status: string): string {
+  const color =
+    status === "in_progress"
+      ? "accent"
+      : status === "open"
+        ? "warning"
+        : status === "blocked"
+          ? "error"
+          : status === "done"
+            ? "success"
+            : "muted";
+  return theme.fg(color, `[${status}]`);
+}
+
+function renderPriority(theme: Theme, priority: string): string {
+  const color =
+    priority === "high"
+      ? "error"
+      : priority === "medium"
+        ? "warning"
+        : priority === "low"
+          ? "dim"
+          : "muted";
+  return theme.fg(color, priority);
+}
+
+function wrapBlock(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const wrapped = wrapTextWithAnsi(line.length > 0 ? line : " ", Math.max(1, width));
+    if (wrapped.length === 0) lines.push("");
+    else lines.push(...wrapped);
+  }
+  return lines;
+}
+
+function padVisible(text: string, width: number): string {
+  const truncated = truncateToWidth(text, width);
+  const missing = Math.max(0, width - visibleWidth(truncated));
+  return truncated + " ".repeat(missing);
+}
+
+async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
+  const todosDir = path.join(cwd, "todos");
+  const issues: string[] = [];
+  let entries: string[] = [];
+
+  try {
+    entries = await fs.readdir(todosDir);
+  } catch {
+    return { todosDir, roots: [], issues: [`No todos directory found at ${todosDir}`] };
+  }
+
+  const files = entries
+    .map((name) => {
+      const match = name.match(TODO_FILENAME_RE);
+      if (!match) return null;
+      return { name, id: match[1], slug: match[2] };
+    })
+    .filter((entry): entry is { name: string; id: string; slug: string } => Boolean(entry))
+    .sort((a, b) => compareIds(a.id, b.id));
+
+  const todos: TodoRecord[] = [];
+
+  for (const file of files) {
+    const fullPath = path.join(todosDir, file.name);
+    const warnings: string[] = [];
+
+    let content = "";
+    try {
+      content = await fs.readFile(fullPath, "utf8");
+    } catch (error) {
+      issues.push(`Failed to read ${file.name}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    const parsed = parseFrontmatter(content);
+    if (!parsed) {
+      todos.push({
+        id: file.id,
+        slug: file.slug,
+        path: fullPath,
+        filename: file.name,
+        frontmatter: {
+          title: file.slug,
+          status: "unknown",
+          priority: "unknown",
+          type: "unknown",
+          created: "",
+          parent: null,
+          blockedBy: [],
+          blocks: [],
+        },
+        body: content,
+        sections: new Map(),
+        children: [],
+        warnings: ["Malformed or missing frontmatter"],
+        valid: false,
+      });
+      continue;
+    }
+
+    for (const field of REQUIRED_FIELDS) {
+      if (!parsed.raw.has(field)) {
+        warnings.push(`Missing field: ${field}`);
+      }
+    }
+
+    const status = normalizeStatus(parsed.raw.get("status") ?? "unknown");
+    const type = stripQuotes(parsed.raw.get("type") ?? "unknown").trim().toLowerCase();
+    const priority = stripQuotes(parsed.raw.get("priority") ?? "unknown").trim().toLowerCase();
+    const parent = normalizeParent(parsed.raw.get("parent") ?? "null");
+
+    if (!["feature", "bug", "refactor", "chore", "epic"].includes(type)) {
+      warnings.push(`Unexpected type: ${type}`);
+    }
+    if (!["high", "medium", "low"].includes(priority)) {
+      warnings.push(`Unexpected priority: ${priority}`);
+    }
+    if (!["open", "in_progress", "blocked", "done"].includes(status)) {
+      warnings.push(`Unexpected status: ${status}`);
+    }
+
+    todos.push({
+      id: file.id,
+      slug: file.slug,
+      path: fullPath,
+      filename: file.name,
+      frontmatter: {
+        title: stripQuotes(parsed.raw.get("title") ?? file.slug),
+        status,
+        priority,
+        type,
+        created: stripQuotes(parsed.raw.get("created") ?? ""),
+        parent,
+        blockedBy: parseArrayValue(parsed.raw.get("blocked-by") ?? "[]"),
+        blocks: parseArrayValue(parsed.raw.get("blocks") ?? "[]"),
+      },
+      body: parsed.body.trim(),
+      sections: parseSections(parsed.body.trim()),
+      children: [],
+      warnings,
+      valid: warnings.length === 0,
+    });
+  }
+
+  const byId = new Map<string, TodoRecord>();
+  for (const todo of todos) byId.set(todo.id, todo);
+
+  const roots: TodoRecord[] = [];
+  for (const todo of todos) {
+    const parentId = todo.frontmatter.parent;
+    if (parentId && byId.has(parentId)) {
+      byId.get(parentId)!.children.push(todo);
+    } else {
+      if (parentId && !byId.has(parentId)) {
+        todo.warnings.push(`Parent not found: ${parentId}`);
+        todo.valid = false;
+      }
+      roots.push(todo);
+    }
+  }
+
+  return { todosDir, roots, issues };
+}
+
+class RepoTodosComponent {
+  private roots: TodoRecord[] = [];
+  private sortMode: SortMode = "number";
+  private previewMode: PreviewMode = "summary";
+  private focusPane: FocusPane = "list";
+  private hideDone = true;
+  private selectedId?: string;
+  private expanded = new Set<string>();
+  private listScroll = 0;
+  private previewScroll = 0;
+  private issues: string[] = [];
+  private loading = true;
+  private lastError?: string;
+  private previewCache = new Map<string, string[]>();
+  private pendingG = false;
+
+  constructor(
+    private cwd: string,
+    private theme: Theme,
+    private requestRender: () => void,
+    private onClose: () => void,
+  ) {}
+
+  async init(): Promise<void> {
+    await this.reload();
+  }
+
+  async reload(): Promise<void> {
+    this.loading = true;
+    this.lastError = undefined;
+    this.requestRender();
+
+    try {
+      const previousSelection = this.selectedId;
+      const { roots, issues } = await scanTodos(this.cwd);
+      this.roots = roots;
+      this.issues = issues;
+      this.previewCache.clear();
+      this.seedExpansion(this.roots);
+      const rows = this.getVisibleRows();
+      this.selectedId = rows.find((row) => row.todo.id === previousSelection)?.todo.id ?? rows[0]?.todo.id;
+      this.clampSelectionIntoView(this.getBodyHeight());
+      this.previewScroll = 0;
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.loading = false;
+      this.requestRender();
+    }
+  }
+
+  private seedExpansion(todos: TodoRecord[]): void {
+    const next = new Set<string>();
+    const walk = (todo: TodoRecord, depth: number) => {
+      const isExpandable = todo.children.length > 0;
+      const shouldExpand = depth === 0 || hasActiveDescendant(todo) || todo.frontmatter.type === "epic";
+      if (isExpandable && shouldExpand) {
+        next.add(todo.id);
+      }
+      for (const child of todo.children) walk(child, depth + 1);
+    };
+    for (const todo of todos) walk(todo, 0);
+    for (const id of this.expanded) next.add(id);
+    this.expanded = next;
+  }
+
+  private getBodyHeight(): number {
+    const rows = process.stdout.rows ?? 30;
+    return Math.max(10, rows - 12);
+  }
+
+  private isDone(todo: TodoRecord): boolean {
+    return todo.frontmatter.status === "done";
+  }
+
+  private shouldShow(todo: TodoRecord): boolean {
+    if (!this.hideDone) return true;
+    if (!this.isDone(todo)) return true;
+    return todo.children.some((child) => this.shouldShow(child));
+  }
+
+  private getVisibleChildren(todo: TodoRecord): TodoRecord[] {
+    return [...todo.children]
+      .filter((child) => this.shouldShow(child))
+      .sort((a, b) => compareTodos(a, b, this.sortMode));
+  }
+
+  private getVisibleRoots(): TodoRecord[] {
+    return [...this.roots]
+      .filter((todo) => this.shouldShow(todo))
+      .sort((a, b) => compareTodos(a, b, this.sortMode));
+  }
+
+  private getVisibleRows(): FlattenedRow[] {
+    const rows: FlattenedRow[] = [];
+    const walk = (todo: TodoRecord, depth: number) => {
+      rows.push({ todo, depth });
+      const children = this.getVisibleChildren(todo);
+      if (children.length > 0 && this.expanded.has(todo.id)) {
+        for (const child of children) walk(child, depth + 1);
+      }
+    };
+    for (const todo of this.getVisibleRoots()) walk(todo, 0);
+    return rows;
+  }
+
+  private getSelectedRowIndex(rows = this.getVisibleRows()): number {
+    const index = rows.findIndex((row) => row.todo.id === this.selectedId);
+    return index >= 0 ? index : 0;
+  }
+
+  private getSelectedTodo(): TodoRecord | undefined {
+    return this.getVisibleRows()[this.getSelectedRowIndex()]?.todo;
+  }
+
+  private clampSelectionIntoView(bodyHeight: number): void {
+    const rows = this.getVisibleRows();
+    if (rows.length === 0) {
+      this.listScroll = 0;
+      this.selectedId = undefined;
+      return;
+    }
+
+    if (!this.selectedId || !rows.some((row) => row.todo.id === this.selectedId)) {
+      this.selectedId = rows[0].todo.id;
+    }
+
+    const index = this.getSelectedRowIndex(rows);
+    if (index < this.listScroll) {
+      this.listScroll = index;
+    } else if (index >= this.listScroll + bodyHeight) {
+      this.listScroll = index - bodyHeight + 1;
+    }
+
+    const maxScroll = Math.max(0, rows.length - bodyHeight);
+    this.listScroll = Math.max(0, Math.min(this.listScroll, maxScroll));
+  }
+
+  private moveSelection(delta: number): void {
+    const rows = this.getVisibleRows();
+    if (rows.length === 0) return;
+    const current = this.getSelectedRowIndex(rows);
+    const next = Math.max(0, Math.min(rows.length - 1, current + delta));
+    this.selectedId = rows[next].todo.id;
+    this.previewScroll = 0;
+    this.clampSelectionIntoView(this.getBodyHeight());
+  }
+
+  private toggleExpanded(todo: TodoRecord | undefined): void {
+    if (!todo || this.getVisibleChildren(todo).length === 0) return;
+    if (this.expanded.has(todo.id)) {
+      const descendants = collectDescendantIds(todo);
+      this.expanded.delete(todo.id);
+      for (const id of descendants) this.expanded.delete(id);
+    } else {
+      this.expanded.add(todo.id);
+    }
+    this.clampSelectionIntoView(this.getBodyHeight());
+  }
+
+  private expandSelected(): void {
+    const todo = this.getSelectedTodo();
+    if (!todo) return;
+    const visibleChildren = this.getVisibleChildren(todo);
+    if (visibleChildren.length > 0 && !this.expanded.has(todo.id)) {
+      this.expanded.add(todo.id);
+      this.clampSelectionIntoView(this.getBodyHeight());
+      return;
+    }
+    if (visibleChildren.length > 0) {
+      const rows = this.getVisibleRows();
+      const current = this.getSelectedRowIndex(rows);
+      const next = rows[current + 1];
+      if (next) {
+        this.selectedId = next.todo.id;
+        this.previewScroll = 0;
+        this.clampSelectionIntoView(this.getBodyHeight());
+      }
+    }
+  }
+
+  private collapseSelected(): void {
+    const rows = this.getVisibleRows();
+    const selected = rows[this.getSelectedRowIndex(rows)];
+    if (!selected) return;
+
+    if (this.getVisibleChildren(selected.todo).length > 0 && this.expanded.has(selected.todo.id)) {
+      this.expanded.delete(selected.todo.id);
+      this.clampSelectionIntoView(this.getBodyHeight());
+      return;
+    }
+
+    if (selected.depth <= 0) return;
+    for (let i = this.getSelectedRowIndex(rows) - 1; i >= 0; i -= 1) {
+      if (rows[i].depth === selected.depth - 1) {
+        this.selectedId = rows[i].todo.id;
+        this.previewScroll = 0;
+        this.clampSelectionIntoView(this.getBodyHeight());
+        return;
+      }
+    }
+  }
+
+  private cycleSortMode(): void {
+    this.sortMode = this.sortMode === "number" ? "state" : "number";
+    this.clampSelectionIntoView(this.getBodyHeight());
+  }
+
+  private toggleHideDone(): void {
+    this.hideDone = !this.hideDone;
+    this.clampSelectionIntoView(this.getBodyHeight());
+    this.previewScroll = 0;
+  }
+
+  private togglePreviewMode(): void {
+    this.previewMode = this.previewMode === "summary" ? "markdown" : "summary";
+    this.previewScroll = 0;
+  }
+
+  private buildSummaryPreview(todo: TodoRecord, width: number): string[] {
+    const lines: string[] = [];
+    const heading = `${todo.frontmatter.title} (${todo.id})`;
+    lines.push(...wrapBlock(this.theme.fg("accent", this.theme.bold(heading)), width));
+    lines.push(...wrapBlock(`${renderState(this.theme, todo.frontmatter.status)}  ${this.theme.fg("muted", todo.frontmatter.type)}  ${renderPriority(this.theme, todo.frontmatter.priority)}`, width));
+    lines.push(...wrapBlock(this.theme.fg("dim", todo.path), width));
+
+    if (todo.frontmatter.parent) {
+      lines.push(...wrapBlock(this.theme.fg("muted", `Parent: ${todo.frontmatter.parent}`), width));
+    }
+    if (todo.frontmatter.blockedBy.length > 0) {
+      lines.push(...wrapBlock(this.theme.fg("warning", `Blocked by: ${todo.frontmatter.blockedBy.join(", ")}`), width));
+    }
+    if (todo.frontmatter.blocks.length > 0) {
+      lines.push(...wrapBlock(this.theme.fg("accent", `Blocks: ${todo.frontmatter.blocks.join(", ")}`), width));
+    }
+    if (todo.warnings.length > 0) {
+      lines.push("");
+      lines.push(...wrapBlock(this.theme.fg("warning", `Warnings: ${todo.warnings.join(" • ")}`), width));
+    }
+
+    const sections: Array<[string, string | undefined]> = [
+      ["Context", todo.sections.get("Context")],
+      ["Acceptance Criteria", todo.sections.get("Acceptance Criteria")],
+      ["Affected Files", todo.sections.get("Affected Files")],
+      ["E2E Spec", todo.sections.get("E2E Spec")],
+      ["Notes", todo.sections.get("Notes")],
+    ];
+
+    for (const [label, content] of sections) {
+      if (!content) continue;
+      lines.push("");
+      lines.push(...wrapBlock(this.theme.fg("accent", this.theme.bold(label)), width));
+      lines.push(...wrapBlock(content, width));
+    }
+
+    return lines;
+  }
+
+  private buildMarkdownPreview(todo: TodoRecord, width: number): string[] {
+    const cacheKey = `${todo.path}:${width}`;
+    const cached = this.previewCache.get(cacheKey);
+    if (cached) return cached;
+
+    const md = new Markdown([
+      `# ${todo.frontmatter.title}`,
+      "",
+      `- id: ${todo.id}`,
+      `- status: ${todo.frontmatter.status}`,
+      `- priority: ${todo.frontmatter.priority}`,
+      `- type: ${todo.frontmatter.type}`,
+      `- created: ${todo.frontmatter.created}`,
+      `- parent: ${todo.frontmatter.parent ?? "null"}`,
+      "",
+      todo.body,
+    ].join("\n"), 0, 0, getMarkdownTheme());
+    const lines = md.render(width);
+    this.previewCache.set(cacheKey, lines);
+    return lines;
+  }
+
+  private getPreviewLines(width: number): string[] {
+    if (this.loading) {
+      return wrapBlock(this.theme.fg("muted", "Loading todos..."), width);
+    }
+    if (this.lastError) {
+      return wrapBlock(this.theme.fg("error", this.lastError), width);
+    }
+    const todo = this.getSelectedTodo();
+    if (!todo) {
+      return wrapBlock(this.theme.fg("muted", "No matching todos found."), width);
+    }
+    return this.previewMode === "markdown"
+      ? this.buildMarkdownPreview(todo, width)
+      : this.buildSummaryPreview(todo, width);
+  }
+
+  private renderListPane(width: number, height: number): string[] {
+    const rows = this.getVisibleRows();
+    this.clampSelectionIntoView(height);
+    const slice = rows.slice(this.listScroll, this.listScroll + height);
+    const lines: string[] = [];
+
+    if (rows.length === 0) {
+      lines.push(...wrapBlock(this.theme.fg("muted", "No todos to show."), width));
+    } else {
+      for (const row of slice) {
+        const todo = row.todo;
+        const isSelected = todo.id === this.selectedId;
+        const indent = "  ".repeat(row.depth);
+        const hasVisibleChildren = this.getVisibleChildren(todo).length > 0;
+        const expander = !hasVisibleChildren ? "•" : this.expanded.has(todo.id) ? "▾" : "▸";
+        const warning = todo.warnings.length > 0 ? this.theme.fg("warning", " !") : "";
+        const meta = this.theme.fg("dim", ` ${todo.frontmatter.type}/${todo.frontmatter.priority}`);
+        let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${this.theme.fg("accent", todo.id)} ${todo.frontmatter.title}${meta}${warning}`;
+        line = truncateToWidth(line, width);
+        if (isSelected) {
+          line = this.theme.bg("selectedBg", padVisible(line, width));
+        } else {
+          line = padVisible(line, width);
+        }
+        lines.push(line);
+      }
+    }
+
+    while (lines.length < height) lines.push(" ".repeat(width));
+    return lines.slice(0, height);
+  }
+
+  private renderPreviewPane(width: number, height: number): string[] {
+    const allLines = this.getPreviewLines(width);
+    const maxScroll = Math.max(0, allLines.length - height);
+    this.previewScroll = Math.max(0, Math.min(this.previewScroll, maxScroll));
+    const lines = allLines.slice(this.previewScroll, this.previewScroll + height).map((line) => padVisible(line, width));
+    while (lines.length < height) lines.push(" ".repeat(width));
+    return lines;
+  }
+
+  handleInput(data: string): void {
+    if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
+      this.pendingG = false;
+      this.onClose();
+      return;
+    }
+
+    if (data === "g") {
+      if (this.pendingG) {
+        this.pendingG = false;
+        if (this.focusPane === "preview") {
+          this.previewScroll = 0;
+        } else {
+          this.moveSelection(-9999);
+        }
+        this.requestRender();
+      } else {
+        this.pendingG = true;
+      }
+      return;
+    }
+
+    if (data === "G") {
+      this.pendingG = false;
+      if (this.focusPane === "preview") {
+        this.previewScroll = Number.MAX_SAFE_INTEGER;
+      } else {
+        this.moveSelection(9999);
+      }
+      this.requestRender();
+      return;
+    }
+
+    this.pendingG = false;
+
+    if (matchesKey(data, Key.tab)) {
+      this.focusPane = this.focusPane === "list" ? "preview" : "list";
+      this.requestRender();
+      return;
+    }
+
+    if (data === "s") {
+      this.cycleSortMode();
+      this.requestRender();
+      return;
+    }
+    if (data === "d") {
+      this.toggleHideDone();
+      this.requestRender();
+      return;
+    }
+    if (data === "m") {
+      this.togglePreviewMode();
+      this.requestRender();
+      return;
+    }
+    if (data === "r") {
+      void this.reload();
+      return;
+    }
+
+    if (this.focusPane === "preview") {
+      const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
+      if (matchesKey(data, Key.up) || data === "k") this.previewScroll -= 1;
+      else if (matchesKey(data, Key.down) || data === "j") this.previewScroll += 1;
+      else if (matchesKey(data, "pageUp")) this.previewScroll -= page;
+      else if (matchesKey(data, "pageDown")) this.previewScroll += page;
+      else if (matchesKey(data, Key.home)) this.previewScroll = 0;
+      else if (matchesKey(data, Key.end)) this.previewScroll = Number.MAX_SAFE_INTEGER;
+      else return;
+      this.requestRender();
+      return;
+    }
+
+    const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
+    if (matchesKey(data, Key.up) || data === "k") this.moveSelection(-1);
+    else if (matchesKey(data, Key.down) || data === "j") this.moveSelection(1);
+    else if (matchesKey(data, "pageUp")) this.moveSelection(-page);
+    else if (matchesKey(data, "pageDown")) this.moveSelection(page);
+    else if (matchesKey(data, Key.left) || data === "h") this.collapseSelected();
+    else if (matchesKey(data, Key.right) || data === "l") this.expandSelected();
+    else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space)) this.toggleExpanded(this.getSelectedTodo());
+    else if (matchesKey(data, Key.home)) this.moveSelection(-9999);
+    else if (matchesKey(data, Key.end)) this.moveSelection(9999);
+    else return;
+
+    this.requestRender();
+  }
+
+  render(width: number): string[] {
+    const contentWidth = Math.max(40, width - 2);
+    const bodyHeight = this.getBodyHeight();
+    const leftWidth = Math.max(28, Math.min(56, Math.floor(contentWidth * 0.42)));
+    const dividerWidth = 3;
+    const rightWidth = Math.max(24, contentWidth - leftWidth - dividerWidth);
+
+    const visibleRows = this.getVisibleRows();
+    const selected = this.getSelectedTodo();
+
+    const title = this.theme.fg("accent", this.theme.bold(" Repo Todos "));
+    const focusLabel =
+      this.focusPane === "list"
+        ? this.theme.fg("accent", "[list]")
+        : this.theme.fg("accent", "[preview]");
+    const subTitle = this.theme.fg(
+      "dim",
+      `${this.cwd}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewMode}`,
+    );
+    const selectedLine = selected
+      ? this.theme.fg("muted", `Selected: ${selected.id} ${selected.frontmatter.title}`)
+      : this.theme.fg("muted", "Selected: none");
+
+    const makeBorderLine = (left: string, fill: string, right: string, label = "") => {
+      const fillWidth = Math.max(0, contentWidth - visibleWidth(label));
+      const content = truncateToWidth(label + fill.repeat(fillWidth), contentWidth, "");
+      return `${this.theme.fg("borderAccent", left)}${this.theme.fg("borderAccent", content)}${this.theme.fg("borderAccent", right)}`;
+    };
+    const makeDividerLine = () =>
+      `${this.theme.fg("borderAccent", "├")}${this.theme.fg("borderMuted", "─".repeat(contentWidth))}${this.theme.fg("borderAccent", "┤")}`;
+    const frameLine = (content: string) =>
+      `${this.theme.fg("borderAccent", "│")}${padVisible(content, contentWidth)}${this.theme.fg("borderAccent", "│")}`;
+
+    const header = [
+      makeBorderLine("┌", "─", "┐", title),
+      frameLine(focusLabel),
+      frameLine(subTitle),
+      frameLine(selectedLine),
+      makeDividerLine(),
+    ];
+
+    const left = this.renderListPane(leftWidth, bodyHeight);
+    const right = this.renderPreviewPane(rightWidth, bodyHeight);
+    const body: string[] = [];
+    for (let i = 0; i < bodyHeight; i += 1) {
+      const line = `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
+      body.push(frameLine(line));
+    }
+
+    const footerText = "↑↓/jk move • ←→/hl fold • gg/G top/bottom • enter toggle • tab switch pane • s sort • d hide done • m markdown • r rescan • esc close";
+    const footerExtra = this.issues.length > 0 ? ` • ${this.issues[0]}` : this.lastError ? ` • error: ${this.lastError}` : "";
+    const footer = [
+      makeDividerLine(),
+      frameLine(this.theme.fg("dim", footerText + footerExtra)),
+      makeBorderLine("└", "─", "┘"),
+    ];
+
+    return [...header, ...body, ...footer];
+  }
+
+  invalidate(): void {
+    this.previewCache.clear();
+  }
+}
+
+export default function repoTodosExtension(pi: ExtensionAPI) {
+  pi.registerCommand(COMMAND_NAME, {
+    description: "Browse ./todos in a read-only tree with preview",
+    handler: async (_args, ctx) => {
+      if (!ctx.hasUI) {
+        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
+        return;
+      }
+
+      await ctx.ui.custom<void>(
+        (tui, theme, _kb, done) => {
+          const component = new RepoTodosComponent(ctx.cwd, theme, () => tui.requestRender(), () => done(undefined));
+          void component.init();
+          return component;
+        },
+        {
+          overlay: true,
+          overlayOptions: {
+            anchor: "center",
+            width: "78%",
+            minWidth: 90,
+            maxHeight: "90%",
+            margin: 1,
+            visible: (termWidth) => termWidth >= 100,
+          },
+        },
+      );
+    },
+  });
+}
