@@ -1,0 +1,11 @@
+{
+  "model": "keep-me",
+  "permissions": {
+    "allow": [
+      "Bash(/tmp/existing:*)"
+    ]
+  },
+  "custom": {
+    "nested": true
+  }
+}

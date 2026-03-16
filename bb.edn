@@ -1,0 +1,52 @@
+{:paths ["scripts" "test"]
+
+ :tasks
+ {:init
+  (do
+    (require '[clojure.string :as str])
+    (def end2edn-root "/home/piotr/git/end2edn")
+    (def podman-base
+      (str "podman run --rm "
+           "--network none "
+           "-v " (System/getProperty "user.dir") ":/work:ro "
+           "-v " end2edn-root ":" end2edn-root ":ro "
+           "--tmpfs /tmp:rw,mode=1777 "
+           "--tmpfs /var/tmp:rw,mode=1777 "
+           "-w /work "
+           "docker.io/babashka/babashka"))
+    (def unit-runner "bb -cp scripts:test test/unit/runner.clj")
+    (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
+
+  test
+  {:doc "Run unit and E2E tests in isolated podman containers"
+   :task (do
+           (run 'test:unit)
+           (println)
+           (run 'test:e2e))}
+
+  test:unit
+  {:doc "Run pure unit tests in isolated podman container"
+   :task (shell (str podman-base " " unit-runner))}
+
+  test:e2e
+  {:doc "Run end2edn E2E tests in isolated podman container"
+   :task (shell (str podman-base " " e2e-runner
+                     (when (seq *command-line-args*)
+                       (str " " (str/join " " *command-line-args*)))))}
+
+  bootstrap
+  {:doc "Run bootstrap script with forwarded args"
+   :task (apply shell "bb" "-m" "bootstrap" *command-line-args*)}
+
+  test:ci
+  {:doc "Run tests directly (CI only)"
+   :task (do
+           (when-not (System/getenv "CI")
+             (println "Error: test:ci can only run in CI environments")
+             (println "Use 'bb test' locally to run in isolated podman")
+             (System/exit 1))
+           (shell unit-runner)
+           (println)
+           (shell (str e2e-runner
+                       (when (seq *command-line-args*)
+                         (str " " (str/join " " *command-line-args*))))))}}}
