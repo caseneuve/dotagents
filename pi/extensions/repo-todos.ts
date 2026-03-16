@@ -1,17 +1,10 @@
-import { getMarkdownTheme, type ExtensionAPI, type Theme } from "@mariozechner/pi-coding-agent";
-import {
-  Key,
-  Markdown,
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+import { type ExtensionAPI, type Theme } from "@mariozechner/pi-coding-agent";
+import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
 type SortMode = "number" | "state";
-type PreviewMode = "summary" | "markdown";
 type FocusPane = "list" | "preview";
 
 type TodoFrontmatter = {
@@ -41,6 +34,13 @@ type TodoRecord = {
 type FlattenedRow = {
   todo: TodoRecord;
   depth: number;
+};
+
+type VisibleTreeCache = {
+  key: string;
+  roots: TodoRecord[];
+  childrenById: Map<string, TodoRecord[]>;
+  rows: FlattenedRow[];
 };
 
 const COMMAND_NAME = "repo-todos";
@@ -356,7 +356,6 @@ async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRe
 class RepoTodosComponent {
   private roots: TodoRecord[] = [];
   private sortMode: SortMode = "number";
-  private previewMode: PreviewMode = "summary";
   private focusPane: FocusPane = "list";
   private hideDone = true;
   private selectedId?: string;
@@ -366,18 +365,24 @@ class RepoTodosComponent {
   private issues: string[] = [];
   private loading = true;
   private lastError?: string;
-  private previewCache = new Map<string, string[]>();
   private pendingG = false;
+  private dataVersion = 0;
+  private visibleTreeCache?: VisibleTreeCache;
 
   constructor(
     private cwd: string,
     private theme: Theme,
-    private requestRender: () => void,
+    private requestRender: (full?: boolean) => void,
     private onClose: () => void,
+    private onEdit: (path: string) => Promise<void>,
   ) {}
 
   async init(): Promise<void> {
     await this.reload();
+  }
+
+  private invalidateTreeCache(): void {
+    this.visibleTreeCache = undefined;
   }
 
   async reload(): Promise<void> {
@@ -390,7 +395,8 @@ class RepoTodosComponent {
       const { roots, issues } = await scanTodos(this.cwd);
       this.roots = roots;
       this.issues = issues;
-      this.previewCache.clear();
+      this.dataVersion += 1;
+      this.invalidateTreeCache();
       this.seedExpansion(this.roots);
       const rows = this.getVisibleRows();
       this.selectedId = rows.find((row) => row.todo.id === previousSelection)?.todo.id ?? rows[0]?.todo.id;
@@ -417,6 +423,7 @@ class RepoTodosComponent {
     for (const todo of todos) walk(todo, 0);
     for (const id of this.expanded) next.add(id);
     this.expanded = next;
+    this.invalidateTreeCache();
   }
 
   private getBodyHeight(): number {
@@ -434,29 +441,60 @@ class RepoTodosComponent {
     return todo.children.some((child) => this.shouldShow(child));
   }
 
+  private getVisibleTree(): VisibleTreeCache {
+    const cacheKey = `${this.dataVersion}|${this.sortMode}|${this.hideDone}|${[...this.expanded].sort().join(",")}`;
+    if (this.visibleTreeCache?.key === cacheKey) {
+      return this.visibleTreeCache;
+    }
+
+    const childrenById = new Map<string, TodoRecord[]>();
+    const rows: FlattenedRow[] = [];
+
+    const sortVisible = (todos: TodoRecord[]): TodoRecord[] =>
+      [...todos]
+        .filter((todo) => this.shouldShow(todo))
+        .sort((a, b) => compareTodos(a, b, this.sortMode));
+
+    const walk = (todo: TodoRecord, depth: number) => {
+      rows.push({ todo, depth });
+      const children = childrenById.get(todo.id) ?? [];
+      if (children.length > 0 && this.expanded.has(todo.id)) {
+        for (const child of children) {
+          walk(child, depth + 1);
+        }
+      }
+    };
+
+    const populateChildren = (todo: TodoRecord) => {
+      const children = sortVisible(todo.children);
+      childrenById.set(todo.id, children);
+      for (const child of children) {
+        populateChildren(child);
+      }
+    };
+
+    const roots = sortVisible(this.roots);
+    for (const root of roots) {
+      populateChildren(root);
+    }
+    for (const root of roots) {
+      walk(root, 0);
+    }
+
+    this.visibleTreeCache = { key: cacheKey, roots, childrenById, rows };
+    return this.visibleTreeCache;
+  }
+
   private getVisibleChildren(todo: TodoRecord): TodoRecord[] {
-    return [...todo.children]
-      .filter((child) => this.shouldShow(child))
-      .sort((a, b) => compareTodos(a, b, this.sortMode));
+    return this.getVisibleTree().childrenById.get(todo.id) ?? [];
   }
 
   private getVisibleRoots(): TodoRecord[] {
-    return [...this.roots]
-      .filter((todo) => this.shouldShow(todo))
-      .sort((a, b) => compareTodos(a, b, this.sortMode));
+    return this.getVisibleTree().roots;
   }
 
   private getVisibleRows(): FlattenedRow[] {
-    const rows: FlattenedRow[] = [];
-    const walk = (todo: TodoRecord, depth: number) => {
-      rows.push({ todo, depth });
-      const children = this.getVisibleChildren(todo);
-      if (children.length > 0 && this.expanded.has(todo.id)) {
-        for (const child of children) walk(child, depth + 1);
-      }
-    };
-    for (const todo of this.getVisibleRoots()) walk(todo, 0);
-    return rows;
+    return this.getVisibleTree().rows;
   }
 
   private getSelectedRowIndex(rows = this.getVisibleRows()): number {
@@ -510,6 +548,7 @@ class RepoTodosComponent {
     } else {
       this.expanded.add(todo.id);
     }
+    this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getBodyHeight());
   }
 
@@ -519,6 +558,7 @@ class RepoTodosComponent {
     const visibleChildren = this.getVisibleChildren(todo);
     if (visibleChildren.length > 0 && !this.expanded.has(todo.id)) {
       this.expanded.add(todo.id);
+      this.invalidateTreeCache();
       this.clampSelectionIntoView(this.getBodyHeight());
       return;
     }
@@ -541,6 +581,7 @@ class RepoTodosComponent {
 
     if (this.getVisibleChildren(selected.todo).length > 0 && this.expanded.has(selected.todo.id)) {
       this.expanded.delete(selected.todo.id);
+      this.invalidateTreeCache();
       this.clampSelectionIntoView(this.getBodyHeight());
       return;
     }
@@ -558,17 +599,14 @@ class RepoTodosComponent {
 
   private cycleSortMode(): void {
     this.sortMode = this.sortMode === "number" ? "state" : "number";
+    this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getBodyHeight());
   }
 
   private toggleHideDone(): void {
     this.hideDone = !this.hideDone;
+    this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getBodyHeight());
-    this.previewScroll = 0;
-  }
-
-  private togglePreviewMode(): void {
-    this.previewMode = this.previewMode === "summary" ? "markdown" : "summary";
     this.previewScroll = 0;
   }
 
@@ -611,28 +649,6 @@ class RepoTodosComponent {
     return lines;
   }
 
-  private buildMarkdownPreview(todo: TodoRecord, width: number): string[] {
-    const cacheKey = `${todo.path}:${width}`;
-    const cached = this.previewCache.get(cacheKey);
-    if (cached) return cached;
-
-    const md = new Markdown([
-      `# ${todo.frontmatter.title}`,
-      "",
-      `- id: ${todo.id}`,
-      `- status: ${todo.frontmatter.status}`,
-      `- priority: ${todo.frontmatter.priority}`,
-      `- type: ${todo.frontmatter.type}`,
-      `- created: ${todo.frontmatter.created}`,
-      `- parent: ${todo.frontmatter.parent ?? "null"}`,
-      "",
-      todo.body,
-    ].join("\n"), 0, 0, getMarkdownTheme());
-    const lines = md.render(width);
-    this.previewCache.set(cacheKey, lines);
-    return lines;
-  }
-
   private getPreviewLines(width: number): string[] {
     if (this.loading) {
       return wrapBlock(this.theme.fg("muted", "Loading todos..."), width);
@@ -644,9 +660,7 @@ class RepoTodosComponent {
     if (!todo) {
       return wrapBlock(this.theme.fg("muted", "No matching todos found."), width);
     }
-    return this.previewMode === "markdown"
-      ? this.buildMarkdownPreview(todo, width)
-      : this.buildSummaryPreview(todo, width);
+    return this.buildSummaryPreview(todo, width);
   }
 
   private renderListPane(width: number, height: number): string[] {
@@ -741,18 +755,33 @@ class RepoTodosComponent {
       this.requestRender();
       return;
     }
-    if (data === "m") {
-      this.togglePreviewMode();
-      this.requestRender();
-      return;
-    }
     if (data === "r") {
       void this.reload();
       return;
     }
+    if (data === "e") {
+      const todo = this.getSelectedTodo();
+      if (todo) {
+        void this.onEdit(todo.path);
+      }
+      return;
+    }
+
+    const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
+    if (matchesKey(data, Key.ctrl("u"))) {
+      if (this.focusPane === "preview") this.moveSelection(-page);
+      else this.previewScroll -= page;
+      this.requestRender();
+      return;
+    }
+    if (matchesKey(data, Key.ctrl("d"))) {
+      if (this.focusPane === "preview") this.moveSelection(page);
+      else this.previewScroll += page;
+      this.requestRender();
+      return;
+    }
 
     if (this.focusPane === "preview") {
-      const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
       if (matchesKey(data, Key.up) || data === "k") this.previewScroll -= 1;
       else if (matchesKey(data, Key.down) || data === "j") this.previewScroll += 1;
       else if (matchesKey(data, "pageUp")) this.previewScroll -= page;
@@ -764,7 +793,6 @@ class RepoTodosComponent {
       return;
     }
 
-    const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
     if (matchesKey(data, Key.up) || data === "k") this.moveSelection(-1);
     else if (matchesKey(data, Key.down) || data === "j") this.moveSelection(1);
     else if (matchesKey(data, "pageUp")) this.moveSelection(-page);
@@ -796,7 +824,7 @@ class RepoTodosComponent {
         : this.theme.fg("accent", "[preview]");
     const subTitle = this.theme.fg(
       "dim",
-      `${this.cwd}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewMode}`,
+      `${this.cwd}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"}`,
     );
     const selectedLine = selected
       ? this.theme.fg("muted", `Selected: ${selected.id} ${selected.frontmatter.title}`)
@@ -828,7 +856,7 @@ class RepoTodosComponent {
       body.push(frameLine(line));
     }
 
-    const footerText = "↑↓/jk move • ←→/hl fold • gg/G top/bottom • enter toggle • tab switch pane • s sort • d hide done • m markdown • r rescan • esc close";
+    const footerText = "tab switch pane • s sort • d hide done • e edit • r rescan • esc close";
     const footerExtra = this.issues.length > 0 ? ` • ${this.issues[0]}` : this.lastError ? ` • error: ${this.lastError}` : "";
     const footer = [
       makeDividerLine(),
@@ -839,9 +867,7 @@ class RepoTodosComponent {
     return [...header, ...body, ...footer];
   }
 
-  invalidate(): void {
-    this.previewCache.clear();
-  }
+  invalidate(): void {}
 }
 
 export default function repoTodosExtension(pi: ExtensionAPI) {
@@ -855,7 +881,42 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
 
       await ctx.ui.custom<void>(
         (tui, theme, _kb, done) => {
-          const component = new RepoTodosComponent(ctx.cwd, theme, () => tui.requestRender(), () => done(undefined));
+          const openEditor = async (filePath: string) => {
+            const editorCmd = process.env.VISUAL || process.env.EDITOR;
+            if (!editorCmd) {
+              ctx.ui.notify("Set $VISUAL or $EDITOR to edit todo files", "warning");
+              return;
+            }
+
+            const [editor, ...editorArgs] = editorCmd.split(" ");
+            tui.stop();
+            try {
+              const result = spawnSync(editor, [...editorArgs, filePath], {
+                stdio: "inherit",
+                shell: process.platform === "win32",
+              });
+              if (result.status && result.status !== 0) {
+                ctx.ui.notify(`Editor exited with code ${result.status}`, "warning");
+              }
+            } catch (error) {
+              ctx.ui.notify(
+                `Failed to open editor: ${error instanceof Error ? error.message : String(error)}`,
+                "error",
+              );
+            } finally {
+              tui.start();
+              tui.requestRender(true);
+              void component.reload();
+            }
+          };
+
+          const component = new RepoTodosComponent(
+            ctx.cwd,
+            theme,
+            (full) => tui.requestRender(Boolean(full)),
+            () => done(undefined),
+            openEditor,
+          );
           void component.init();
           return component;
         },
