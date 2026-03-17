@@ -17,6 +17,8 @@ Entries live in `~/org/agent-journal/YYYY/MM/dd/HHMM-<project>.org`.
    ```
    The helper returns an EDN map with `:path :date :hostname :agent :project :branch :ticket :commits :dirs-exist :last-entry`.
 
+   If `:project` is `"unknown"` and the helper includes `:suggestions`, choose a sensible project name from the suggestions or from local repo context, then re-run with `--mkdir <chosen-name>`.
+
 2. If `:last-entry` is non-nil, read it first for prior state and any unfinished next steps.
 
 3. Determine `:LLM_CATEGORY:` (`feature|bug|refactor|chore`) and `FILETAGS`.
