@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+const DEFAULT_SCREENSHOTS_DIR = "/tmp/screenshots";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 
 function getMimeType(file: string): string {
@@ -37,23 +38,26 @@ function formatDirForDisplay(dir: string, cwd: string): string {
   return dir.startsWith(cwd) ? path.relative(cwd, dir) || "." : dir;
 }
 
-export default function attachScreenshotExtension(pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI) {
   pi.registerCommand("attach-screenshot", {
     description:
-      "Open all screenshots in sxiv, mark one with 'm', quit, and attach it",
+      "Open screenshots in sxiv, mark with 'm', quit, and attach all marked (default: /tmp/screenshots, '.' = cwd)",
     handler: async (args, ctx) => {
       if (!ctx.isIdle()) {
         ctx.ui.notify("Agent is busy. Try again when idle.", "warning");
         return;
       }
 
-      const targetDir = args.trim()
-        ? path.resolve(ctx.cwd, args.trim())
-        : ctx.cwd;
+      const trimmedArgs = args.trim();
+      const targetDir = !trimmedArgs
+        ? DEFAULT_SCREENSHOTS_DIR
+        : trimmedArgs === "."
+          ? ctx.cwd
+          : path.resolve(ctx.cwd, trimmedArgs);
       let files: string[];
       try {
         files = await listImages(targetDir);
-      } catch {
+      } catch (error) {
         ctx.ui.notify(`Failed to read directory: ${targetDir}`, "error");
         return;
       }
@@ -67,7 +71,7 @@ export default function attachScreenshotExtension(pi: ExtensionAPI) {
       }
 
       ctx.ui.notify(
-        `Opening ${files.length} image(s) in sxiv. Mark one with 'm', then quit with 'q'.`,
+        `Opening ${files.length} image(s) in sxiv. Mark one or more with 'm', then quit with 'q'.`,
         "info",
       );
 
@@ -94,37 +98,50 @@ export default function attachScreenshotExtension(pi: ExtensionAPI) {
         return;
       }
 
-      let selected = marked[0];
-      if (marked.length > 1) {
-        const picked = await ctx.ui.select(
-          "Multiple screenshots marked. Choose one to attach:",
-          marked.map((file) => path.basename(file)),
-        );
-        if (!picked) return;
-        selected =
-          marked.find((file) => path.basename(file) === picked) ?? marked[0];
+      const attachments: Array<
+        | { type: "text"; text: string }
+        | { type: "image"; mimeType: string; data: string }
+      > = [];
+      const failed: string[] = [];
+
+      attachments.push({
+        type: "text",
+        text:
+          marked.length === 1
+            ? `Attaching screenshot: ${path.basename(marked[0])}`
+            : `Attaching ${marked.length} screenshots: ${marked.map((file) => path.basename(file)).join(", ")}`,
+      });
+
+      for (const selected of marked) {
+        try {
+          const data = await fs.readFile(selected);
+          attachments.push({
+            type: "image",
+            mimeType: getMimeType(selected),
+            data: data.toString("base64"),
+          });
+        } catch {
+          failed.push(selected);
+        }
       }
 
-      let data: Buffer;
-      try {
-        data = await fs.readFile(selected);
-      } catch {
-        ctx.ui.notify(`Failed to read selected image: ${selected}`, "error");
+      if (attachments.length === 1) {
+        ctx.ui.notify("Could not read any marked screenshots.", "error");
         return;
       }
 
-      pi.sendUserMessage([
-        {
-          type: "text",
-          text: `Attaching screenshot: ${path.basename(selected)}`,
-        },
-        {
-          type: "image",
-          mimeType: getMimeType(selected),
-          data: data.toString("base64"),
-        },
-      ]);
-      ctx.ui.notify(`Attached ${path.basename(selected)}`, "info");
+      pi.sendUserMessage(attachments);
+
+      const attachedCount = attachments.length - 1;
+      ctx.ui.notify(`Attached ${attachedCount} screenshot(s).`, "info");
+      if (failed.length > 0) {
+        ctx.ui.notify(
+          `Failed to read ${failed.length} marked screenshot(s): ${failed
+            .map((file) => path.basename(file))
+            .join(", ")}`,
+          "warning",
+        );
+      }
     },
   });
 }
