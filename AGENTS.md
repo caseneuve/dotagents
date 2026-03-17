@@ -156,6 +156,29 @@ When behavior changes, update the relevant docs:
 
 Docs should describe the canonical current path, not legacy entrypoints or historical behavior.
 
+## Commits
+
+Use commit messages in this format:
+
+```text
+[category] short description
+```
+
+Examples:
+- `[pi] fix repo-todos overlay height clipping`
+- `[shared] add bootstrap symlink helper`
+- `[test] cover stale symlink replacement`
+
+Prefer the narrowest useful category for the area changed, such as:
+- `pi`
+- `shared`
+- `agents`
+- `claude`
+- `scripts`
+- `test`
+- `docs`
+- `bootstrap`
+
 ## Final check before finishing a change
 
 Before wrapping up, verify:
