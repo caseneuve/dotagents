@@ -123,8 +123,8 @@ Usage:
 
 Keybindings:
 - `↑/↓` or `j/k` — move selection / scroll preview
-- `enter` or `tab` — focus the preview pane
-- `ctrl-f` — focus the filter input
+- `enter` or `tab` — focus the preview pane and collapse the left list
+- `/` or `ctrl-f` — focus the filter input
 - `p` — toggle current-project filtering on/off
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom

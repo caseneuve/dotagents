@@ -56,10 +56,11 @@ const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
 const HEIGHT_SAFETY_MARGIN = 1;
 const FRAME_COLOR = "muted";
 const BODY_MIN_HEIGHT = 10;
-const LIST_WIDTH_RATIO = 0.42;
+const LIST_WIDTH_RATIO = 0.5;
 const LIST_MIN_WIDTH = 30;
-const LIST_MAX_WIDTH = 64;
+const LIST_MAX_WIDTH = 80;
 const PREVIEW_MIN_WIDTH = 24;
+const PREVIEW_ONLY_WIDTH_OFFSET = 2;
 const CONTENT_MIN_WIDTH = 40;
 const DIVIDER_WIDTH = 3;
 const MAX_QUERY_TOKENS = 8;
@@ -404,7 +405,6 @@ function buildPreviewLines(
     ),
   );
   lines.push(...wrapBlock(theme.fg("muted", tagsLabel), width));
-  lines.push(...wrapBlock(theme.fg("dim", formatHomePath(entry.path)), width));
   lines.push("");
 
   const bodyLines =
@@ -635,7 +635,7 @@ class AgentJournalComponent {
     const lines = slice.map((entry) => {
       const isSelected = entry.path === this.selectedPath;
       const project = entry.metadata.project ?? MISSING_PROJECT_LABEL;
-      const line = `${entry.metadata.date} ${entry.metadata.title} ${this.theme.fg("dim", `[${project}]`)}`;
+      const line = `${entry.metadata.title} ${this.theme.fg("dim", `[${project}]`)}`;
       const padded = padVisible(line, width);
       return isSelected ? this.theme.bg("selectedBg", padded) : padded;
     });
@@ -697,7 +697,7 @@ class AgentJournalComponent {
       return;
     }
 
-    if (matchesKey(data, Key.ctrl("f"))) {
+    if (matchesKey(data, Key.ctrl("f")) || data === "/") {
       this.focusFilterInput();
       return;
     }
@@ -737,7 +737,7 @@ class AgentJournalComponent {
     }
 
     if (matchesKey(data, Key.enter)) {
-      this.focusPane = "preview";
+      this.focusPane = this.focusPane === "list" ? "preview" : "list";
       this.requestRender();
       return;
     }
@@ -803,14 +803,16 @@ class AgentJournalComponent {
 
     const contentWidth = Math.max(CONTENT_MIN_WIDTH, width - 2);
     const bodyHeight = this.getBodyHeight();
-    const leftWidth = Math.max(
-      LIST_MIN_WIDTH,
-      Math.min(LIST_MAX_WIDTH, Math.floor(contentWidth * LIST_WIDTH_RATIO)),
-    );
-    const rightWidth = Math.max(
-      PREVIEW_MIN_WIDTH,
-      contentWidth - leftWidth - DIVIDER_WIDTH,
-    );
+    const isPreviewFocused = this.focusPane === "preview";
+    const leftWidth = isPreviewFocused
+      ? 0
+      : Math.max(
+          LIST_MIN_WIDTH,
+          Math.min(LIST_MAX_WIDTH, Math.floor(contentWidth * LIST_WIDTH_RATIO)),
+        );
+    const rightWidth = isPreviewFocused
+      ? Math.max(PREVIEW_MIN_WIDTH, contentWidth - PREVIEW_ONLY_WIDTH_OFFSET)
+      : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
     const selected = this.getSelectedEntry();
 
     const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
@@ -868,16 +870,20 @@ class AgentJournalComponent {
       makeDividerLine(),
     ];
 
-    const left = this.renderListPane(leftWidth, bodyHeight);
+    const left = isPreviewFocused
+      ? []
+      : this.renderListPane(leftWidth, bodyHeight);
     const right = this.renderPreviewPane(rightWidth, bodyHeight);
     const body: string[] = [];
     for (let i = 0; i < bodyHeight; i += 1) {
-      const line = `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
+      const line = isPreviewFocused
+        ? padVisible(right[i] ?? "", contentWidth)
+        : `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
       body.push(frameLine(line));
     }
 
     const footerText =
-      "ctrl-f filter • p project toggle • e edit • enter/tab preview • r rescan • q/esc close";
+      "/ or ctrl-f filter • p project toggle • enter/tab preview/full preview • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
