@@ -172,10 +172,7 @@
                :markdown-mode :copy})
    (skill-ops {:src (str (fs/path (:shared-src p) "skills"))
                :dst (str (fs/path (:agents-dst p) "skills"))
-               :markdown-mode :link})
-   (tree-ops {:src (str (fs/path (:shared-src p) "hooks"))
-              :dst (str (fs/path (:agents-dst p) "hooks"))
-              :mode :link})))
+               :markdown-mode :link})))
 
 (defn plan-pi [p]
   (concat
