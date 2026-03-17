@@ -13,6 +13,7 @@ import path from "node:path";
 
 type FocusPane = "list" | "preview";
 type QueryFocus = "none" | "input";
+type SplitMode = "horizontal" | "vertical";
 
 type JournalMetadata = {
   title: string;
@@ -61,6 +62,9 @@ const LIST_MIN_WIDTH = 30;
 const LIST_MAX_WIDTH = 80;
 const PREVIEW_MIN_WIDTH = 24;
 const PREVIEW_ONLY_WIDTH_OFFSET = 2;
+const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
+const VERTICAL_LIST_MIN_HEIGHT = 6;
+const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
 const CONTENT_MIN_WIDTH = 40;
 const DIVIDER_WIDTH = 3;
 const MAX_QUERY_TOKENS = 8;
@@ -434,6 +438,7 @@ class AgentJournalComponent {
   private previewScroll = 0;
   private focusPane: FocusPane = "list";
   private queryFocus: QueryFocus = "none";
+  private splitMode: SplitMode = "horizontal";
   private filterInput = new Input();
   private pendingG = false;
   private currentProjectFilterEnabled = false;
@@ -494,7 +499,7 @@ class AgentJournalComponent {
     this.selectedPath =
       this.filteredEntries.find((entry) => entry.path === previousSelection)
         ?.path ?? this.filteredEntries[0]?.path;
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
   async reload(): Promise<void> {
@@ -512,7 +517,7 @@ class AgentJournalComponent {
         this.filteredEntries.find((entry) => entry.path === previousSelection)
           ?.path ?? this.filteredEntries[0]?.path;
       this.previewScroll = 0;
-      this.clampSelectionIntoView(this.getBodyHeight());
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -577,7 +582,7 @@ class AgentJournalComponent {
     );
     this.selectedPath = this.filteredEntries[nextIndex]?.path;
     this.previewScroll = 0;
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
   private toggleCurrentProjectFilter(): void {
@@ -596,6 +601,28 @@ class AgentJournalComponent {
   private blurFilterInput(): void {
     this.queryFocus = "none";
     this.syncFocusableChildren();
+  }
+
+  private toggleSplitMode(): void {
+    this.splitMode =
+      this.splitMode === "horizontal" ? "vertical" : "horizontal";
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
+  private getListPaneHeight(bodyHeight: number): number {
+    if (this.focusPane === "preview") {
+      return bodyHeight;
+    }
+    if (this.splitMode === "horizontal") {
+      return bodyHeight;
+    }
+
+    const candidate = Math.floor(bodyHeight * VERTICAL_LIST_HEIGHT_RATIO);
+    const minListHeight = Math.min(
+      VERTICAL_LIST_MIN_HEIGHT,
+      Math.max(1, bodyHeight - VERTICAL_PREVIEW_MIN_HEIGHT - 1),
+    );
+    return Math.max(minListHeight, candidate);
   }
 
   private renderListPane(width: number, height: number): string[] {
@@ -748,6 +775,12 @@ class AgentJournalComponent {
       return;
     }
 
+    if (data === "t") {
+      this.toggleSplitMode();
+      this.requestRender();
+      return;
+    }
+
     if (data === "r") {
       void this.reload();
       return;
@@ -804,15 +837,29 @@ class AgentJournalComponent {
     const contentWidth = Math.max(CONTENT_MIN_WIDTH, width - 2);
     const bodyHeight = this.getBodyHeight();
     const isPreviewFocused = this.focusPane === "preview";
+    const isVerticalSplit = !isPreviewFocused && this.splitMode === "vertical";
     const leftWidth = isPreviewFocused
       ? 0
-      : Math.max(
-          LIST_MIN_WIDTH,
-          Math.min(LIST_MAX_WIDTH, Math.floor(contentWidth * LIST_WIDTH_RATIO)),
-        );
+      : isVerticalSplit
+        ? contentWidth
+        : Math.max(
+            LIST_MIN_WIDTH,
+            Math.min(
+              LIST_MAX_WIDTH,
+              Math.floor(contentWidth * LIST_WIDTH_RATIO),
+            ),
+          );
     const rightWidth = isPreviewFocused
       ? Math.max(PREVIEW_MIN_WIDTH, contentWidth - PREVIEW_ONLY_WIDTH_OFFSET)
-      : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
+      : isVerticalSplit
+        ? contentWidth
+        : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
+    const listHeight = this.getListPaneHeight(bodyHeight);
+    const previewHeight = isPreviewFocused
+      ? bodyHeight
+      : isVerticalSplit
+        ? bodyHeight - listHeight - 1
+        : bodyHeight;
     const selected = this.getSelectedEntry();
 
     const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
@@ -823,7 +870,7 @@ class AgentJournalComponent {
         : this.theme.fg("accent", "[preview]");
     const subtitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.journalRoot)} • ${this.filteredEntries.length}/${this.entries.length} shown • newest first`,
+      `${formatHomePath(this.journalRoot)} • ${this.filteredEntries.length}/${this.entries.length} shown • newest first • layout:${this.splitMode}`,
     );
 
     const queryValue = this.filterInput.getValue();
@@ -872,18 +919,36 @@ class AgentJournalComponent {
 
     const left = isPreviewFocused
       ? []
-      : this.renderListPane(leftWidth, bodyHeight);
-    const right = this.renderPreviewPane(rightWidth, bodyHeight);
+      : this.renderListPane(leftWidth, listHeight);
+    const right = this.renderPreviewPane(
+      rightWidth,
+      Math.max(0, previewHeight),
+    );
     const body: string[] = [];
-    for (let i = 0; i < bodyHeight; i += 1) {
-      const line = isPreviewFocused
-        ? padVisible(right[i] ?? "", contentWidth)
-        : `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
-      body.push(frameLine(line));
+
+    if (isPreviewFocused) {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else if (isVerticalSplit) {
+      for (let i = 0; i < listHeight; i += 1) {
+        body.push(frameLine(padVisible(left[i] ?? "", contentWidth)));
+      }
+      body.push(
+        frameLine(this.theme.fg("borderMuted", "─".repeat(contentWidth))),
+      );
+      for (let i = 0; i < previewHeight; i += 1) {
+        body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        const line = `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
+        body.push(frameLine(line));
+      }
     }
 
     const footerText =
-      "/ or ctrl-f filter • p project toggle • enter/tab preview/full preview • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • p project • t layout • enter/tab preview • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`

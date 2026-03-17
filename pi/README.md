@@ -144,6 +144,7 @@ Keybindings:
 - `enter` or `tab` — focus the preview pane and collapse the left list
 - `/` or `ctrl-f` — focus the filter input
 - `p` — toggle current-project filtering on/off
+- `t` — toggle horizontal/vertical split in list mode
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom
 - `e` — open selected entry in the editor
