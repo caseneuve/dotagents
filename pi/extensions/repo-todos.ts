@@ -1,5 +1,11 @@
 import { type ExtensionAPI, type Theme } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import {
+  Key,
+  matchesKey,
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
 import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -45,6 +51,12 @@ type VisibleTreeCache = {
 
 const COMMAND_NAME = "repo-todos";
 const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
+const OVERLAY_MAX_HEIGHT = "90%";
+const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
+const FRAME_HEADER_HEIGHT = 5;
+const FRAME_FOOTER_HEIGHT = 3;
+const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
+const HEIGHT_SAFETY_MARGIN = 1;
 const REQUIRED_FIELDS = [
   "title",
   "status",
@@ -165,7 +177,11 @@ function compareIds(a: string, b: string): number {
   return 0;
 }
 
-function compareTodos(a: TodoRecord, b: TodoRecord, sortMode: SortMode): number {
+function compareTodos(
+  a: TodoRecord,
+  b: TodoRecord,
+  sortMode: SortMode,
+): number {
   if (sortMode === "state") {
     const aState = STATUS_ORDER.get(a.frontmatter.status) ?? 99;
     const bState = STATUS_ORDER.get(b.frontmatter.status) ?? 99;
@@ -216,7 +232,10 @@ function renderPriority(theme: Theme, priority: string): string {
 function wrapBlock(text: string, width: number): string[] {
   const lines: string[] = [];
   for (const line of text.split(/\r?\n/)) {
-    const wrapped = wrapTextWithAnsi(line.length > 0 ? line : " ", Math.max(1, width));
+    const wrapped = wrapTextWithAnsi(
+      line.length > 0 ? line : " ",
+      Math.max(1, width),
+    );
     if (wrapped.length === 0) lines.push("");
     else lines.push(...wrapped);
   }
@@ -229,7 +248,9 @@ function padVisible(text: string, width: number): string {
   return truncated + " ".repeat(missing);
 }
 
-async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
+async function scanTodos(
+  cwd: string,
+): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
   const todosDir = path.join(cwd, "todos");
   const issues: string[] = [];
   let entries: string[] = [];
@@ -237,7 +258,11 @@ async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRe
   try {
     entries = await fs.readdir(todosDir);
   } catch {
-    return { todosDir, roots: [], issues: [`No todos directory found at ${todosDir}`] };
+    return {
+      todosDir,
+      roots: [],
+      issues: [`No todos directory found at ${todosDir}`],
+    };
   }
 
   const files = entries
@@ -246,7 +271,9 @@ async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRe
       if (!match) return null;
       return { name, id: match[1], slug: match[2] };
     })
-    .filter((entry): entry is { name: string; id: string; slug: string } => Boolean(entry))
+    .filter((entry): entry is { name: string; id: string; slug: string } =>
+      Boolean(entry),
+    )
     .sort((a, b) => compareIds(a.id, b.id));
 
   const todos: TodoRecord[] = [];
@@ -259,7 +286,9 @@ async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRe
     try {
       content = await fs.readFile(fullPath, "utf8");
     } catch (error) {
-      issues.push(`Failed to read ${file.name}: ${error instanceof Error ? error.message : String(error)}`);
+      issues.push(
+        `Failed to read ${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       continue;
     }
 
@@ -296,8 +325,12 @@ async function scanTodos(cwd: string): Promise<{ todosDir: string; roots: TodoRe
     }
 
     const status = normalizeStatus(parsed.raw.get("status") ?? "unknown");
-    const type = stripQuotes(parsed.raw.get("type") ?? "unknown").trim().toLowerCase();
-    const priority = stripQuotes(parsed.raw.get("priority") ?? "unknown").trim().toLowerCase();
+    const type = stripQuotes(parsed.raw.get("type") ?? "unknown")
+      .trim()
+      .toLowerCase();
+    const priority = stripQuotes(parsed.raw.get("priority") ?? "unknown")
+      .trim()
+      .toLowerCase();
     const parent = normalizeParent(parsed.raw.get("parent") ?? "null");
 
     if (!["feature", "bug", "refactor", "chore", "epic"].includes(type)) {
@@ -399,7 +432,9 @@ class RepoTodosComponent {
       this.invalidateTreeCache();
       this.seedExpansion(this.roots);
       const rows = this.getVisibleRows();
-      this.selectedId = rows.find((row) => row.todo.id === previousSelection)?.todo.id ?? rows[0]?.todo.id;
+      this.selectedId =
+        rows.find((row) => row.todo.id === previousSelection)?.todo.id ??
+        rows[0]?.todo.id;
       this.clampSelectionIntoView(this.getBodyHeight());
       this.previewScroll = 0;
     } catch (error) {
@@ -414,7 +449,10 @@ class RepoTodosComponent {
     const next = new Set<string>();
     const walk = (todo: TodoRecord, depth: number) => {
       const isExpandable = todo.children.length > 0;
-      const shouldExpand = depth === 0 || hasActiveDescendant(todo) || todo.frontmatter.type === "epic";
+      const shouldExpand =
+        depth === 0 ||
+        hasActiveDescendant(todo) ||
+        todo.frontmatter.type === "epic";
       if (isExpandable && shouldExpand) {
         next.add(todo.id);
       }
@@ -428,7 +466,11 @@ class RepoTodosComponent {
 
   private getBodyHeight(): number {
     const rows = process.stdout.rows ?? 30;
-    return Math.max(10, rows - 12);
+    const maxOverlayHeight = Math.floor(rows * OVERLAY_MAX_HEIGHT_RATIO);
+    return Math.max(
+      10,
+      maxOverlayHeight - FRAME_CHROME_HEIGHT - HEIGHT_SAFETY_MARGIN,
+    );
   }
 
   private isDone(todo: TodoRecord): boolean {
@@ -514,7 +556,10 @@ class RepoTodosComponent {
       return;
     }
 
-    if (!this.selectedId || !rows.some((row) => row.todo.id === this.selectedId)) {
+    if (
+      !this.selectedId ||
+      !rows.some((row) => row.todo.id === this.selectedId)
+    ) {
       this.selectedId = rows[0].todo.id;
     }
 
@@ -579,7 +624,10 @@ class RepoTodosComponent {
     const selected = rows[this.getSelectedRowIndex(rows)];
     if (!selected) return;
 
-    if (this.getVisibleChildren(selected.todo).length > 0 && this.expanded.has(selected.todo.id)) {
+    if (
+      this.getVisibleChildren(selected.todo).length > 0 &&
+      this.expanded.has(selected.todo.id)
+    ) {
       this.expanded.delete(selected.todo.id);
       this.invalidateTreeCache();
       this.clampSelectionIntoView(this.getBodyHeight());
@@ -613,22 +661,55 @@ class RepoTodosComponent {
   private buildSummaryPreview(todo: TodoRecord, width: number): string[] {
     const lines: string[] = [];
     const heading = `${todo.frontmatter.title} (${todo.id})`;
-    lines.push(...wrapBlock(this.theme.fg("accent", this.theme.bold(heading)), width));
-    lines.push(...wrapBlock(`${renderState(this.theme, todo.frontmatter.status)}  ${this.theme.fg("muted", todo.frontmatter.type)}  ${renderPriority(this.theme, todo.frontmatter.priority)}`, width));
+    lines.push(
+      ...wrapBlock(this.theme.fg("accent", this.theme.bold(heading)), width),
+    );
+    lines.push(
+      ...wrapBlock(
+        `${renderState(this.theme, todo.frontmatter.status)}  ${this.theme.fg("muted", todo.frontmatter.type)}  ${renderPriority(this.theme, todo.frontmatter.priority)}`,
+        width,
+      ),
+    );
     lines.push(...wrapBlock(this.theme.fg("dim", todo.path), width));
 
     if (todo.frontmatter.parent) {
-      lines.push(...wrapBlock(this.theme.fg("muted", `Parent: ${todo.frontmatter.parent}`), width));
+      lines.push(
+        ...wrapBlock(
+          this.theme.fg("muted", `Parent: ${todo.frontmatter.parent}`),
+          width,
+        ),
+      );
     }
     if (todo.frontmatter.blockedBy.length > 0) {
-      lines.push(...wrapBlock(this.theme.fg("warning", `Blocked by: ${todo.frontmatter.blockedBy.join(", ")}`), width));
+      lines.push(
+        ...wrapBlock(
+          this.theme.fg(
+            "warning",
+            `Blocked by: ${todo.frontmatter.blockedBy.join(", ")}`,
+          ),
+          width,
+        ),
+      );
     }
     if (todo.frontmatter.blocks.length > 0) {
-      lines.push(...wrapBlock(this.theme.fg("accent", `Blocks: ${todo.frontmatter.blocks.join(", ")}`), width));
+      lines.push(
+        ...wrapBlock(
+          this.theme.fg(
+            "accent",
+            `Blocks: ${todo.frontmatter.blocks.join(", ")}`,
+          ),
+          width,
+        ),
+      );
     }
     if (todo.warnings.length > 0) {
       lines.push("");
-      lines.push(...wrapBlock(this.theme.fg("warning", `Warnings: ${todo.warnings.join(" • ")}`), width));
+      lines.push(
+        ...wrapBlock(
+          this.theme.fg("warning", `Warnings: ${todo.warnings.join(" • ")}`),
+          width,
+        ),
+      );
     }
 
     const sections: Array<[string, string | undefined]> = [
@@ -642,7 +723,9 @@ class RepoTodosComponent {
     for (const [label, content] of sections) {
       if (!content) continue;
       lines.push("");
-      lines.push(...wrapBlock(this.theme.fg("accent", this.theme.bold(label)), width));
+      lines.push(
+        ...wrapBlock(this.theme.fg("accent", this.theme.bold(label)), width),
+      );
       lines.push(...wrapBlock(content, width));
     }
 
@@ -658,7 +741,10 @@ class RepoTodosComponent {
     }
     const todo = this.getSelectedTodo();
     if (!todo) {
-      return wrapBlock(this.theme.fg("muted", "No matching todos found."), width);
+      return wrapBlock(
+        this.theme.fg("muted", "No matching todos found."),
+        width,
+      );
     }
     return this.buildSummaryPreview(todo, width);
   }
@@ -670,16 +756,26 @@ class RepoTodosComponent {
     const lines: string[] = [];
 
     if (rows.length === 0) {
-      lines.push(...wrapBlock(this.theme.fg("muted", "No todos to show."), width));
+      lines.push(
+        ...wrapBlock(this.theme.fg("muted", "No todos to show."), width),
+      );
     } else {
       for (const row of slice) {
         const todo = row.todo;
         const isSelected = todo.id === this.selectedId;
         const indent = "  ".repeat(row.depth);
         const hasVisibleChildren = this.getVisibleChildren(todo).length > 0;
-        const expander = !hasVisibleChildren ? "•" : this.expanded.has(todo.id) ? "▾" : "▸";
-        const warning = todo.warnings.length > 0 ? this.theme.fg("warning", " !") : "";
-        const meta = this.theme.fg("dim", ` ${todo.frontmatter.type}/${todo.frontmatter.priority}`);
+        const expander = !hasVisibleChildren
+          ? "•"
+          : this.expanded.has(todo.id)
+            ? "▾"
+            : "▸";
+        const warning =
+          todo.warnings.length > 0 ? this.theme.fg("warning", " !") : "";
+        const meta = this.theme.fg(
+          "dim",
+          ` ${todo.frontmatter.type}/${todo.frontmatter.priority}`,
+        );
         let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${this.theme.fg("accent", todo.id)} ${todo.frontmatter.title}${meta}${warning}`;
         line = truncateToWidth(line, width);
         if (isSelected) {
@@ -699,7 +795,9 @@ class RepoTodosComponent {
     const allLines = this.getPreviewLines(width);
     const maxScroll = Math.max(0, allLines.length - height);
     this.previewScroll = Math.max(0, Math.min(this.previewScroll, maxScroll));
-    const lines = allLines.slice(this.previewScroll, this.previewScroll + height).map((line) => padVisible(line, width));
+    const lines = allLines
+      .slice(this.previewScroll, this.previewScroll + height)
+      .map((line) => padVisible(line, width));
     while (lines.length < height) lines.push(" ".repeat(width));
     return lines;
   }
@@ -783,11 +881,13 @@ class RepoTodosComponent {
 
     if (this.focusPane === "preview") {
       if (matchesKey(data, Key.up) || data === "k") this.previewScroll -= 1;
-      else if (matchesKey(data, Key.down) || data === "j") this.previewScroll += 1;
+      else if (matchesKey(data, Key.down) || data === "j")
+        this.previewScroll += 1;
       else if (matchesKey(data, "pageUp")) this.previewScroll -= page;
       else if (matchesKey(data, "pageDown")) this.previewScroll += page;
       else if (matchesKey(data, Key.home)) this.previewScroll = 0;
-      else if (matchesKey(data, Key.end)) this.previewScroll = Number.MAX_SAFE_INTEGER;
+      else if (matchesKey(data, Key.end))
+        this.previewScroll = Number.MAX_SAFE_INTEGER;
       else return;
       this.requestRender();
       return;
@@ -797,9 +897,11 @@ class RepoTodosComponent {
     else if (matchesKey(data, Key.down) || data === "j") this.moveSelection(1);
     else if (matchesKey(data, "pageUp")) this.moveSelection(-page);
     else if (matchesKey(data, "pageDown")) this.moveSelection(page);
-    else if (matchesKey(data, Key.left) || data === "h") this.collapseSelected();
+    else if (matchesKey(data, Key.left) || data === "h")
+      this.collapseSelected();
     else if (matchesKey(data, Key.right) || data === "l") this.expandSelected();
-    else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space)) this.toggleExpanded(this.getSelectedTodo());
+    else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space))
+      this.toggleExpanded(this.getSelectedTodo());
     else if (matchesKey(data, Key.home)) this.moveSelection(-9999);
     else if (matchesKey(data, Key.end)) this.moveSelection(9999);
     else return;
@@ -810,7 +912,10 @@ class RepoTodosComponent {
   render(width: number): string[] {
     const contentWidth = Math.max(40, width - 2);
     const bodyHeight = this.getBodyHeight();
-    const leftWidth = Math.max(28, Math.min(56, Math.floor(contentWidth * 0.42)));
+    const leftWidth = Math.max(
+      28,
+      Math.min(56, Math.floor(contentWidth * 0.42)),
+    );
     const dividerWidth = 3;
     const rightWidth = Math.max(24, contentWidth - leftWidth - dividerWidth);
 
@@ -827,12 +932,24 @@ class RepoTodosComponent {
       `${this.cwd}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"}`,
     );
     const selectedLine = selected
-      ? this.theme.fg("muted", `Selected: ${selected.id} ${selected.frontmatter.title}`)
+      ? this.theme.fg(
+          "muted",
+          `Selected: ${selected.id} ${selected.frontmatter.title}`,
+        )
       : this.theme.fg("muted", "Selected: none");
 
-    const makeBorderLine = (left: string, fill: string, right: string, label = "") => {
+    const makeBorderLine = (
+      left: string,
+      fill: string,
+      right: string,
+      label = "",
+    ) => {
       const fillWidth = Math.max(0, contentWidth - visibleWidth(label));
-      const content = truncateToWidth(label + fill.repeat(fillWidth), contentWidth, "");
+      const content = truncateToWidth(
+        label + fill.repeat(fillWidth),
+        contentWidth,
+        "",
+      );
       return `${this.theme.fg("borderAccent", left)}${this.theme.fg("borderAccent", content)}${this.theme.fg("borderAccent", right)}`;
     };
     const makeDividerLine = () =>
@@ -856,8 +973,14 @@ class RepoTodosComponent {
       body.push(frameLine(line));
     }
 
-    const footerText = "tab switch pane • s sort • d hide done • e edit • r rescan • esc close";
-    const footerExtra = this.issues.length > 0 ? ` • ${this.issues[0]}` : this.lastError ? ` • error: ${this.lastError}` : "";
+    const footerText =
+      "tab switch pane • s sort • d hide done • e edit • r rescan • esc close";
+    const footerExtra =
+      this.issues.length > 0
+        ? ` • ${this.issues[0]}`
+        : this.lastError
+          ? ` • error: ${this.lastError}`
+          : "";
     const footer = [
       makeDividerLine(),
       frameLine(this.theme.fg("dim", footerText + footerExtra)),
@@ -884,7 +1007,10 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
           const openEditor = async (filePath: string) => {
             const editorCmd = process.env.VISUAL || process.env.EDITOR;
             if (!editorCmd) {
-              ctx.ui.notify("Set $VISUAL or $EDITOR to edit todo files", "warning");
+              ctx.ui.notify(
+                "Set $VISUAL or $EDITOR to edit todo files",
+                "warning",
+              );
               return;
             }
 
@@ -896,7 +1022,10 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
                 shell: process.platform === "win32",
               });
               if (result.status && result.status !== 0) {
-                ctx.ui.notify(`Editor exited with code ${result.status}`, "warning");
+                ctx.ui.notify(
+                  `Editor exited with code ${result.status}`,
+                  "warning",
+                );
               }
             } catch (error) {
               ctx.ui.notify(
@@ -926,7 +1055,7 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
             anchor: "center",
             width: "78%",
             minWidth: 90,
-            maxHeight: "90%",
+            maxHeight: OVERLAY_MAX_HEIGHT,
             margin: 1,
             visible: (termWidth) => termWidth >= 100,
           },
