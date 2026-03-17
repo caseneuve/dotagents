@@ -82,7 +82,7 @@ Keybindings:
 - `d` — hide/show completed items
 - `m` — toggle summary/markdown preview
 - `r` — rescan todos
-- `esc` — close
+- `q` / `esc` — close
 
 Notes:
 - operates on the current working directory only

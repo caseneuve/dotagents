@@ -57,6 +57,7 @@ const FRAME_HEADER_HEIGHT = 5;
 const FRAME_FOOTER_HEIGHT = 3;
 const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
 const HEIGHT_SAFETY_MARGIN = 1;
+const FRAME_COLOR = "muted";
 const REQUIRED_FIELDS = [
   "title",
   "status",
@@ -246,6 +247,14 @@ function padVisible(text: string, width: number): string {
   const truncated = truncateToWidth(text, width);
   const missing = Math.max(0, width - visibleWidth(truncated));
   return truncated + " ".repeat(missing);
+}
+
+function formatHomePath(filePath: string): string {
+  const home = process.env.HOME;
+  if (home && filePath.startsWith(home)) {
+    return `~${filePath.slice(home.length)}` || "~";
+  }
+  return filePath;
 }
 
 async function scanTodos(
@@ -803,7 +812,11 @@ class RepoTodosComponent {
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
+    if (
+      matchesKey(data, Key.escape) ||
+      matchesKey(data, Key.ctrl("c")) ||
+      data === "q"
+    ) {
       this.pendingG = false;
       this.onClose();
       return;
@@ -922,14 +935,15 @@ class RepoTodosComponent {
     const visibleRows = this.getVisibleRows();
     const selected = this.getSelectedTodo();
 
-    const title = this.theme.fg("accent", this.theme.bold(" Repo Todos "));
+    const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
+    const title = this.theme.bold(" Repo Todos ");
     const focusLabel =
       this.focusPane === "list"
         ? this.theme.fg("accent", "[list]")
         : this.theme.fg("accent", "[preview]");
     const subTitle = this.theme.fg(
       "dim",
-      `${this.cwd}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"}`,
+      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"}`,
     );
     const selectedLine = selected
       ? this.theme.fg(
@@ -950,15 +964,15 @@ class RepoTodosComponent {
         contentWidth,
         "",
       );
-      return `${this.theme.fg("borderAccent", left)}${this.theme.fg("borderAccent", content)}${this.theme.fg("borderAccent", right)}`;
+      return `${borderFg(left)}${borderFg(content)}${borderFg(right)}`;
     };
     const makeDividerLine = () =>
-      `${this.theme.fg("borderAccent", "├")}${this.theme.fg("borderAccent", "─".repeat(contentWidth))}${this.theme.fg("borderAccent", "┤")}`;
+      `${borderFg("┣")}${borderFg("━".repeat(contentWidth))}${borderFg("┫")}`;
     const frameLine = (content: string) =>
-      `${this.theme.fg("borderAccent", "│")}${padVisible(content, contentWidth)}${this.theme.fg("borderAccent", "│")}`;
+      `${borderFg("┃")}${padVisible(content, contentWidth)}${borderFg("┃")}`;
 
     const header = [
-      makeBorderLine("┌", "─", "┐", title),
+      makeBorderLine("┏", "━", "┓", title),
       frameLine(focusLabel),
       frameLine(subTitle),
       frameLine(selectedLine),
@@ -974,7 +988,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "tab switch pane • s sort • d hide done • e edit • r rescan • esc close";
+      "tab switch pane • s sort • d hide done • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
@@ -984,7 +998,7 @@ class RepoTodosComponent {
     const footer = [
       makeDividerLine(),
       frameLine(this.theme.fg("dim", footerText + footerExtra)),
-      makeBorderLine("└", "─", "┘"),
+      makeBorderLine("┗", "━", "┛"),
     ];
 
     return [...header, ...body, ...footer];
