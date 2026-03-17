@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: strip-ai-coauthor
+        name: Strip AI Co-authored-by
+        language: system
+        entry: sed -i '/^Co-[Aa]uthored-[Bb]y:.*noreply@*/d'
+        stages: [commit-msg]
+        always_run: true
