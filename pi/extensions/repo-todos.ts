@@ -1,5 +1,6 @@
 import { type ExtensionAPI, type Theme } from "@mariozechner/pi-coding-agent";
 import {
+  Input,
   Key,
   matchesKey,
   truncateToWidth,
@@ -12,6 +13,8 @@ import path from "node:path";
 
 type SortMode = "number" | "state";
 type FocusPane = "list" | "preview";
+type QueryFocus = "none" | "input";
+type SplitMode = "horizontal" | "vertical";
 
 type TodoFrontmatter = {
   title: string;
@@ -53,11 +56,22 @@ const COMMAND_NAME = "repo-todos";
 const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
-const FRAME_HEADER_HEIGHT = 5;
+const FRAME_HEADER_HEIGHT = 7;
 const FRAME_FOOTER_HEIGHT = 3;
 const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
 const HEIGHT_SAFETY_MARGIN = 1;
 const FRAME_COLOR = "muted";
+const LIST_WIDTH_RATIO = 0.42;
+const LIST_MIN_WIDTH = 28;
+const LIST_MAX_WIDTH = 56;
+const PREVIEW_MIN_WIDTH = 24;
+const DIVIDER_WIDTH = 3;
+const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
+const VERTICAL_LIST_MIN_HEIGHT = 6;
+const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
+const FILTER_INPUT_LABEL = "Filter";
+const FILTER_INPUT_HINT = "id/title";
+const MAX_QUERY_TOKENS = 8;
 const REQUIRED_FIELDS = [
   "title",
   "status",
@@ -178,6 +192,21 @@ function compareIds(a: string, b: string): number {
   return 0;
 }
 
+function todoMatchesQuery(todo: TodoRecord, query: string): boolean {
+  const trimmed = normalizeText(query).toLowerCase();
+  if (!trimmed) return true;
+
+  const tokens = trimmed.split(" ").filter(Boolean).slice(0, MAX_QUERY_TOKENS);
+  if (tokens.length === 0) return true;
+
+  const haystack = [todo.id, todo.frontmatter.title, todo.slug].map((value) =>
+    value.toLowerCase(),
+  );
+  return tokens.every((token) =>
+    haystack.some((value) => value.includes(token)),
+  );
+}
+
 function compareTodos(
   a: TodoRecord,
   b: TodoRecord,
@@ -255,6 +284,10 @@ function formatHomePath(filePath: string): string {
     return `~${filePath.slice(home.length)}` || "~";
   }
   return filePath;
+}
+
+function normalizeText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 async function scanTodos(
@@ -399,6 +432,8 @@ class RepoTodosComponent {
   private roots: TodoRecord[] = [];
   private sortMode: SortMode = "number";
   private focusPane: FocusPane = "list";
+  private queryFocus: QueryFocus = "none";
+  private splitMode: SplitMode = "horizontal";
   private hideDone = true;
   private selectedId?: string;
   private expanded = new Set<string>();
@@ -409,6 +444,7 @@ class RepoTodosComponent {
   private lastError?: string;
   private pendingG = false;
   private dataVersion = 0;
+  private filterInput = new Input();
   private visibleTreeCache?: VisibleTreeCache;
 
   constructor(
@@ -417,7 +453,18 @@ class RepoTodosComponent {
     private requestRender: (full?: boolean) => void,
     private onClose: () => void,
     private onEdit: (path: string) => Promise<void>,
-  ) {}
+  ) {
+    this.filterInput.onSubmit = () => {
+      this.queryFocus = "none";
+      this.invalidateTreeCache();
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+      this.requestRender();
+    };
+    this.filterInput.onEscape = () => {
+      this.queryFocus = "none";
+      this.requestRender();
+    };
+  }
 
   async init(): Promise<void> {
     await this.reload();
@@ -444,7 +491,7 @@ class RepoTodosComponent {
       this.selectedId =
         rows.find((row) => row.todo.id === previousSelection)?.todo.id ??
         rows[0]?.todo.id;
-      this.clampSelectionIntoView(this.getBodyHeight());
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
       this.previewScroll = 0;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
@@ -482,14 +529,35 @@ class RepoTodosComponent {
     );
   }
 
+  private getListPaneHeight(bodyHeight: number): number {
+    if (this.splitMode === "horizontal") {
+      return bodyHeight;
+    }
+
+    const candidate = Math.floor(bodyHeight * VERTICAL_LIST_HEIGHT_RATIO);
+    const minListHeight = Math.min(
+      VERTICAL_LIST_MIN_HEIGHT,
+      Math.max(1, bodyHeight - VERTICAL_PREVIEW_MIN_HEIGHT - 1),
+    );
+    return Math.max(minListHeight, candidate);
+  }
+
   private isDone(todo: TodoRecord): boolean {
     return todo.frontmatter.status === "done";
   }
 
+  private getQuery(): string {
+    return this.filterInput.getValue();
+  }
+
   private shouldShow(todo: TodoRecord): boolean {
-    if (!this.hideDone) return true;
-    if (!this.isDone(todo)) return true;
-    return todo.children.some((child) => this.shouldShow(child));
+    const matchesSelf = todoMatchesQuery(todo, this.getQuery());
+    const visibleChildren = todo.children.some((child) =>
+      this.shouldShow(child),
+    );
+    const visibleByDoneState =
+      !this.hideDone || !this.isDone(todo) || visibleChildren;
+    return visibleByDoneState && (matchesSelf || visibleChildren);
   }
 
   private getVisibleTree(): VisibleTreeCache {
@@ -590,7 +658,7 @@ class RepoTodosComponent {
     const next = Math.max(0, Math.min(rows.length - 1, current + delta));
     this.selectedId = rows[next].todo.id;
     this.previewScroll = 0;
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
   private toggleExpanded(todo: TodoRecord | undefined): void {
@@ -603,7 +671,7 @@ class RepoTodosComponent {
       this.expanded.add(todo.id);
     }
     this.invalidateTreeCache();
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
   private expandSelected(): void {
@@ -613,7 +681,7 @@ class RepoTodosComponent {
     if (visibleChildren.length > 0 && !this.expanded.has(todo.id)) {
       this.expanded.add(todo.id);
       this.invalidateTreeCache();
-      this.clampSelectionIntoView(this.getBodyHeight());
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
       return;
     }
     if (visibleChildren.length > 0) {
@@ -623,7 +691,9 @@ class RepoTodosComponent {
       if (next) {
         this.selectedId = next.todo.id;
         this.previewScroll = 0;
-        this.clampSelectionIntoView(this.getBodyHeight());
+        this.clampSelectionIntoView(
+          this.getListPaneHeight(this.getBodyHeight()),
+        );
       }
     }
   }
@@ -639,7 +709,7 @@ class RepoTodosComponent {
     ) {
       this.expanded.delete(selected.todo.id);
       this.invalidateTreeCache();
-      this.clampSelectionIntoView(this.getBodyHeight());
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
       return;
     }
 
@@ -648,7 +718,9 @@ class RepoTodosComponent {
       if (rows[i].depth === selected.depth - 1) {
         this.selectedId = rows[i].todo.id;
         this.previewScroll = 0;
-        this.clampSelectionIntoView(this.getBodyHeight());
+        this.clampSelectionIntoView(
+          this.getListPaneHeight(this.getBodyHeight()),
+        );
         return;
       }
     }
@@ -657,14 +729,29 @@ class RepoTodosComponent {
   private cycleSortMode(): void {
     this.sortMode = this.sortMode === "number" ? "state" : "number";
     this.invalidateTreeCache();
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
   private toggleHideDone(): void {
     this.hideDone = !this.hideDone;
     this.invalidateTreeCache();
-    this.clampSelectionIntoView(this.getBodyHeight());
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
     this.previewScroll = 0;
+  }
+
+  private toggleSplitMode(): void {
+    this.splitMode =
+      this.splitMode === "horizontal" ? "vertical" : "horizontal";
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
+  private focusFilterInput(): void {
+    this.queryFocus = "input";
+    this.requestRender();
+  }
+
+  private blurFilterInput(): void {
+    this.queryFocus = "none";
   }
 
   private getTodoDisplayPath(todo: TodoRecord): string {
@@ -820,6 +907,19 @@ class RepoTodosComponent {
   }
 
   handleInput(data: string): void {
+    if (this.queryFocus === "input") {
+      if (matchesKey(data, Key.ctrl("f"))) {
+        this.blurFilterInput();
+        this.requestRender();
+        return;
+      }
+      this.filterInput.handleInput(data);
+      this.invalidateTreeCache();
+      this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+      this.requestRender();
+      return;
+    }
+
     if (
       matchesKey(data, Key.escape) ||
       matchesKey(data, Key.ctrl("c")) ||
@@ -827,6 +927,11 @@ class RepoTodosComponent {
     ) {
       this.pendingG = false;
       this.onClose();
+      return;
+    }
+
+    if (matchesKey(data, Key.ctrl("f")) || data === "/") {
+      this.focusFilterInput();
       return;
     }
 
@@ -859,6 +964,12 @@ class RepoTodosComponent {
     this.pendingG = false;
 
     if (matchesKey(data, Key.tab)) {
+      this.toggleExpanded(this.getSelectedTodo());
+      this.requestRender();
+      return;
+    }
+
+    if (matchesKey(data, Key.enter)) {
       this.focusPane = this.focusPane === "list" ? "preview" : "list";
       this.requestRender();
       return;
@@ -866,6 +977,11 @@ class RepoTodosComponent {
 
     if (data === "s") {
       this.cycleSortMode();
+      this.requestRender();
+      return;
+    }
+    if (data === "t") {
+      this.toggleSplitMode();
       this.requestRender();
       return;
     }
@@ -919,7 +1035,7 @@ class RepoTodosComponent {
     else if (matchesKey(data, Key.left) || data === "h")
       this.collapseSelected();
     else if (matchesKey(data, Key.right) || data === "l") this.expandSelected();
-    else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space))
+    else if (matchesKey(data, Key.space))
       this.toggleExpanded(this.getSelectedTodo());
     else if (matchesKey(data, Key.home)) this.moveSelection(-9999);
     else if (matchesKey(data, Key.end)) this.moveSelection(9999);
@@ -931,12 +1047,32 @@ class RepoTodosComponent {
   render(width: number): string[] {
     const contentWidth = Math.max(40, width - 2);
     const bodyHeight = this.getBodyHeight();
-    const leftWidth = Math.max(
-      28,
-      Math.min(56, Math.floor(contentWidth * 0.42)),
-    );
-    const dividerWidth = 3;
-    const rightWidth = Math.max(24, contentWidth - leftWidth - dividerWidth);
+    const isPreviewFocused = this.focusPane === "preview";
+    const isVerticalSplit = !isPreviewFocused && this.splitMode === "vertical";
+    const leftWidth = isPreviewFocused
+      ? 0
+      : isVerticalSplit
+        ? contentWidth
+        : Math.max(
+            LIST_MIN_WIDTH,
+            Math.min(
+              LIST_MAX_WIDTH,
+              Math.floor(contentWidth * LIST_WIDTH_RATIO),
+            ),
+          );
+    const rightWidth = isPreviewFocused
+      ? contentWidth
+      : isVerticalSplit
+        ? contentWidth
+        : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
+    const listHeight = isPreviewFocused
+      ? 0
+      : this.getListPaneHeight(bodyHeight);
+    const previewHeight = isPreviewFocused
+      ? bodyHeight
+      : isVerticalSplit
+        ? bodyHeight - listHeight - 1
+        : bodyHeight;
 
     const visibleRows = this.getVisibleRows();
     const selected = this.getSelectedTodo();
@@ -949,8 +1085,15 @@ class RepoTodosComponent {
         : this.theme.fg("accent", "[preview]");
     const subTitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"}`,
+      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • layout:${this.splitMode}`,
     );
+    const queryValue = this.getQuery();
+    const queryDisplay = queryValue || FILTER_INPUT_HINT;
+    const queryPrefix = `${FILTER_INPUT_LABEL}: `;
+    const queryLine =
+      this.queryFocus === "input"
+        ? `${queryPrefix}${this.filterInput.render(Math.max(8, contentWidth - queryPrefix.length))[0] ?? ""}`
+        : `${queryPrefix}${this.theme.fg(queryValue ? "text" : "muted", queryDisplay)}`;
     const selectedLine = selected
       ? this.theme.fg(
           "muted",
@@ -981,20 +1124,40 @@ class RepoTodosComponent {
       makeBorderLine("┏", "━", "┓", title),
       frameLine(focusLabel),
       frameLine(subTitle),
+      frameLine(queryLine),
       frameLine(selectedLine),
       makeDividerLine(),
     ];
 
-    const left = this.renderListPane(leftWidth, bodyHeight);
-    const right = this.renderPreviewPane(rightWidth, bodyHeight);
+    const left = isPreviewFocused
+      ? []
+      : this.renderListPane(leftWidth, listHeight);
+    const right = this.renderPreviewPane(rightWidth, previewHeight);
     const body: string[] = [];
-    for (let i = 0; i < bodyHeight; i += 1) {
-      const line = `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
-      body.push(frameLine(line));
+
+    if (isPreviewFocused) {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else if (isVerticalSplit) {
+      for (let i = 0; i < listHeight; i += 1) {
+        body.push(frameLine(padVisible(left[i] ?? "", contentWidth)));
+      }
+      body.push(
+        frameLine(this.theme.fg("borderMuted", "─".repeat(contentWidth))),
+      );
+      for (let i = 0; i < previewHeight; i += 1) {
+        body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        const line = `${padVisible(left[i] ?? "", leftWidth)}${this.theme.fg("borderMuted", " │ ")}${padVisible(right[i] ?? "", rightWidth)}`;
+        body.push(frameLine(line));
+      }
     }
 
     const footerText =
-      "tab switch pane • s sort • d hide done • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • t layout • s sort • d hide done • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
