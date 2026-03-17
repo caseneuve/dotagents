@@ -77,6 +77,24 @@ Notes:
 - extracts the last text block, not tool payloads or non-text content
 - leaves the built-in `ctrl-g` external editor flow unchanged
 
+### `extensions/attach-screenshot.ts`
+Adds an `/attach-screenshot` command for picking an image in `sxiv` and attaching it to the conversation.
+
+What it does:
+- scans the current directory, or a provided relative path, for common image files
+- opens matching files in `sxiv` using thumbnail/output mode
+- lets you mark one or more candidates with `m` inside `sxiv`
+- attaches the selected screenshot back into the current Pi conversation as an image message
+
+Usage:
+- `/attach-screenshot`
+- `/attach-screenshot path/to/screenshots`
+
+Notes:
+- requires `sxiv` to be installed and available on `PATH`
+- only works while the agent is idle
+- if multiple images are marked, Pi asks which basename to attach
+
 ### `extensions/repo-todos.ts`
 Adds a `/repo-todos` command for browsing repository todos stored in `./todos/`.
 
