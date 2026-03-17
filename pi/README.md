@@ -59,6 +59,24 @@ Notes:
 - prompt selection is restricted to the current branch path
 - labels can later be edited or removed in the standard `/tree` UI
 
+### `extensions/last-assistant-block.ts`
+Adds a `/last-assistant-block` command and `ctrl-x` shortcut for reusing the latest assistant text block.
+
+What it does:
+- scans the current branch history for the most recent completed assistant message
+- extracts the last text block from that message
+- loads that text into the main input editor
+- makes it easy to follow up, refine, or press `ctrl-g` to open it in the external editor
+
+Usage:
+- `/last-assistant-block`
+- `ctrl-x`
+
+Notes:
+- works on the current branch only
+- extracts the last text block, not tool payloads or non-text content
+- leaves the built-in `ctrl-g` external editor flow unchanged
+
 ### `extensions/repo-todos.ts`
 Adds a `/repo-todos` command for browsing repository todos stored in `./todos/`.
 
@@ -89,6 +107,34 @@ Notes:
 - operates on the current working directory only
 - intended for todo files following the add-todo-style frontmatter schema
 - epics and parents with children can be folded and unfolded
+
+### `extensions/agent-journal.ts`
+Adds an `/agent-journal` command for browsing `~/org/agent-journal/` entries in a two-pane overlay.
+
+What it does:
+- recursively scans the full journal tree for `.org` entries and sorts them by recency
+- parses `#+TITLE`, `#+DATE`, `#+FILETAGS`, and `:LLM_PROJECT:` metadata
+- defaults to the current git-root project when that project can be inferred from cwd
+- shows a list on the left and an Org-ish formatted preview on the right
+- opens the selected entry in `$EDITOR` / `$VISUAL` with `e`
+
+Usage:
+- `/agent-journal`
+
+Keybindings:
+- `↑/↓` or `j/k` — move selection / scroll preview
+- `enter` or `tab` — focus the preview pane
+- `ctrl-f` — focus the filter input
+- `p` — toggle current-project filtering on/off
+- `ctrl-u` / `ctrl-d` — page preview up/down
+- `gg` / `G` — jump to top/bottom
+- `e` — open selected entry in the editor
+- `r` — rescan the journal tree
+- `q` / `esc` — close
+
+Notes:
+- the initial query filter matches title, project, and filetags
+- the preview strips Org metadata and drawers, then renders headings and basic inline markup in a cleaner reading view
 
 ## Design Notes
 
