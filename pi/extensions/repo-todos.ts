@@ -953,7 +953,7 @@ class RepoTodosComponent {
       return `${this.theme.fg("borderAccent", left)}${this.theme.fg("borderAccent", content)}${this.theme.fg("borderAccent", right)}`;
     };
     const makeDividerLine = () =>
-      `${this.theme.fg("borderAccent", "├")}${this.theme.fg("borderMuted", "─".repeat(contentWidth))}${this.theme.fg("borderAccent", "┤")}`;
+      `${this.theme.fg("borderAccent", "├")}${this.theme.fg("borderAccent", "─".repeat(contentWidth))}${this.theme.fg("borderAccent", "┤")}`;
     const frameLine = (content: string) =>
       `${this.theme.fg("borderAccent", "│")}${padVisible(content, contentWidth)}${this.theme.fg("borderAccent", "│")}`;
 
