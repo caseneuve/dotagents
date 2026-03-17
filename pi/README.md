@@ -76,6 +76,7 @@ Usage:
 Keybindings:
 - `↑/↓` or `j/k` — move selection / scroll preview
 - `←/→` or `h/l` — collapse/expand in the todo tree
+- `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom
 - `tab` — switch focus between list and preview
 - `s` — toggle sort mode

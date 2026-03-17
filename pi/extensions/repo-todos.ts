@@ -667,6 +667,12 @@ class RepoTodosComponent {
     this.previewScroll = 0;
   }
 
+  private getTodoDisplayPath(todo: TodoRecord): string {
+    return (
+      path.relative(path.join(this.cwd, "todos"), todo.path) || todo.filename
+    );
+  }
+
   private buildSummaryPreview(todo: TodoRecord, width: number): string[] {
     const lines: string[] = [];
     const heading = `${todo.frontmatter.title} (${todo.id})`;
@@ -679,7 +685,9 @@ class RepoTodosComponent {
         width,
       ),
     );
-    lines.push(...wrapBlock(this.theme.fg("dim", todo.path), width));
+    lines.push(
+      ...wrapBlock(this.theme.fg("dim", this.getTodoDisplayPath(todo)), width),
+    );
 
     if (todo.frontmatter.parent) {
       lines.push(
@@ -880,14 +888,12 @@ class RepoTodosComponent {
 
     const page = Math.max(5, Math.floor(this.getBodyHeight() * 0.8));
     if (matchesKey(data, Key.ctrl("u"))) {
-      if (this.focusPane === "preview") this.moveSelection(-page);
-      else this.previewScroll -= page;
+      this.previewScroll -= page;
       this.requestRender();
       return;
     }
     if (matchesKey(data, Key.ctrl("d"))) {
-      if (this.focusPane === "preview") this.moveSelection(page);
-      else this.previewScroll += page;
+      this.previewScroll += page;
       this.requestRender();
       return;
     }
