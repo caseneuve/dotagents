@@ -33,13 +33,15 @@ Entries live in `~/org/agent-journal/YYYY/MM/dd/HHMM-<project>.org`.
 
 Use inline `=code=` for symbols, hashes, and flags, and `~path~` for paths.
 Skip optional sections when they add no signal.
+Bracketed values in the template (for example `[YYYY-MM-DD HH:MM]`) are placeholders to replace, not literal brackets to keep.
+`Learnings`, `Mistakes & Feedback`, and `Insights` are optional sections: include them only when useful, otherwise omit those headings entirely.
 
 ```org
 #+TITLE: [concise title]
 #+DATE:  [YYYY-MM-DD HH:MM]
 #+STARTUP: showall
 #+LLM_SCHEMA: v1
-#+FILETAGS: [:agent-journal:agent:project:tags:]
+#+FILETAGS: :agent-journal:agent:project:tags:
 
 * Meta
 :PROPERTIES:
@@ -57,11 +59,11 @@ Skip optional sections when they add no signal.
 * State
 [Completed / in-progress / blocked. If not done: what remains or blocks it]
 
-* Learnings                                                        :optional:
-[Useful findings that should survive the session]
+* Learnings
+[Optional. Useful findings that should survive the session]
 
-* Mistakes & Feedback                                              :optional:
-[Wrong turns, corrections, or workflow issues]
+* Mistakes & Feedback
+[Optional. Wrong turns, corrections, or workflow issues]
 
 * Commits
 - =hash= [message]
@@ -69,6 +71,6 @@ Skip optional sections when they add no signal.
 * Next Steps
 - [Actionable item to resume]
 
-* Insights                                                         :optional:
-[Process or tooling observations worth preserving]
+* Insights
+[Optional. Process or tooling observations worth preserving]
 ```
