@@ -9,3 +9,4 @@
 | [add-todo](add-todo/SKILL.md) | Create and manage `./todos/*.md` work items with helper scripts. |
 | [sandbox](sandbox/SKILL.md) | Use isolated git worktrees for ticket work and controlled merges back to the main repo. |
 | [org-journal](org-journal/SKILL.md) | Record session logs in `~/org/agent-journal/` and rebuild a shared Org index. |
+| [self-reflect](self-reflect/SKILL.md) | Review the session for mistakes and friction, propose targeted doc and rule improvements. |

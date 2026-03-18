@@ -101,3 +101,4 @@ Errors (`ruff F`, clj-kondo `:error`, eslint `Error`) → `decision: block`. Sty
 | `/add-todo`           | [todo](skills/add-todo/SKILL.md)             |
 | `/sandbox`            | [sandbox](skills/sandbox/SKILL.md)           |
 | `/org-journal`        | [org-journal](skills/org-journal/SKILL.md)   |
+| `/self-reflect`       | [self-reflect](skills/self-reflect/SKILL.md) |

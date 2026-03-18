@@ -8,3 +8,4 @@
 | [journal](journal/SKILL.md)           | Document mistakes (post-mortems) and learnings. Stored in `~/.claude/journal/` for agents to consult and learn from.                                    |
 | [add-todo](add-todo/SKILL.md)         | Create and track work items. Manages TODO tickets with E2E specs for structured feature development.                                                    |
 | [sandbox](sandbox/SKILL.md)           | Isolated git worktree for ticket development. Creates disposable worktrees for clean isolation per ticket with TDD workflow support.                    |
+| [self-reflect](self-reflect/SKILL.md) | Session self-diagnosis. Reviews the conversation for mistakes and friction, proposes targeted improvements to docs and rules.                           |

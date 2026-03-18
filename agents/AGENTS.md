@@ -61,3 +61,4 @@ If you bootstrap hooks into `~/.agents/hooks/`, `smart-lint.sh` can be used as a
 - `add-todo`: create and track work items in `./todos`
 - `sandbox`: develop tickets in disposable git worktrees
 - `org-journal`: record session logs in Org mode
+- `self-reflect`: review the session for mistakes, propose doc and rule improvements
