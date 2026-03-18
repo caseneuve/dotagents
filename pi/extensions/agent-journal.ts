@@ -51,6 +51,9 @@ const JOURNAL_FILE_EXTENSION = ".org";
 const INDEX_BASENAME = "index.org";
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
+const OVERLAY_MIN_WIDTH = 100;
+const OVERLAY_MARGIN = 1;
+const MIN_TERMINAL_COLUMNS = OVERLAY_MIN_WIDTH + OVERLAY_MARGIN * 2;
 const FRAME_HEADER_HEIGHT = 7;
 const FRAME_FOOTER_HEIGHT = 3;
 const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
@@ -979,6 +982,15 @@ export default function agentJournalExtension(pi: ExtensionAPI) {
         return;
       }
 
+      const termWidth = process.stdout.columns ?? 0;
+      if (termWidth < MIN_TERMINAL_COLUMNS) {
+        ctx.ui.notify(
+          `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
+          "warning",
+        );
+        return;
+      }
+
       const currentProject = detectCurrentProject(ctx.cwd);
 
       await ctx.ui.custom<void>(
@@ -1034,10 +1046,9 @@ export default function agentJournalExtension(pi: ExtensionAPI) {
           overlayOptions: {
             anchor: "center",
             width: "82%",
-            minWidth: 100,
+            minWidth: OVERLAY_MIN_WIDTH,
             maxHeight: OVERLAY_MAX_HEIGHT,
-            margin: 1,
-            visible: (termWidth) => termWidth >= 110,
+            margin: OVERLAY_MARGIN,
           },
         },
       );

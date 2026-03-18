@@ -61,6 +61,9 @@ const COMMAND_NAME = "repo-todos";
 const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
+const OVERLAY_MIN_WIDTH = 90;
+const OVERLAY_MARGIN = 1;
+const MIN_TERMINAL_COLUMNS = OVERLAY_MIN_WIDTH + OVERLAY_MARGIN * 2;
 const FRAME_HEADER_HEIGHT = 7;
 const FRAME_FOOTER_HEIGHT = 3;
 const FRAME_CHROME_HEIGHT = FRAME_HEADER_HEIGHT + FRAME_FOOTER_HEIGHT;
@@ -1262,6 +1265,15 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
         return;
       }
 
+      const termWidth = process.stdout.columns ?? 0;
+      if (termWidth < MIN_TERMINAL_COLUMNS) {
+        ctx.ui.notify(
+          `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
+          "warning",
+        );
+        return;
+      }
+
       const markedTodos = await ctx.ui.custom<MarkedTodosPayload | undefined>(
         (tui, theme, _kb, done) => {
           const openEditor = async (filePath: string) => {
@@ -1314,10 +1326,9 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
           overlayOptions: {
             anchor: "center",
             width: "78%",
-            minWidth: 90,
+            minWidth: OVERLAY_MIN_WIDTH,
             maxHeight: OVERLAY_MAX_HEIGHT,
-            margin: 1,
-            visible: (termWidth) => termWidth >= 100,
+            margin: OVERLAY_MARGIN,
           },
         },
       );
