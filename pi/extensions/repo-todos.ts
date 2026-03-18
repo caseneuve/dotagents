@@ -52,6 +52,11 @@ type VisibleTreeCache = {
   rows: FlattenedRow[];
 };
 
+type MarkedTodosPayload = {
+  count: number;
+  text: string;
+};
+
 const COMMAND_NAME = "repo-todos";
 const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
 const OVERLAY_MAX_HEIGHT = "90%";
@@ -290,6 +295,14 @@ function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+function formatMarkedTodosEditorText(todoPaths: string[]): string {
+  const lines = [
+    "# read the following todos:",
+    ...todoPaths.map((todoPath) => `- ${todoPath}`),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
 async function scanTodos(
   cwd: string,
 ): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
@@ -444,6 +457,7 @@ class RepoTodosComponent {
   private lastError?: string;
   private pendingG = false;
   private dataVersion = 0;
+  private markedIds = new Set<string>();
   private filterInput = new Input();
   private visibleTreeCache?: VisibleTreeCache;
 
@@ -451,7 +465,7 @@ class RepoTodosComponent {
     private cwd: string,
     private theme: Theme,
     private requestRender: (full?: boolean) => void,
-    private onClose: () => void,
+    private onClose: (payload?: MarkedTodosPayload) => void,
     private onEdit: (path: string) => Promise<void>,
   ) {
     this.filterInput.onSubmit = () => {
@@ -484,6 +498,7 @@ class RepoTodosComponent {
       const { roots, issues } = await scanTodos(this.cwd);
       this.roots = roots;
       this.issues = issues;
+      this.pruneMarkedIds();
       this.dataVersion += 1;
       this.invalidateTreeCache();
       this.seedExpansion(this.roots);
@@ -760,6 +775,59 @@ class RepoTodosComponent {
     );
   }
 
+  private collectTodosById(): Map<string, TodoRecord> {
+    const byId = new Map<string, TodoRecord>();
+    const walk = (todos: TodoRecord[]) => {
+      for (const todo of todos) {
+        byId.set(todo.id, todo);
+        walk(todo.children);
+      }
+    };
+    walk(this.roots);
+    return byId;
+  }
+
+  private pruneMarkedIds(): void {
+    const byId = this.collectTodosById();
+    for (const id of this.markedIds) {
+      if (!byId.has(id)) {
+        this.markedIds.delete(id);
+      }
+    }
+  }
+
+  private toggleMarkForSelected(): void {
+    const todo = this.getSelectedTodo();
+    if (!todo) return;
+
+    if (this.markedIds.has(todo.id)) {
+      this.markedIds.delete(todo.id);
+    } else {
+      this.markedIds.add(todo.id);
+    }
+  }
+
+  private buildMarkedTodosPayload(): MarkedTodosPayload | undefined {
+    if (this.markedIds.size === 0) return undefined;
+
+    const byId = this.collectTodosById();
+    const todos = [...this.markedIds]
+      .map((id) => byId.get(id))
+      .filter((todo): todo is TodoRecord => Boolean(todo))
+      .sort((a, b) => compareIds(a.id, b.id));
+
+    if (todos.length === 0) return undefined;
+
+    const todoPaths = todos.map((todo) =>
+      path.relative(this.cwd, todo.path).replaceAll(path.sep, "/"),
+    );
+
+    return {
+      count: todos.length,
+      text: formatMarkedTodosEditorText(todoPaths),
+    };
+  }
+
   private buildSummaryPreview(todo: TodoRecord, width: number): string[] {
     const lines: string[] = [];
     const heading = `${todo.frontmatter.title} (${todo.id})`;
@@ -876,11 +944,15 @@ class RepoTodosComponent {
             : "▸";
         const warning =
           todo.warnings.length > 0 ? this.theme.fg("warning", " !") : "";
+        const isMarked = this.markedIds.has(todo.id);
         const meta = this.theme.fg(
           "dim",
           ` ${todo.frontmatter.type}/${todo.frontmatter.priority}`,
         );
         let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${this.theme.fg("accent", todo.id)} ${todo.frontmatter.title}${meta}${warning}`;
+        if (isMarked) {
+          line = this.theme.bold(line);
+        }
         line = truncateToWidth(line, width);
         if (isSelected) {
           line = this.theme.bg("selectedBg", padVisible(line, width));
@@ -926,7 +998,7 @@ class RepoTodosComponent {
       data === "q"
     ) {
       this.pendingG = false;
-      this.onClose();
+      this.onClose(this.buildMarkedTodosPayload());
       return;
     }
 
@@ -999,6 +1071,11 @@ class RepoTodosComponent {
       if (todo) {
         void this.onEdit(todo.path);
       }
+      return;
+    }
+    if (data === "m" && this.focusPane === "list") {
+      this.toggleMarkForSelected();
+      this.requestRender();
       return;
     }
 
@@ -1157,7 +1234,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • tab fold • enter focus/unfocus • t layout • s sort • d hide done • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
@@ -1185,7 +1262,7 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
         return;
       }
 
-      await ctx.ui.custom<void>(
+      const markedTodos = await ctx.ui.custom<MarkedTodosPayload | undefined>(
         (tui, theme, _kb, done) => {
           const openEditor = async (filePath: string) => {
             const editorCmd = process.env.VISUAL || process.env.EDITOR;
@@ -1226,7 +1303,7 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
             ctx.cwd,
             theme,
             (full) => tui.requestRender(Boolean(full)),
-            () => done(undefined),
+            (payload) => done(payload),
             openEditor,
           );
           void component.init();
@@ -1244,6 +1321,14 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
           },
         },
       );
+
+      if (markedTodos) {
+        ctx.ui.setEditorText(markedTodos.text);
+        ctx.ui.notify(
+          `Loaded ${markedTodos.count} marked todo${markedTodos.count === 1 ? "" : "s"} into the editor`,
+          "info",
+        );
+      }
     },
   });
 }
