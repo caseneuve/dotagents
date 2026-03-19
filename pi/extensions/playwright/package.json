@@ -1,0 +1,8 @@
+{
+  "name": "dotagents-playwright-extension",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.54.2"
+  }
+}

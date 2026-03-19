@@ -216,6 +216,22 @@ Notes:
 - the first backend implementation covers the ChatGPT subscription / `wham/usage` endpoint only
 - model-to-backend matching is heuristic for now and can be refined as more backends are added
 
+### `extensions/playwright/`
+
+Adds native Playwright browser-debug tools for frontend verification loops.
+
+What it does:
+
+- exposes browser actions as first-class tools (`playwright_open`, `playwright_query`, `playwright_hover`, etc.)
+- returns structured outputs for DOM queries, computed styles, waits, screenshots, and console errors
+- keeps one browser session alive across tool calls for fast iterate-fix-verify cycles
+- enforces a strict development URL policy: only `http://localhost:3000`
+
+Notes:
+
+- this first iteration focuses on tool functionality; settings UI will be added later
+- install extension-local dependencies with Bun in `pi/extensions/playwright/`
+
 ## Design Notes
 
 These extensions are intentionally small and composable.
