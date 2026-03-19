@@ -225,11 +225,13 @@ What it does:
 - exposes browser actions as first-class tools (`playwright_open`, `playwright_query`, `playwright_hover`, etc.)
 - returns structured outputs for DOM queries, computed styles, waits, screenshots, and console errors
 - keeps one browser session alive across tool calls for fast iterate-fix-verify cycles
-- enforces a strict development URL policy: only `http://localhost:3000`
+- enforces URL policy for navigation and network interception with allow/deny/default-action rules
+- ships with a safe default policy that allows only `http://localhost:3000`
+- includes `/playwright-settings` for interactive policy editing
 
 Notes:
 
-- this first iteration focuses on tool functionality; settings UI will be added later
+- policy is stored project-locally at `.pi/playwright-policy.json`
 - install extension-local dependencies with Bun in `pi/extensions/playwright/`
 
 ## Design Notes

@@ -1,4 +1,5 @@
-import { DEV_ALLOWED_ORIGIN, INTERNAL_ALLOWED_PROTOCOLS } from "./constants";
+import { INTERNAL_ALLOWED_PROTOCOLS, POLICY_ACTIONS } from "./constants";
+import type { UrlPolicyConfig } from "./policy-config";
 
 export type UrlAccessDecision = {
   allowed: boolean;
@@ -14,11 +15,37 @@ function parseUrl(rawUrl: string): URL | null {
   }
 }
 
-function isAllowedHttpOrigin(url: URL): boolean {
-  return url.origin === DEV_ALLOWED_ORIGIN;
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function decideNavigationAccess(rawUrl: string): UrlAccessDecision {
+function wildcardToRegExp(pattern: string): RegExp {
+  const escaped = escapeRegExp(pattern).replace(/\\\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+function matchRule(url: URL, rawRule: string): boolean {
+  const rule = rawRule.trim();
+  if (!rule) {
+    return false;
+  }
+
+  if (rule.includes("*")) {
+    const regex = wildcardToRegExp(rule);
+    return regex.test(url.toString()) || regex.test(url.origin);
+  }
+
+  return url.toString() === rule || url.origin === rule;
+}
+
+function matchesAnyRule(url: URL, rules: string[]): boolean {
+  return rules.some((rule) => matchRule(url, rule));
+}
+
+export function decideNavigationAccess(
+  rawUrl: string,
+  config: UrlPolicyConfig,
+): UrlAccessDecision {
   const url = parseUrl(rawUrl);
   if (!url) {
     return {
@@ -27,22 +54,41 @@ export function decideNavigationAccess(rawUrl: string): UrlAccessDecision {
     };
   }
 
-  if (isAllowedHttpOrigin(url)) {
+  if (matchesAnyRule(url, config.deny)) {
+    return {
+      allowed: false,
+      reason: "Blocked by deny policy rule",
+      normalizedUrl: url.toString(),
+    };
+  }
+
+  if (matchesAnyRule(url, config.allow)) {
     return {
       allowed: true,
-      reason: "Allowed dev origin",
+      reason: "Allowed by allow policy rule",
+      normalizedUrl: url.toString(),
+    };
+  }
+
+  if (config.defaultAction === POLICY_ACTIONS.allow) {
+    return {
+      allowed: true,
+      reason: "Allowed by default policy",
       normalizedUrl: url.toString(),
     };
   }
 
   return {
     allowed: false,
-    reason: `Blocked by policy: only ${DEV_ALLOWED_ORIGIN} is allowed during development`,
+    reason: "Blocked by default deny policy",
     normalizedUrl: url.toString(),
   };
 }
 
-export function decideRequestAccess(rawUrl: string): UrlAccessDecision {
+export function decideRequestAccess(
+  rawUrl: string,
+  config: UrlPolicyConfig,
+): UrlAccessDecision {
   const url = parseUrl(rawUrl);
   if (!url) {
     return {
@@ -59,5 +105,5 @@ export function decideRequestAccess(rawUrl: string): UrlAccessDecision {
     };
   }
 
-  return decideNavigationAccess(url.toString());
+  return decideNavigationAccess(url.toString(), config);
 }

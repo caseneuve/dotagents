@@ -5,6 +5,7 @@ import {
   MAX_CONSOLE_ERRORS,
 } from "./constants";
 import { decideNavigationAccess, decideRequestAccess } from "./policy";
+import type { UrlPolicyConfig } from "./policy-config";
 
 import type { Browser, BrowserContext, Page } from "playwright";
 
@@ -53,6 +54,8 @@ export class PlaywrightSession {
     text: string;
   }> = [];
 
+  constructor(private readonly getPolicyConfig: () => UrlPolicyConfig) {}
+
   async ensureStarted(): Promise<void> {
     if (this.page && !this.page.isClosed()) {
       return;
@@ -66,7 +69,7 @@ export class PlaywrightSession {
 
     await this.context.route("**/*", async (route) => {
       const url = route.request().url();
-      const decision = decideRequestAccess(url);
+      const decision = decideRequestAccess(url, this.getPolicyConfig());
       if (!decision.allowed) {
         await route.abort("blockedbyclient");
         return;
@@ -116,7 +119,7 @@ export class PlaywrightSession {
   }
 
   async open(url: string): Promise<{ finalUrl: string; title: string }> {
-    const decision = decideNavigationAccess(url);
+    const decision = decideNavigationAccess(url, this.getPolicyConfig());
     if (!decision.allowed) {
       throw new Error(decision.reason);
     }

@@ -13,10 +13,31 @@ export const TOOL_NAMES = {
   consoleErrors: "playwright_console_errors",
 } as const;
 
-export const DEV_ALLOWED_ORIGIN = "http://localhost:3000";
+export const COMMAND_NAMES = {
+  settings: "playwright-settings",
+} as const;
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 export const MAX_CONSOLE_ERRORS = 200;
 
 export const INTERNAL_ALLOWED_PROTOCOLS = new Set(["about:", "data:", "blob:"]);
+
+export const POLICY_DEFAULT_ALLOWED_RULE = "http://localhost:3000";
+export const POLICY_FILE_RELATIVE_PATH = ".pi/playwright-policy.json";
+
+export const POLICY_ACTIONS = {
+  allow: "allow",
+  deny: "deny",
+} as const;
+
+export const SETTINGS_ACTIONS = {
+  showSummary: "Show policy summary",
+  addAllowRule: "Add allow rule",
+  addDenyRule: "Add deny rule",
+  removeAllowRule: "Remove allow rule",
+  removeDenyRule: "Remove deny rule",
+  setDefaultAction: "Set default action",
+  saveAndExit: "Save and exit",
+  exitWithoutSaving: "Exit without saving",
+} as const;

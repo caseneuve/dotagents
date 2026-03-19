@@ -12,7 +12,13 @@ bunx playwright install chromium
 
 ## Current security policy (dev)
 
-Only `http://localhost:3000` is allowed for navigation and network requests.
+Default policy starts as:
+
+- `defaultAction: deny`
+- `allow: ["http://localhost:3000"]`
+- `deny: []`
+
+Manage policy with `/playwright-settings`.
 
 ## Tools
 

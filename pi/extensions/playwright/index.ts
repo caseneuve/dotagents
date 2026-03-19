@@ -1,14 +1,51 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { EXTENSION_NAME, TOOL_NAMES } from "./constants";
+import { COMMAND_NAMES, EXTENSION_NAME, TOOL_NAMES } from "./constants";
+import {
+  clonePolicyConfig,
+  DEFAULT_POLICY_CONFIG,
+  summarizePolicy,
+  type UrlPolicyConfig,
+} from "./policy-config";
+import { loadPolicyConfig } from "./policy-storage";
 import { PlaywrightSession } from "./session";
+import { registerPlaywrightSettingsCommand } from "./settings-command";
 
 function asPrettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
 export default function (pi: ExtensionAPI) {
-  const session = new PlaywrightSession();
+  let policyConfig: UrlPolicyConfig = clonePolicyConfig(DEFAULT_POLICY_CONFIG);
+
+  const session = new PlaywrightSession(() => policyConfig);
+
+  registerPlaywrightSettingsCommand(pi, {
+    get: () => clonePolicyConfig(policyConfig),
+    set: (next) => {
+      policyConfig = clonePolicyConfig(next);
+    },
+  });
+
+  pi.on("session_start", async (_event, ctx) => {
+    try {
+      policyConfig = await loadPolicyConfig(ctx.cwd);
+      ctx.ui.setStatus(
+        EXTENSION_NAME,
+        `playwright policy: ${summarizePolicy(policyConfig)}`,
+      );
+    } catch (error) {
+      policyConfig = clonePolicyConfig(DEFAULT_POLICY_CONFIG);
+      ctx.ui.setStatus(
+        EXTENSION_NAME,
+        `playwright policy: ${summarizePolicy(policyConfig)} (fallback)`,
+      );
+      ctx.ui.notify(
+        `Failed to load /${COMMAND_NAMES.settings} policy file: ${String(error)}`,
+        "warning",
+      );
+    }
+  });
 
   pi.on("session_shutdown", async () => {
     await session.dispose();
@@ -18,7 +55,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.open,
     label: "Playwright Open",
     description: "Open a URL in the Playwright browser session.",
-    promptSnippet: "Open a localhost:3000 URL in a browser session",
+    promptSnippet: "Open an allowed URL in a browser session",
     parameters: Type.Object({
       url: Type.String({ description: "Absolute URL to open" }),
     }),
@@ -203,9 +240,5 @@ export default function (pi: ExtensionAPI) {
         details: result,
       };
     },
-  });
-
-  pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.setStatus(EXTENSION_NAME, "playwright policy: localhost:3000 only");
   });
 }
