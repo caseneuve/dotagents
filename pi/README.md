@@ -145,7 +145,7 @@ Keybindings:
 - `t` — toggle horizontal/vertical split
 - `s` — toggle sort mode
 - `d` — hide/show completed items
-- `m` — toggle summary/markdown preview
+- `m` — mark/unmark the selected todo (from list or preview focus)
 - `r` — rescan todos
 - `q` / `esc` — close
 

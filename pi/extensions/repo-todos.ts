@@ -1076,7 +1076,7 @@ class RepoTodosComponent {
       }
       return;
     }
-    if (data === "m" && this.focusPane === "list") {
+    if (data === "m") {
       this.toggleMarkForSelected();
       this.requestRender();
       return;
@@ -1175,11 +1175,8 @@ class RepoTodosComponent {
         ? `${queryPrefix}${this.filterInput.render(Math.max(8, contentWidth - queryPrefix.length))[0] ?? ""}`
         : `${queryPrefix}${this.theme.fg(queryValue ? "text" : "muted", queryDisplay)}`;
     const selectedLine = selected
-      ? this.theme.fg(
-          "muted",
-          `Selected: ${selected.id} ${selected.frontmatter.title}`,
-        )
-      : this.theme.fg("muted", "Selected: none");
+      ? `${this.theme.fg(this.markedIds.has(selected.id) ? "success" : "muted", this.markedIds.has(selected.id) ? "☑" : "☐")} ${this.theme.fg("muted", `${selected.id} ${selected.frontmatter.title}`)}`
+      : this.theme.fg("muted", "☐ none");
 
     const makeBorderLine = (
       left: string,
