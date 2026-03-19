@@ -3,7 +3,15 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
-import { Container, matchesKey, Spacer, Text } from "@mariozechner/pi-tui";
+import {
+  Container,
+  getEditorKeybindings,
+  matchesKey,
+  type SelectItem,
+  SelectList,
+  Spacer,
+  Text,
+} from "@mariozechner/pi-tui";
 import {
   COMMAND_NAMES,
   POLICY_FILE_RELATIVE_PATH,
@@ -29,6 +37,22 @@ type ProtocolSelection = "http" | "https" | "both";
 const PROTOCOL_OPTIONS: ProtocolSelection[] = ["http", "https", "both"];
 const HTTP_PREFIX = "http://";
 const HTTPS_PREFIX = "https://";
+
+type SettingsActionOption = {
+  label: string;
+  value: string;
+  hotkey: string;
+};
+
+const SETTINGS_HOTKEYS = {
+  viewSummary: "v",
+  addAllow: "a",
+  removeAllow: "A",
+  addDeny: "d",
+  removeDeny: "D",
+  save: "s",
+  exit: "e",
+} as const;
 
 function formatRuleList(title: string, rules: string[]): string {
   if (rules.length === 0) {
@@ -59,58 +83,134 @@ function withProtocol(protocol: "http" | "https", domainPart: string): string {
   return `${prefix}${stripLeadingHttpProtocols(domainPart)}`;
 }
 
-async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
-  const options: Array<{ label: string; value: string }> = [
+function buildSettingsActionOptions(
+  config: UrlPolicyConfig,
+): SettingsActionOption[] {
+  const options: SettingsActionOption[] = [
     {
-      label: SETTINGS_ACTIONS.showSummary,
+      label: `[${SETTINGS_HOTKEYS.viewSummary}] ${SETTINGS_ACTIONS.showSummary}`,
       value: SETTINGS_ACTIONS.showSummary,
+      hotkey: SETTINGS_HOTKEYS.viewSummary,
     },
     {
-      label: SETTINGS_ACTIONS.addAllowRule,
+      label: `[${SETTINGS_HOTKEYS.addAllow}] ${SETTINGS_ACTIONS.addAllowRule}`,
       value: SETTINGS_ACTIONS.addAllowRule,
+      hotkey: SETTINGS_HOTKEYS.addAllow,
     },
     {
-      label: SETTINGS_ACTIONS.addDenyRule,
+      label: `[${SETTINGS_HOTKEYS.addDeny}] ${SETTINGS_ACTIONS.addDenyRule}`,
       value: SETTINGS_ACTIONS.addDenyRule,
+      hotkey: SETTINGS_HOTKEYS.addDeny,
     },
   ];
 
   if (config.allow.length > 0) {
     options.push({
-      label: SETTINGS_ACTIONS.removeAllowRule,
+      label: `[${SETTINGS_HOTKEYS.removeAllow}] ${SETTINGS_ACTIONS.removeAllowRule}`,
       value: SETTINGS_ACTIONS.removeAllowRule,
+      hotkey: SETTINGS_HOTKEYS.removeAllow,
     });
   }
 
   if (config.deny.length > 0) {
     options.push({
-      label: SETTINGS_ACTIONS.removeDenyRule,
+      label: `[${SETTINGS_HOTKEYS.removeDeny}] ${SETTINGS_ACTIONS.removeDenyRule}`,
       value: SETTINGS_ACTIONS.removeDenyRule,
+      hotkey: SETTINGS_HOTKEYS.removeDeny,
     });
   }
 
   options.push(
     {
-      label: SETTINGS_ACTIONS.saveAndExit,
+      label: `[${SETTINGS_HOTKEYS.save}] ${SETTINGS_ACTIONS.saveAndExit}`,
       value: SETTINGS_ACTIONS.saveAndExit,
+      hotkey: SETTINGS_HOTKEYS.save,
     },
     {
-      label: SETTINGS_ACTIONS.exitWithoutSaving,
+      label: `[${SETTINGS_HOTKEYS.exit}] ${SETTINGS_ACTIONS.exitWithoutSaving}`,
       value: SETTINGS_ACTIONS.exitWithoutSaving,
+      hotkey: SETTINGS_HOTKEYS.exit,
     },
   );
 
+  return options;
+}
+
+async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
+  const options = buildSettingsActionOptions(config);
   const summary = createSettingsMenuSummary(config);
-  const selectedLabel = await ctx.ui.select(
-    `Playwright settings (${summary})`,
-    options.map((option) => option.label),
-  );
 
-  if (!selectedLabel) {
-    return undefined;
-  }
+  return ctx.ui.custom<string | undefined>((tui, theme, _keybindings, done) => {
+    const container = new Container();
+    container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+    container.addChild(
+      new Text(theme.fg("accent", theme.bold("Playwright settings")), 1, 0),
+    );
+    container.addChild(new Text(theme.fg("dim", summary), 1, 0));
+    container.addChild(new Spacer(1));
 
-  return options.find((option) => option.label === selectedLabel)?.value;
+    const items: SelectItem[] = options.map((option) => ({
+      label: option.label,
+      value: option.value,
+    }));
+
+    const selectList = new SelectList(items, Math.min(items.length, 10), {
+      selectedPrefix: (text) => theme.fg("accent", text),
+      selectedText: (text) => theme.fg("accent", text),
+      description: (text) => theme.fg("muted", text),
+      scrollInfo: (text) => theme.fg("dim", text),
+      noMatch: (text) => theme.fg("warning", text),
+    });
+
+    selectList.onSelect = (item) => done(String(item.value));
+    selectList.onCancel = () => done(undefined);
+
+    container.addChild(selectList);
+    container.addChild(new Spacer(1));
+    container.addChild(
+      new Text(
+        theme.fg(
+          "dim",
+          "Hotkeys: v summary • a/A allow add/remove • d/D deny add/remove • s save • e exit",
+        ),
+        1,
+        0,
+      ),
+    );
+    container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+
+    return {
+      render(width: number) {
+        return container.render(width);
+      },
+      invalidate() {
+        container.invalidate();
+      },
+      handleInput(data: string) {
+        const optionByHotkey = options.find((option) => option.hotkey === data);
+        if (optionByHotkey) {
+          done(optionByHotkey.value);
+          return;
+        }
+
+        const editorKeys = getEditorKeybindings();
+        if (
+          editorKeys.matches(data, "selectUp") ||
+          editorKeys.matches(data, "selectDown") ||
+          editorKeys.matches(data, "selectConfirm") ||
+          editorKeys.matches(data, "selectCancel")
+        ) {
+          selectList.handleInput(data);
+          tui.requestRender();
+          return;
+        }
+
+        if (matchesKey(data, "escape")) {
+          done(undefined);
+        }
+      },
+    };
+  });
 }
 
 async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
