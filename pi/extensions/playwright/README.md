@@ -28,6 +28,7 @@ Settings UX notes:
 - Copy-pasted rules with duplicate protocol prefixes are sanitized.
 - Policy is allowlist-only: URLs must match allow rules.
 - Deny rules always win over allow rules.
+- `playwright_open` returns structured `policyBlocked` + `nonRetryable` details when blocked so agents can stop retry loops and ask for settings updates.
 
 ## Tools
 

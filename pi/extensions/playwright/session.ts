@@ -4,7 +4,11 @@ import {
   DEFAULT_VIEWPORT,
   MAX_CONSOLE_ERRORS,
 } from "./constants";
-import { decideNavigationAccess, decideRequestAccess } from "./policy";
+import {
+  decideNavigationAccess,
+  decideRequestAccess,
+  type UrlAccessDecision,
+} from "./policy";
 import type { UrlPolicyConfig } from "./policy-config";
 
 import type { Browser, BrowserContext, Page } from "playwright";
@@ -31,6 +35,23 @@ type ComputedStyleOptions = {
   selector: string;
   props: string[];
 };
+
+export class PlaywrightPolicyBlockedError extends Error {
+  constructor(
+    message: string,
+    readonly details: {
+      requestedUrl: string;
+      decision: UrlAccessDecision;
+      allowRules: string[];
+      denyRules: string[];
+      nonRetryable: true;
+      policyBlocked: true;
+    },
+  ) {
+    super(message);
+    this.name = "PlaywrightPolicyBlockedError";
+  }
+}
 
 function withDefaultTimeout(timeoutMs?: number): number {
   return timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -119,9 +140,17 @@ export class PlaywrightSession {
   }
 
   async open(url: string): Promise<{ finalUrl: string; title: string }> {
-    const decision = decideNavigationAccess(url, this.getPolicyConfig());
+    const policyConfig = this.getPolicyConfig();
+    const decision = decideNavigationAccess(url, policyConfig);
     if (!decision.allowed) {
-      throw new Error(decision.reason);
+      throw new PlaywrightPolicyBlockedError(decision.reason, {
+        requestedUrl: url,
+        decision,
+        allowRules: [...policyConfig.allow],
+        denyRules: [...policyConfig.deny],
+        nonRetryable: true,
+        policyBlocked: true,
+      });
     }
 
     await this.ensureStarted();

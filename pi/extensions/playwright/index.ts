@@ -1,6 +1,11 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { COMMAND_NAMES, EXTENSION_NAME, TOOL_NAMES } from "./constants";
+import {
+  COMMAND_NAMES,
+  EXTENSION_NAME,
+  POLICY_FILE_RELATIVE_PATH,
+  TOOL_NAMES,
+} from "./constants";
 import {
   clonePolicyConfig,
   DEFAULT_POLICY_CONFIG,
@@ -8,11 +13,23 @@ import {
   type UrlPolicyConfig,
 } from "./policy-config";
 import { loadPolicyConfig } from "./policy-storage";
-import { PlaywrightSession } from "./session";
+import { PlaywrightPolicyBlockedError, PlaywrightSession } from "./session";
 import { registerPlaywrightSettingsCommand } from "./settings-command";
 
 function asPrettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function formatPolicyBlockedText(details: {
+  requestedUrl: string;
+  reason: string;
+}): string {
+  return [
+    `Policy blocked navigation to ${details.requestedUrl}`,
+    `Reason: ${details.reason}`,
+    `This is non-retryable for the same URL until policy changes.`,
+    `Next step: update /${COMMAND_NAMES.settings} (stored in ${POLICY_FILE_RELATIVE_PATH}) or use an already allowed URL.`,
+  ].join("\n");
 }
 
 export default function (pi: ExtensionAPI) {
@@ -56,15 +73,50 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Open",
     description: "Open a URL in the Playwright browser session.",
     promptSnippet: "Open an allowed URL in a browser session",
+    promptGuidelines: [
+      "If this tool returns policyBlocked=true, do not retry the same URL.",
+      "When blocked by policy, ask the user to update /playwright-settings or provide an already allowed URL.",
+    ],
     parameters: Type.Object({
       url: Type.String({ description: "Absolute URL to open" }),
     }),
     async execute(_toolCallId, params) {
-      const result = await session.open(params.url);
-      return {
-        content: [{ type: "text", text: `Opened ${result.finalUrl}` }],
-        details: result,
-      };
+      try {
+        const result = await session.open(params.url);
+        return {
+          content: [{ type: "text", text: `Opened ${result.finalUrl}` }],
+          details: result,
+        };
+      } catch (error) {
+        if (error instanceof PlaywrightPolicyBlockedError) {
+          const result = {
+            ok: false,
+            nonRetryable: true as const,
+            policyBlocked: true as const,
+            requestedUrl: error.details.requestedUrl,
+            reason: error.message,
+            normalizedUrl: error.details.decision.normalizedUrl,
+            allowRules: error.details.allowRules,
+            denyRules: error.details.denyRules,
+            nextStep: `Run /${COMMAND_NAMES.settings} to adjust allow/deny rules, then retry.`,
+          };
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: formatPolicyBlockedText({
+                  requestedUrl: result.requestedUrl,
+                  reason: result.reason,
+                }),
+              },
+            ],
+            details: result,
+          };
+        }
+
+        throw error;
+      }
     },
   });
 
