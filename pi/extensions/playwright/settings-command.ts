@@ -22,6 +22,12 @@ type PolicyStateAccessor = {
   set(next: UrlPolicyConfig): void;
 };
 
+type ProtocolSelection = "http" | "https" | "both";
+
+const PROTOCOL_OPTIONS: ProtocolSelection[] = ["http", "https", "both"];
+const HTTP_PREFIX = "http://";
+const HTTPS_PREFIX = "https://";
+
 function formatRuleList(title: string, rules: string[]): string {
   if (rules.length === 0) {
     return `${title}: (none)`;
@@ -35,6 +41,23 @@ function createSettingsMenuSummary(config: UrlPolicyConfig): string {
     `Policy file: ${POLICY_FILE_RELATIVE_PATH}`,
     `Summary: ${summarizePolicy(config)}`,
   ].join("\n");
+}
+
+function stripLeadingHttpProtocols(raw: string): string {
+  let value = raw.trim();
+  while (/^https?:\/\//i.test(value)) {
+    value = value.replace(/^https?:\/\//i, "");
+  }
+  return value.trim();
+}
+
+function hasExplicitHttpProtocol(rule: string): boolean {
+  return /^https?:\/\//i.test(rule.trim());
+}
+
+function withProtocol(protocol: "http" | "https", domainPart: string): string {
+  const prefix = protocol === "http" ? HTTP_PREFIX : HTTPS_PREFIX;
+  return `${prefix}${stripLeadingHttpProtocols(domainPart)}`;
 }
 
 async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
@@ -61,25 +84,76 @@ async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
     "",
     formatRuleList("Deny rules", config.deny),
     "",
-    "Rule format: include protocol, e.g. http://localhost:3000 or https://*.example.com",
-    "Policy is allowlist-only: URLs must match an allow rule and must not match any deny rule.",
+    "Rule input supports either:",
+    "- full URL pattern with protocol (example: https://*.example.com)",
+    "- domain/path only (example: localhost:3000 or *.example.com/app)",
+    "",
+    "When you enter domain/path only, you'll choose protocol: http, https, or both.",
     "Deny rules take precedence over allow rules.",
   ].join("\n");
 
   await ctx.ui.editor("Playwright policy summary", summary);
 }
 
-async function promptAddRule(
+async function promptRuleInput(
   ctx: ExtensionContext,
   typeLabel: "allow" | "deny",
 ): Promise<string | undefined> {
   return ctx.ui.input(
     `Add ${typeLabel} rule`,
-    "https://example.com or https://*.example.com",
+    "localhost:3000 or https://*.example.com",
     {
       timeout: 120_000,
     },
   );
+}
+
+async function promptProtocolSelection(
+  ctx: ExtensionContext,
+): Promise<ProtocolSelection | undefined> {
+  return ctx.ui.select("Choose protocol(s)", PROTOCOL_OPTIONS);
+}
+
+async function buildRulesFromUserInput(
+  ctx: ExtensionContext,
+  rawInput: string,
+): Promise<string[]> {
+  const trimmed = rawInput.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  if (hasExplicitHttpProtocol(trimmed)) {
+    const protocol = trimmed.toLowerCase().startsWith(HTTPS_PREFIX)
+      ? "https"
+      : "http";
+    const sanitized = withProtocol(protocol, trimmed);
+    return [sanitized];
+  }
+
+  if (isRuleFormatSupported(trimmed)) {
+    return [trimmed];
+  }
+
+  const domainPart = stripLeadingHttpProtocols(trimmed);
+  if (!domainPart) {
+    return [];
+  }
+
+  const selection = await promptProtocolSelection(ctx);
+  if (!selection) {
+    return [];
+  }
+
+  if (selection === "http") {
+    return [withProtocol("http", domainPart)];
+  }
+
+  if (selection === "https") {
+    return [withProtocol("https", domainPart)];
+  }
+
+  return [withProtocol("http", domainPart), withProtocol("https", domainPart)];
 }
 
 async function promptRemoveRule(
@@ -132,41 +206,55 @@ export function registerPlaywrightSettingsCommand(
         }
 
         if (action === SETTINGS_ACTIONS.addAllowRule) {
-          const rule = await promptAddRule(ctx, "allow");
-          if (rule) {
-            if (!isRuleFormatSupported(rule)) {
-              ctx.ui.notify(
-                "Unsupported rule format. Include protocol, e.g. http://localhost:3000 or https://*.example.com",
-                "warning",
-              );
+          const rawInput = await promptRuleInput(ctx, "allow");
+          if (rawInput) {
+            const rules = await buildRulesFromUserInput(ctx, rawInput);
+            if (rules.length === 0) {
               continue;
+            }
+
+            let nextAllow = workingCopy.allow;
+            for (const rule of rules) {
+              if (!isRuleFormatSupported(rule)) {
+                ctx.ui.notify(`Unsupported rule format: ${rule}`, "warning");
+                continue;
+              }
+              nextAllow = addRule(nextAllow, rule);
             }
 
             workingCopy = {
               ...workingCopy,
-              allow: addRule(workingCopy.allow, rule),
+              allow: nextAllow,
             };
             updateStatus(ctx, workingCopy);
+            ctx.ui.notify(`Added allow rule(s): ${rules.join(", ")}`, "info");
           }
           continue;
         }
 
         if (action === SETTINGS_ACTIONS.addDenyRule) {
-          const rule = await promptAddRule(ctx, "deny");
-          if (rule) {
-            if (!isRuleFormatSupported(rule)) {
-              ctx.ui.notify(
-                "Unsupported rule format. Include protocol, e.g. http://localhost:3000 or https://*.example.com",
-                "warning",
-              );
+          const rawInput = await promptRuleInput(ctx, "deny");
+          if (rawInput) {
+            const rules = await buildRulesFromUserInput(ctx, rawInput);
+            if (rules.length === 0) {
               continue;
+            }
+
+            let nextDeny = workingCopy.deny;
+            for (const rule of rules) {
+              if (!isRuleFormatSupported(rule)) {
+                ctx.ui.notify(`Unsupported rule format: ${rule}`, "warning");
+                continue;
+              }
+              nextDeny = addRule(nextDeny, rule);
             }
 
             workingCopy = {
               ...workingCopy,
-              deny: addRule(workingCopy.deny, rule),
+              deny: nextDeny,
             };
             updateStatus(ctx, workingCopy);
+            ctx.ui.notify(`Added deny rule(s): ${rules.join(", ")}`, "info");
           }
           continue;
         }

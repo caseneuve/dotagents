@@ -21,7 +21,9 @@ Manage policy with `/playwright-settings`.
 
 Notes:
 
-- Rules should include protocol (for example `http://localhost:3000`, `https://example.com`, or `https://*.example.com`).
+- Rules can be entered as full URL patterns (`https://*.example.com`) or domain/path only (`*.example.com/app`).
+- Domain/path input prompts protocol choice (`http`, `https`, or `both`).
+- Copy-pasted rules with duplicate protocol prefixes are sanitized.
 - Policy is allowlist-only: URLs must match allow rules.
 - Deny rules always win over allow rules.
 
