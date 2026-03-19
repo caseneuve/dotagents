@@ -3,7 +3,8 @@
   :tests
   [{:test :pi-installs-only-extensions-and-themes
     :cwd "/work"
-    :setup-cmd ["sh" "-c" "rm -rf /tmp/dotagents-e2e-pi && mkdir -p /tmp/dotagents-e2e-pi/home"]
+    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-pi"]
+                ["mkdir" "-p" "/tmp/dotagents-e2e-pi/home"]]
     :cmd ["env" "HOME=/tmp/dotagents-e2e-pi/home" "bb" "bootstrap" "pi"]
     :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-pi"]
     :expect [[:exit-code 0]
@@ -16,7 +17,8 @@
 
    {:test :agents-copies-docs-and-links-helpers
     :cwd "/work"
-    :setup-cmd ["sh" "-c" "rm -rf /tmp/dotagents-e2e-agents && mkdir -p /tmp/dotagents-e2e-agents/home"]
+    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-agents"]
+                ["mkdir" "-p" "/tmp/dotagents-e2e-agents/home"]]
     :cmd ["env" "HOME=/tmp/dotagents-e2e-agents/home" "bb" "bootstrap" "agents"]
     :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-agents"]
     :expect [[:exit-code 0]
@@ -28,7 +30,9 @@
 
    {:test :claude-merges-settings
     :cwd "/work"
-    :setup-cmd ["sh" "-c" "rm -rf /tmp/dotagents-e2e-claude && mkdir -p /tmp/dotagents-e2e-claude/home/.claude && cp test/fixtures/claude-settings.json /tmp/dotagents-e2e-claude/home/.claude/settings.json"]
+    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-claude"]
+                ["mkdir" "-p" "/tmp/dotagents-e2e-claude/home/.claude"]
+                ["cp" "test/fixtures/claude-settings.json" "/tmp/dotagents-e2e-claude/home/.claude/settings.json"]]
     :cmd ["env" "HOME=/tmp/dotagents-e2e-claude/home" "bb" "bootstrap" "claude"]
     :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-claude"]
     :expect [[:exit-code 0]
@@ -45,7 +49,8 @@
 
    {:test :dry-run-makes-no-changes
     :cwd "/work"
-    :setup-cmd ["sh" "-c" "rm -rf /tmp/dotagents-e2e-dry && mkdir -p /tmp/dotagents-e2e-dry/home"]
+    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-dry"]
+                ["mkdir" "-p" "/tmp/dotagents-e2e-dry/home"]]
     :cmd ["env" "HOME=/tmp/dotagents-e2e-dry/home" "bb" "bootstrap" "all" "--dry-run"]
     :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-dry"]
     :expect [[:exit-code 0]
