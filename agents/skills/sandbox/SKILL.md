@@ -35,6 +35,8 @@ After creation:
 - Do not switch back to the main repo for implementation work.
 - Follow project safety rules for test execution. If tests must be isolated, use the project's containerized path rather than the host.
 - Keep commits scoped to the ticket and follow the repo's commit conventions.
+- At ticket start, inspect recent commit subjects in the worktree root (`git log --oneline -n 20`) and mirror the established format.
+- Keep commit cadence aligned with TDD slices (red -> green -> refactor), unless the user requests batching/squashing.
 
 ## Submodule flow
 

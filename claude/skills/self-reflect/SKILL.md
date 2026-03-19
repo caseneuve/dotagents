@@ -81,6 +81,10 @@ Show the user:
 
 If the user approves (all or selectively), apply the edits. Do not apply anything the user hasn't confirmed.
 
+For symlink-managed agent setups:
+- Apply fixes in the source-of-truth repository, not only in the live local path (unless user explicitly asks for local-only setup edits).
+- If source-of-truth is unclear, ask once before editing.
+
 After applying, briefly summarize what was changed.
 
 ---

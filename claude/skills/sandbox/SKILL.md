@@ -28,7 +28,8 @@ Ticket number is flexible: `16`, `#16`, `00016` all resolve to the same ticket (
 
 - All development in worktree — never switch back to main repo
 - Write tests — DO NOT run on host (Docker/containers only)
-- Commit with `[#N stage]` format (see CLAUDE.md)
+- Before first commit, inspect recent subjects in the worktree root (`git log --oneline -n 20`) and mirror local commit style.
+- Commit with project format (see CLAUDE.md), keeping cadence aligned with TDD slices (red -> green -> refactor) unless user requests batching/squashing.
 
 ### Submodules: Three-Stage Commit Flow
 

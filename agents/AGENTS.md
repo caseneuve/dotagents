@@ -42,6 +42,12 @@ Use one-line subjects:
 - `[#N feat]`
 - `[chore]`
 
+Before the first commit on a ticket:
+- Inspect recent history (`git log --oneline -n 20`) and match the repo's established subject style.
+
+During implementation:
+- Keep commits aligned to TDD slices (red -> green -> refactor) unless the user explicitly asks to batch or squash.
+
 ## Safety
 
 - Destructive operations require containment and path validation.
