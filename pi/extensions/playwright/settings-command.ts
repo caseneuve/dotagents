@@ -271,6 +271,11 @@ export function registerPlaywrightSettingsCommand(
         }
 
         if (action === SETTINGS_ACTIONS.addDenyRule) {
+          ctx.ui.notify(
+            "Policy reminder: this is allowlist-only. URLs are blocked by default unless they match an allow rule.",
+            "info",
+          );
+
           const rawInput = await promptRuleInput(ctx, "deny");
           if (rawInput) {
             const rules = await buildRulesFromUserInput(ctx, rawInput);
