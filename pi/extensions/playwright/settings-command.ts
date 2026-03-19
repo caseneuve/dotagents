@@ -74,7 +74,7 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
   ];
 
   const summary = createSettingsMenuSummary(config);
-  ctx.ui.notify(summary, "info");
+  ctx.ui.notify(`⚠ ${summary}`, "warning");
   return ctx.ui.select("Playwright settings", choices);
 }
 
@@ -272,8 +272,8 @@ export function registerPlaywrightSettingsCommand(
 
         if (action === SETTINGS_ACTIONS.addDenyRule) {
           ctx.ui.notify(
-            "Policy reminder: this is allowlist-only. URLs are blocked by default unless they match an allow rule.",
-            "info",
+            "⚠ Policy reminder: allowlist-only. URLs are blocked by default unless they match an allow rule.",
+            "warning",
           );
 
           const rawInput = await promptRuleInput(ctx, "deny");
