@@ -1,4 +1,4 @@
-import { INTERNAL_ALLOWED_PROTOCOLS, POLICY_ACTIONS } from "./constants";
+import { INTERNAL_ALLOWED_PROTOCOLS } from "./constants";
 import type { UrlPolicyConfig } from "./policy-config";
 
 export type UrlAccessDecision = {
@@ -70,17 +70,9 @@ export function decideNavigationAccess(
     };
   }
 
-  if (config.defaultAction === POLICY_ACTIONS.allow) {
-    return {
-      allowed: true,
-      reason: "Allowed by default policy",
-      normalizedUrl: url.toString(),
-    };
-  }
-
   return {
     allowed: false,
-    reason: "Blocked by default deny policy",
+    reason: "Blocked by default policy (allowlist-only)",
     normalizedUrl: url.toString(),
   };
 }

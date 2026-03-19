@@ -225,7 +225,7 @@ What it does:
 - exposes browser actions as first-class tools (`playwright_open`, `playwright_query`, `playwright_hover`, etc.)
 - returns structured outputs for DOM queries, computed styles, waits, screenshots, and console errors
 - keeps one browser session alive across tool calls for fast iterate-fix-verify cycles
-- enforces URL policy for navigation and network interception with allow/deny/default-action rules
+- enforces URL policy for navigation and network interception with allow/deny rules (allowlist-only)
 - ships with a safe default policy that allows only `http://localhost:3000`
 - includes `/playwright-settings` for interactive policy editing
 

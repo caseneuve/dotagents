@@ -4,7 +4,6 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import {
   COMMAND_NAMES,
-  POLICY_ACTIONS,
   POLICY_FILE_RELATIVE_PATH,
   SETTINGS_ACTIONS,
 } from "./constants";
@@ -14,7 +13,6 @@ import {
   isRuleFormatSupported,
   removeRule,
   summarizePolicy,
-  type PolicyAction,
   type UrlPolicyConfig,
 } from "./policy-config";
 import { savePolicyConfig } from "./policy-storage";
@@ -46,7 +44,6 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
     SETTINGS_ACTIONS.addDenyRule,
     SETTINGS_ACTIONS.removeAllowRule,
     SETTINGS_ACTIONS.removeDenyRule,
-    SETTINGS_ACTIONS.setDefaultAction,
     SETTINGS_ACTIONS.saveAndExit,
     SETTINGS_ACTIONS.exitWithoutSaving,
   ];
@@ -65,6 +62,7 @@ async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
     formatRuleList("Deny rules", config.deny),
     "",
     "Rule format: include protocol, e.g. http://localhost:3000 or https://*.example.com",
+    "Policy is allowlist-only: URLs must match an allow rule and must not match any deny rule.",
     "Deny rules take precedence over allow rules.",
   ].join("\n");
 
@@ -95,15 +93,6 @@ async function promptRemoveRule(
   }
 
   return ctx.ui.select(`Remove ${kind} rule`, rules);
-}
-
-async function promptDefaultAction(
-  ctx: ExtensionContext,
-): Promise<PolicyAction | undefined> {
-  return ctx.ui.select("Set default action", [
-    POLICY_ACTIONS.deny,
-    POLICY_ACTIONS.allow,
-  ]);
 }
 
 function updateStatus(ctx: ExtensionContext, config: UrlPolicyConfig) {
@@ -210,22 +199,6 @@ export function registerPlaywrightSettingsCommand(
               deny: removeRule(workingCopy.deny, selected),
             };
             updateStatus(ctx, workingCopy);
-          }
-          continue;
-        }
-
-        if (action === SETTINGS_ACTIONS.setDefaultAction) {
-          const defaultAction = await promptDefaultAction(ctx);
-          if (defaultAction) {
-            workingCopy = {
-              ...workingCopy,
-              defaultAction,
-            };
-            updateStatus(ctx, workingCopy);
-            ctx.ui.notify(
-              `Default action set to '${defaultAction}' for URLs that match neither allow nor deny rules`,
-              "info",
-            );
           }
           continue;
         }

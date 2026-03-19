@@ -14,7 +14,6 @@ bunx playwright install chromium
 
 Default policy starts as:
 
-- `defaultAction: deny`
 - `allow: ["http://localhost:3000"]`
 - `deny: []`
 
@@ -23,7 +22,7 @@ Manage policy with `/playwright-settings`.
 Notes:
 
 - Rules should include protocol (for example `http://localhost:3000`, `https://example.com`, or `https://*.example.com`).
-- `defaultAction` applies only when a URL matches neither deny nor allow rules.
+- Policy is allowlist-only: URLs must match allow rules.
 - Deny rules always win over allow rules.
 
 ## Tools
