@@ -60,18 +60,57 @@ function withProtocol(protocol: "http" | "https", domainPart: string): string {
 }
 
 async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
-  const choices = [
-    SETTINGS_ACTIONS.showSummary,
-    SETTINGS_ACTIONS.addAllowRule,
-    SETTINGS_ACTIONS.addDenyRule,
-    SETTINGS_ACTIONS.removeAllowRule,
-    SETTINGS_ACTIONS.removeDenyRule,
-    SETTINGS_ACTIONS.saveAndExit,
-    SETTINGS_ACTIONS.exitWithoutSaving,
+  const options: Array<{ label: string; value: string }> = [
+    {
+      label: SETTINGS_ACTIONS.showSummary,
+      value: SETTINGS_ACTIONS.showSummary,
+    },
+    {
+      label: SETTINGS_ACTIONS.addAllowRule,
+      value: SETTINGS_ACTIONS.addAllowRule,
+    },
+    {
+      label: SETTINGS_ACTIONS.addDenyRule,
+      value: SETTINGS_ACTIONS.addDenyRule,
+    },
   ];
 
+  if (config.allow.length > 0) {
+    options.push({
+      label: SETTINGS_ACTIONS.removeAllowRule,
+      value: SETTINGS_ACTIONS.removeAllowRule,
+    });
+  }
+
+  if (config.deny.length > 0) {
+    options.push({
+      label: SETTINGS_ACTIONS.removeDenyRule,
+      value: SETTINGS_ACTIONS.removeDenyRule,
+    });
+  }
+
+  options.push(
+    {
+      label: SETTINGS_ACTIONS.saveAndExit,
+      value: SETTINGS_ACTIONS.saveAndExit,
+    },
+    {
+      label: SETTINGS_ACTIONS.exitWithoutSaving,
+      value: SETTINGS_ACTIONS.exitWithoutSaving,
+    },
+  );
+
   const summary = createSettingsMenuSummary(config);
-  return ctx.ui.select(`Playwright settings (${summary})`, choices);
+  const selectedLabel = await ctx.ui.select(
+    `Playwright settings (${summary})`,
+    options.map((option) => option.label),
+  );
+
+  if (!selectedLabel) {
+    return undefined;
+  }
+
+  return options.find((option) => option.label === selectedLabel)?.value;
 }
 
 async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
@@ -192,7 +231,6 @@ async function promptRemoveRule(
   kind: "allow" | "deny",
 ): Promise<string | undefined> {
   if (rules.length === 0) {
-    ctx.ui.notify(`No ${kind} rules to remove`, "warning");
     return undefined;
   }
 
