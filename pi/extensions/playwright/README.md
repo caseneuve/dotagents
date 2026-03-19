@@ -19,8 +19,10 @@ Default policy starts as:
 
 Manage policy with `/playwright-settings`.
 
-Notes:
+Settings UX notes:
 
+- **View policy summary** opens a styled read-only summary modal.
+- Remove actions are shown only when that list has entries (no empty-list warning flow).
 - Rules can be entered as full URL patterns (`https://*.example.com`) or domain/path only (`*.example.com/app`).
 - Domain/path input prompts protocol choice (`http`, `https`, or `both`).
 - Copy-pasted rules with duplicate protocol prefixes are sanitized.
