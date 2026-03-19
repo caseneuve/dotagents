@@ -223,12 +223,15 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: TOOL_NAMES.type,
     label: "Playwright Type",
-    description: "Type text into an input/textarea selected by CSS selector.",
+    description:
+      "Type text into an input/textarea selected by CSS selector. By default this appends text unless clear=true.",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
       text: Type.String({ description: "Text to type" }),
       clear: Type.Optional(
-        Type.Boolean({ description: "Clear field before typing" }),
+        Type.Boolean({
+          description: "Clear field before typing (default: false)",
+        }),
       ),
       delayMs: Type.Optional(
         Type.Number({
@@ -253,14 +256,17 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: TOOL_NAMES.fillForm,
     label: "Playwright Fill Form",
-    description: "Fill multiple fields in one call using CSS selectors.",
+    description:
+      "Fill multiple fields in one call using CSS selectors. Each field clears first by default unless clear=false.",
     parameters: Type.Object({
       fields: Type.Array(
         Type.Object({
           selector: Type.String({ description: "CSS selector" }),
           value: Type.String({ description: "Value to set" }),
           clear: Type.Optional(
-            Type.Boolean({ description: "Clear field before typing" }),
+            Type.Boolean({
+              description: "Clear field before typing (default: true)",
+            }),
           ),
         }),
         { minItems: 1 },

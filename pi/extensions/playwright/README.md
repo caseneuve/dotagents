@@ -40,8 +40,8 @@ Settings UX notes:
 - `playwright_computed_style`
 - `playwright_hover`
 - `playwright_click`
-- `playwright_type`
-- `playwright_fill_form`
+- `playwright_type` (defaults to append; use `clear: true` to replace)
+- `playwright_fill_form` (defaults to replace each field; use per-field `clear: false` to append)
 - `playwright_select_option`
 - `playwright_press_key`
 - `playwright_drag`
