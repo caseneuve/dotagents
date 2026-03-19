@@ -1,2 +1,3 @@
 .clj-kondo/
 .lsp/
+.pi/playwright-policy.json
