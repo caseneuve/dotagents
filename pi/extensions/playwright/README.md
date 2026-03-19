@@ -20,6 +20,12 @@ Default policy starts as:
 
 Manage policy with `/playwright-settings`.
 
+Notes:
+
+- Rules should include protocol (for example `http://localhost:3000`, `https://example.com`, or `https://*.example.com`).
+- `defaultAction` applies only when a URL matches neither deny nor allow rules.
+- Deny rules always win over allow rules.
+
 ## Tools
 
 - `playwright_open`

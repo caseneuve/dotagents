@@ -26,6 +26,21 @@ export function normalizeRule(rule: string): string {
   return rule.trim();
 }
 
+const SCHEME_WITH_SLASHES_REGEX = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+const SCHEME_ONLY_REGEX = /^(about|data|blob):/;
+
+export function isRuleFormatSupported(rule: string): boolean {
+  const normalized = normalizeRule(rule);
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    SCHEME_WITH_SLASHES_REGEX.test(normalized) ||
+    SCHEME_ONLY_REGEX.test(normalized)
+  );
+}
+
 export function addRule(rules: string[], rule: string): string[] {
   const normalized = normalizeRule(rule);
   if (!normalized) {

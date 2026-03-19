@@ -11,6 +11,7 @@ import {
 import {
   addRule,
   clonePolicyConfig,
+  isRuleFormatSupported,
   removeRule,
   summarizePolicy,
   type PolicyAction,
@@ -53,6 +54,21 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
   const summary = createSettingsMenuSummary(config);
   ctx.ui.notify(summary, "info");
   return ctx.ui.select("Playwright settings", choices);
+}
+
+async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
+  const summary = [
+    `Summary: ${summarizePolicy(config)}`,
+    "",
+    formatRuleList("Allow rules", config.allow),
+    "",
+    formatRuleList("Deny rules", config.deny),
+    "",
+    "Rule format: include protocol, e.g. http://localhost:3000 or https://*.example.com",
+    "Deny rules take precedence over allow rules.",
+  ].join("\n");
+
+  await ctx.ui.editor("Playwright policy summary", summary);
 }
 
 async function promptAddRule(
@@ -122,20 +138,21 @@ export function registerPlaywrightSettingsCommand(
         }
 
         if (action === SETTINGS_ACTIONS.showSummary) {
-          const summary = [
-            summarizePolicy(workingCopy),
-            "",
-            formatRuleList("Allow rules", workingCopy.allow),
-            "",
-            formatRuleList("Deny rules", workingCopy.deny),
-          ].join("\n");
-          ctx.ui.notify(summary, "info");
+          await showSummary(ctx, workingCopy);
           continue;
         }
 
         if (action === SETTINGS_ACTIONS.addAllowRule) {
           const rule = await promptAddRule(ctx, "allow");
           if (rule) {
+            if (!isRuleFormatSupported(rule)) {
+              ctx.ui.notify(
+                "Unsupported rule format. Include protocol, e.g. http://localhost:3000 or https://*.example.com",
+                "warning",
+              );
+              continue;
+            }
+
             workingCopy = {
               ...workingCopy,
               allow: addRule(workingCopy.allow, rule),
@@ -148,6 +165,14 @@ export function registerPlaywrightSettingsCommand(
         if (action === SETTINGS_ACTIONS.addDenyRule) {
           const rule = await promptAddRule(ctx, "deny");
           if (rule) {
+            if (!isRuleFormatSupported(rule)) {
+              ctx.ui.notify(
+                "Unsupported rule format. Include protocol, e.g. http://localhost:3000 or https://*.example.com",
+                "warning",
+              );
+              continue;
+            }
+
             workingCopy = {
               ...workingCopy,
               deny: addRule(workingCopy.deny, rule),
@@ -197,6 +222,10 @@ export function registerPlaywrightSettingsCommand(
               defaultAction,
             };
             updateStatus(ctx, workingCopy);
+            ctx.ui.notify(
+              `Default action set to '${defaultAction}' for URLs that match neither allow nor deny rules`,
+              "info",
+            );
           }
           continue;
         }
