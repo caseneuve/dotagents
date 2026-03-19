@@ -89,10 +89,12 @@ async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
     "- domain/path only (example: localhost:3000 or *.example.com/app)",
     "",
     "When you enter domain/path only, you'll choose protocol: http, https, or both.",
+    "Policy is read-only in this view. Use add/remove actions to change rules.",
     "Deny rules take precedence over allow rules.",
   ].join("\n");
 
-  await ctx.ui.editor("Playwright policy summary", summary);
+  ctx.ui.notify(summary, "info");
+  await ctx.ui.select("Policy summary", ["Close"]);
 }
 
 async function promptRuleInput(

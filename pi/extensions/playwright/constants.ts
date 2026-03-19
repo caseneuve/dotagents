@@ -27,7 +27,7 @@ export const POLICY_DEFAULT_ALLOWED_RULE = "http://localhost:3000";
 export const POLICY_FILE_RELATIVE_PATH = ".pi/playwright-policy.json";
 
 export const SETTINGS_ACTIONS = {
-  showSummary: "Show policy summary",
+  showSummary: "View policy summary (read-only)",
   addAllowRule: "Add allow rule",
   addDenyRule: "Add deny rule",
   removeAllowRule: "Remove allow rule",
