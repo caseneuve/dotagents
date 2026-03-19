@@ -1,7 +1,9 @@
-import type {
-  ExtensionAPI,
-  ExtensionContext,
+import {
+  DynamicBorder,
+  type ExtensionAPI,
+  type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
+import { Container, matchesKey, Spacer, Text } from "@mariozechner/pi-tui";
 import {
   COMMAND_NAMES,
   POLICY_FILE_RELATIVE_PATH,
@@ -89,12 +91,46 @@ async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
     "- domain/path only (example: localhost:3000 or *.example.com/app)",
     "",
     "When you enter domain/path only, you'll choose protocol: http, https, or both.",
-    "Policy is read-only in this view. Use add/remove actions to change rules.",
     "Deny rules take precedence over allow rules.",
   ].join("\n");
 
-  ctx.ui.notify(summary, "info");
-  await ctx.ui.select("Policy summary", ["Close"]);
+  await ctx.ui.custom<void>((_tui, theme, _keybindings, done) => {
+    const container = new Container();
+    container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+    container.addChild(
+      new Text(
+        theme.fg("accent", theme.bold("Playwright policy summary")),
+        1,
+        0,
+      ),
+    );
+    container.addChild(new Spacer(1));
+    container.addChild(new Text(theme.fg("text", summary), 1, 0));
+    container.addChild(new Spacer(1));
+    container.addChild(
+      new Text(theme.fg("dim", "Press Enter, q, or Esc to close"), 1, 0),
+    );
+    container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+
+    return {
+      render(width: number) {
+        return container.render(width);
+      },
+      invalidate() {
+        container.invalidate();
+      },
+      handleInput(data: string) {
+        if (
+          matchesKey(data, "return") ||
+          matchesKey(data, "escape") ||
+          data.toLowerCase() === "q"
+        ) {
+          done();
+          return;
+        }
+      },
+    };
+  });
 }
 
 async function promptRuleInput(
