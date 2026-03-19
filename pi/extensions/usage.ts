@@ -7,6 +7,7 @@ import {
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 type ModelLike = {
@@ -86,7 +87,8 @@ type ComponentState =
   | { kind: "error"; message: string };
 
 const COMMAND_NAME = "usage";
-const AUTH_PATH = path.join(process.env.HOME ?? "~", ".codex", "auth.json");
+const HOME_DIR = process.env.HOME || os.homedir();
+const AUTH_PATH = path.join(HOME_DIR, ".codex", "auth.json");
 const CHATGPT_BACKEND_KEY = "chatgpt-wham";
 const CHATGPT_BACKEND_NAME = "ChatGPT subscription";
 const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
@@ -248,9 +250,7 @@ function drawMeter(
   );
   const muted = theme.fg(COLOR_DIM, METER_EMPTY_CHAR.repeat(mutedCount));
 
-  return displayMode === "remaining"
-    ? truncateToWidth(`${highlighted}${muted}`, width)
-    : truncateToWidth(`${highlighted}${muted}`, width);
+  return truncateToWidth(`${highlighted}${muted}`, width);
 }
 
 function boxLines(

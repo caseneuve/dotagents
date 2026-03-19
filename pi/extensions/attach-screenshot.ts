@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -93,7 +94,6 @@ function stripConsumedMarkers(text: string): string {
 
 export default function (pi: ExtensionAPI) {
   const pendingScreenshots = new Map<string, PendingScreenshot>();
-  let nextMarkerId = 1;
 
   function refreshPendingUi(ctx: ExtensionContext) {
     const pending = pendingScreenshots.size;
@@ -253,7 +253,7 @@ export default function (pi: ExtensionAPI) {
       for (const selected of marked) {
         try {
           const data = await fs.readFile(selected);
-          const id = String(nextMarkerId++);
+          const id = randomUUID();
           pendingScreenshots.set(id, {
             id,
             file: selected,

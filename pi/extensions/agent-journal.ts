@@ -9,6 +9,7 @@ import {
 } from "@mariozechner/pi-tui";
 import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 type FocusPane = "list" | "preview";
@@ -46,7 +47,8 @@ type ParsedOrgFile = {
 };
 
 const COMMAND_NAME = "agent-journal";
-const JOURNAL_ROOT = path.join(process.env.HOME ?? "~", "org", "agent-journal");
+const HOME_DIR = process.env.HOME || os.homedir();
+const JOURNAL_ROOT = path.join(HOME_DIR, "org", "agent-journal");
 const JOURNAL_FILE_EXTENSION = ".org";
 const INDEX_BASENAME = "index.org";
 const OVERLAY_MAX_HEIGHT = "90%";
@@ -84,9 +86,8 @@ const MISSING_PROJECT_LABEL = "no-project";
 const UNTAGGED_LABEL = "untagged";
 
 function formatHomePath(filePath: string): string {
-  const home = process.env.HOME;
-  if (home && filePath.startsWith(home)) {
-    return `~${filePath.slice(home.length)}` || "~";
+  if (filePath.startsWith(HOME_DIR)) {
+    return `~${filePath.slice(HOME_DIR.length)}` || "~";
   }
   return filePath;
 }
