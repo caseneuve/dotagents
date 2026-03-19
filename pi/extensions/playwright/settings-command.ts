@@ -172,9 +172,7 @@ async function promptRuleInput(
   ctx: ExtensionContext,
   title: string,
 ): Promise<string | undefined> {
-  return ctx.ui.input(title, "localhost:3000 or https://*.example.com", {
-    timeout: 120_000,
-  });
+  return ctx.ui.input(title, "localhost:3000 or https://*.example.com");
 }
 
 async function promptProtocolSelection(
