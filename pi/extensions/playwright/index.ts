@@ -230,7 +230,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: TOOL_NAMES.screenshot,
     label: "Playwright Screenshot",
-    description: "Capture a screenshot of viewport or selector.",
+    description:
+      "Capture a screenshot of viewport or selector. Writes only under .pi/playwright/.",
     parameters: Type.Object({
       selector: Type.Optional(Type.String({ description: "CSS selector" })),
       fullPage: Type.Optional(

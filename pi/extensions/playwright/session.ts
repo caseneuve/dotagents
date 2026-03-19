@@ -1,8 +1,11 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import {
   DEFAULT_TIMEOUT_MS,
   DEFAULT_VIEWPORT,
   MAX_CONSOLE_ERRORS,
+  PLAYWRIGHT_DIR_RELATIVE_PATH,
+  PLAYWRIGHT_SCREENSHOTS_DIR_RELATIVE_PATH,
 } from "./constants";
 import {
   decideNavigationAccess,
@@ -57,11 +60,38 @@ function withDefaultTimeout(timeoutMs?: number): number {
   return timeoutMs ?? DEFAULT_TIMEOUT_MS;
 }
 
-function toAbsoluteScreenshotPath(filePath: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath;
+function getAllowedPlaywrightRootAbsolutePath(): string {
+  return path.resolve(process.cwd(), PLAYWRIGHT_DIR_RELATIVE_PATH);
+}
+
+function isSubPath(
+  candidateAbsolutePath: string,
+  rootAbsolutePath: string,
+): boolean {
+  const relative = path.relative(rootAbsolutePath, candidateAbsolutePath);
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
+function toSafeAbsoluteScreenshotPath(filePath?: string): string {
+  const defaultRelativePath = path.join(
+    PLAYWRIGHT_SCREENSHOTS_DIR_RELATIVE_PATH,
+    `pi-playwright-${Date.now()}.png`,
+  );
+
+  const rawPath = filePath ?? defaultRelativePath;
+  const absolutePath = path.resolve(process.cwd(), rawPath);
+  const allowedRoot = getAllowedPlaywrightRootAbsolutePath();
+
+  if (!isSubPath(absolutePath, allowedRoot)) {
+    throw new Error(
+      `Screenshot path is outside allowed directory. Allowed root: ${allowedRoot}`,
+    );
   }
-  return path.join(process.cwd(), filePath);
+
+  return absolutePath;
 }
 
 export class PlaywrightSession {
@@ -276,10 +306,9 @@ export class PlaywrightSession {
 
   async screenshot(options: ScreenshotOptions): Promise<{ path: string }> {
     const page = this.getPageOrThrow();
-    const timestamp = Date.now();
-    const targetPath = toAbsoluteScreenshotPath(
-      options.path ?? `/tmp/pi-playwright-${timestamp}.png`,
-    );
+    const targetPath = toSafeAbsoluteScreenshotPath(options.path);
+
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
     if (options.selector) {
       await page

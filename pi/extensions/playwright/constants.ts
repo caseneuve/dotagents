@@ -26,6 +26,10 @@ export const INTERNAL_ALLOWED_PROTOCOLS = new Set(["about:", "data:", "blob:"]);
 export const POLICY_DEFAULT_ALLOWED_RULE = "http://localhost:3000";
 export const POLICY_FILE_RELATIVE_PATH = ".pi/playwright-policy.json";
 
+export const PLAYWRIGHT_DIR_RELATIVE_PATH = ".pi/playwright";
+export const PLAYWRIGHT_SCREENSHOTS_DIR_RELATIVE_PATH =
+  ".pi/playwright/screenshots";
+
 export const SETTINGS_ACTIONS = {
   showSummary: "View policy summary",
   addAllowRule: "Add allow rule",

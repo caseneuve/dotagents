@@ -30,6 +30,7 @@ Settings UX notes:
 - Policy is allowlist-only: URLs must match allow rules.
 - Deny rules always win over allow rules.
 - `playwright_open` fails with a non-retryable policy-block error when blocked, including a machine-readable `NON_RETRYABLE_POLICY_BLOCK { ... }` payload in the error text.
+- Screenshots default to `.pi/playwright/screenshots/` and screenshot paths are restricted to `.pi/playwright/`.
 
 ## Tools
 
