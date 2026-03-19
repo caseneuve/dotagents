@@ -68,21 +68,6 @@ export default function (pi: ExtensionAPI) {
     await session.dispose();
   });
 
-  pi.on("tool_result", async (event) => {
-    if (event.toolName !== TOOL_NAMES.open) {
-      return;
-    }
-
-    const details = (event.details ?? {}) as { policyBlocked?: boolean };
-    if (!details.policyBlocked) {
-      return;
-    }
-
-    return {
-      isError: true,
-    };
-  });
-
   pi.registerTool({
     name: TOOL_NAMES.open,
     label: "Playwright Open",
@@ -116,18 +101,16 @@ export default function (pi: ExtensionAPI) {
             nextStep: `Run /${COMMAND_NAMES.settings} to adjust allow/deny rules, then retry.`,
           };
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: formatPolicyBlockedText({
-                  requestedUrl: result.requestedUrl,
-                  reason: result.reason,
-                }),
-              },
-            ],
-            details: result,
-          };
+          const message = [
+            formatPolicyBlockedText({
+              requestedUrl: result.requestedUrl,
+              reason: result.reason,
+            }),
+            "",
+            `NON_RETRYABLE_POLICY_BLOCK ${JSON.stringify(result)}`,
+          ].join("\n");
+
+          throw new Error(message);
         }
 
         throw error;
