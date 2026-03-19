@@ -112,10 +112,14 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
       const disposeBranch = footerData.onBranchChange(() =>
         tui.requestRender(),
       );
+      const disposeBranchStatus = pi.events.on("branch-status:changed", () =>
+        tui.requestRender(),
+      );
 
       return {
         dispose() {
           disposeBranch();
+          disposeBranchStatus();
         },
         invalidate() {},
         render(width: number): string[] {

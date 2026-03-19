@@ -10,6 +10,7 @@ type SessionEntryLike = {
 };
 
 const STATUS_KEY = "branch-status";
+const RENDER_EVENT = "branch-status:changed";
 const MAX_LABEL_LENGTH = 24;
 const FALLBACK_ID_LENGTH = 8;
 
@@ -142,18 +143,26 @@ function countLabels(ctx: ExtensionContext): number {
   return count;
 }
 
-function renderStatus(ctx: ExtensionContext): string {
+function renderStatus(ctx: ExtensionContext): string | undefined {
   const theme = ctx.ui.theme;
   const trail = computeBranchTrail(ctx);
   const labelCount = countLabels(ctx);
+
+  if (trail.length <= 1 && labelCount === 0) {
+    return undefined;
+  }
+
   const branchText = trail.join(" →  ");
   const suffix = labelCount > 0 ? ` (${labelCount})` : "";
 
   return theme.fg("dim", `[⋔ ${branchText}]${suffix}`);
 }
 
-function updateStatus(ctx: ExtensionContext, lastRendered?: string): string {
-  if (!ctx.hasUI) return lastRendered ?? "";
+function updateStatus(
+  ctx: ExtensionContext,
+  lastRendered?: string,
+): string | undefined {
+  if (!ctx.hasUI) return lastRendered;
   const rendered = renderStatus(ctx);
   if (rendered !== lastRendered) {
     ctx.ui.setStatus(STATUS_KEY, rendered);
@@ -163,16 +172,20 @@ function updateStatus(ctx: ExtensionContext, lastRendered?: string): string {
 
 export default function branchStatusExtension(pi: ExtensionAPI) {
   let lastCtx: ExtensionContext | undefined;
-  let lastRendered = "";
+  let lastRendered: string | undefined;
 
   const refresh = (ctx: ExtensionContext) => {
     lastCtx = ctx;
-    lastRendered = updateStatus(ctx, lastRendered);
+    const nextRendered = updateStatus(ctx, lastRendered);
+    if (nextRendered !== lastRendered) {
+      pi.events.emit(RENDER_EVENT, undefined);
+    }
+    lastRendered = nextRendered;
   };
 
   pi.events.on("bookmark:changed", () => {
     if (lastCtx) {
-      lastRendered = "";
+      lastRendered = undefined;
       refresh(lastCtx);
     }
   });
@@ -181,4 +194,5 @@ export default function branchStatusExtension(pi: ExtensionAPI) {
   pi.on("session_switch", async (_event, ctx) => refresh(ctx));
   pi.on("session_tree", async (_event, ctx) => refresh(ctx));
   pi.on("session_fork", async (_event, ctx) => refresh(ctx));
+  pi.on("turn_end", async (_event, ctx) => refresh(ctx));
 }

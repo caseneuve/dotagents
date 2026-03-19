@@ -21,10 +21,9 @@ Shows the current conversational branch context in the status area.
 What it does:
 
 - infers the current branch path from the active session leaf
-- shows a compact branch name in the footer/status area
+- shows a compact branch name in the footer/status area only when there is branch context to show
 - prefers the nearest label/bookmark on the active path when available
 - falls back to the split point id when no label exists
-- shows extra branch context such as prompt distance and number of sibling paths
 
 Why it exists:
 
