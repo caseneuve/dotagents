@@ -36,9 +36,15 @@ Settings UX notes:
 
 - `playwright_open`
 - `playwright_query`
+- `playwright_snapshot`
 - `playwright_computed_style`
 - `playwright_hover`
 - `playwright_click`
+- `playwright_type`
+- `playwright_fill_form`
+- `playwright_select_option`
+- `playwright_press_key`
+- `playwright_drag`
 - `playwright_scroll_to`
 - `playwright_navigate_hash`
 - `playwright_screenshot`

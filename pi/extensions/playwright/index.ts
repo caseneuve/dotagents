@@ -141,6 +141,33 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: TOOL_NAMES.snapshot,
+    label: "Playwright Snapshot",
+    description:
+      "Capture an accessibility tree snapshot for the page or a root selector.",
+    parameters: Type.Object({
+      selector: Type.Optional(
+        Type.String({
+          description: "Optional CSS selector used as snapshot root",
+        }),
+      ),
+      interestingOnly: Type.Optional(
+        Type.Boolean({
+          description:
+            "Use Playwright accessibility interestingOnly filtering (default: true)",
+        }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      const result = await session.snapshot(params);
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
     name: TOOL_NAMES.computedStyle,
     label: "Playwright Computed Style",
     description: "Read computed CSS properties for a selector.",
@@ -186,6 +213,137 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params) {
       await session.click(params.selector);
       const result = { ok: true, selector: params.selector };
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: TOOL_NAMES.type,
+    label: "Playwright Type",
+    description: "Type text into an input/textarea selected by CSS selector.",
+    parameters: Type.Object({
+      selector: Type.String({ description: "CSS selector" }),
+      text: Type.String({ description: "Text to type" }),
+      clear: Type.Optional(
+        Type.Boolean({ description: "Clear field before typing" }),
+      ),
+      delayMs: Type.Optional(
+        Type.Number({
+          description: "Per-character typing delay in milliseconds",
+        }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      await session.type(params);
+      const result = {
+        ok: true,
+        selector: params.selector,
+        typedLength: params.text.length,
+      };
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: TOOL_NAMES.fillForm,
+    label: "Playwright Fill Form",
+    description: "Fill multiple fields in one call using CSS selectors.",
+    parameters: Type.Object({
+      fields: Type.Array(
+        Type.Object({
+          selector: Type.String({ description: "CSS selector" }),
+          value: Type.String({ description: "Value to set" }),
+          clear: Type.Optional(
+            Type.Boolean({ description: "Clear field before typing" }),
+          ),
+        }),
+        { minItems: 1 },
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      await session.fillForm(params);
+      const result = {
+        ok: true,
+        fieldCount: params.fields.length,
+      };
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: TOOL_NAMES.selectOption,
+    label: "Playwright Select Option",
+    description:
+      "Select an option in a <select> element by value, label, or index.",
+    parameters: Type.Object({
+      selector: Type.String({ description: "CSS selector" }),
+      value: Type.Optional(Type.String({ description: "Option value" })),
+      label: Type.Optional(Type.String({ description: "Option label" })),
+      index: Type.Optional(
+        Type.Number({ description: "Zero-based option index" }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      const result = await session.selectOption(params);
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: TOOL_NAMES.pressKey,
+    label: "Playwright Press Key",
+    description: "Press a keyboard key on page or focused selector.",
+    parameters: Type.Object({
+      key: Type.String({
+        description: "Key name, e.g. Enter, ArrowDown, Control+A",
+      }),
+      selector: Type.Optional(
+        Type.String({
+          description: "Optional selector to focus before pressing",
+        }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      await session.pressKey(params);
+      const result = {
+        ok: true,
+        key: params.key,
+        selector: params.selector ?? null,
+      };
+      return {
+        content: [{ type: "text", text: asPrettyJson(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: TOOL_NAMES.drag,
+    label: "Playwright Drag",
+    description: "Drag from source selector to target selector.",
+    parameters: Type.Object({
+      sourceSelector: Type.String({ description: "Source CSS selector" }),
+      targetSelector: Type.String({ description: "Target CSS selector" }),
+    }),
+    async execute(_toolCallId, params) {
+      await session.drag(params);
+      const result = {
+        ok: true,
+        sourceSelector: params.sourceSelector,
+        targetSelector: params.targetSelector,
+      };
       return {
         content: [{ type: "text", text: asPrettyJson(result) }],
         details: result,

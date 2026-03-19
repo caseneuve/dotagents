@@ -39,6 +39,45 @@ type ComputedStyleOptions = {
   props: string[];
 };
 
+type SnapshotOptions = {
+  selector?: string;
+  interestingOnly?: boolean;
+};
+
+type TypeOptions = {
+  selector: string;
+  text: string;
+  clear?: boolean;
+  delayMs?: number;
+};
+
+type FillFormField = {
+  selector: string;
+  value: string;
+  clear?: boolean;
+};
+
+type FillFormOptions = {
+  fields: FillFormField[];
+};
+
+type SelectOptionOptions = {
+  selector: string;
+  value?: string;
+  label?: string;
+  index?: number;
+};
+
+type PressKeyOptions = {
+  key: string;
+  selector?: string;
+};
+
+type DragOptions = {
+  sourceSelector: string;
+  targetSelector: string;
+};
+
 export class PlaywrightPolicyBlockedError extends Error {
   constructor(
     message: string,
@@ -257,6 +296,37 @@ export class PlaywrightSession {
     };
   }
 
+  async snapshot(options: SnapshotOptions) {
+    const page = this.getPageOrThrow();
+    const interestingOnly = options.interestingOnly ?? true;
+
+    if (!options.selector) {
+      const tree = await page.accessibility.snapshot({ interestingOnly });
+      return {
+        interestingOnly,
+        selector: null,
+        tree,
+      };
+    }
+
+    const locator = page.locator(options.selector).first();
+    const handle = await locator.elementHandle();
+    if (!handle) {
+      throw new Error(`Snapshot root selector not found: ${options.selector}`);
+    }
+
+    const tree = await page.accessibility.snapshot({
+      interestingOnly,
+      root: handle,
+    });
+
+    return {
+      interestingOnly,
+      selector: options.selector,
+      tree,
+    };
+  }
+
   async computedStyle(options: ComputedStyleOptions) {
     const page = this.getPageOrThrow();
     const { selector, props } = options;
@@ -288,6 +358,76 @@ export class PlaywrightSession {
   async click(selector: string): Promise<void> {
     const page = this.getPageOrThrow();
     await page.locator(selector).first().click();
+  }
+
+  async type(options: TypeOptions): Promise<void> {
+    const page = this.getPageOrThrow();
+    const locator = page.locator(options.selector).first();
+
+    if (options.clear) {
+      await locator.fill("");
+    }
+
+    await locator.type(options.text, {
+      delay: options.delayMs,
+    });
+  }
+
+  async fillForm(options: FillFormOptions): Promise<void> {
+    const page = this.getPageOrThrow();
+
+    for (const field of options.fields) {
+      const locator = page.locator(field.selector).first();
+      if (field.clear ?? true) {
+        await locator.fill("");
+      }
+      await locator.type(field.value);
+    }
+  }
+
+  async selectOption(
+    options: SelectOptionOptions,
+  ): Promise<{ selected: string[] }> {
+    const page = this.getPageOrThrow();
+    const locator = page.locator(options.selector).first();
+
+    if (options.value !== undefined) {
+      const selected = await locator.selectOption({ value: options.value });
+      return { selected };
+    }
+
+    if (options.label !== undefined) {
+      const selected = await locator.selectOption({ label: options.label });
+      return { selected };
+    }
+
+    if (options.index !== undefined) {
+      const selected = await locator.selectOption({ index: options.index });
+      return { selected };
+    }
+
+    throw new Error("selectOption requires one of: value, label, or index");
+  }
+
+  async pressKey(options: PressKeyOptions): Promise<void> {
+    const page = this.getPageOrThrow();
+
+    if (options.selector) {
+      const locator = page.locator(options.selector).first();
+      await locator.focus();
+      await locator.press(options.key);
+      return;
+    }
+
+    await page.keyboard.press(options.key);
+  }
+
+  async drag(options: DragOptions): Promise<void> {
+    const page = this.getPageOrThrow();
+    await page
+      .locator(options.sourceSelector)
+      .first()
+      .dragTo(page.locator(options.targetSelector).first());
   }
 
   async scrollTo(selector: string): Promise<void> {
