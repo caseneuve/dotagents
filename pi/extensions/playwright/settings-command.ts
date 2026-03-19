@@ -39,10 +39,7 @@ function formatRuleList(title: string, rules: string[]): string {
 }
 
 function createSettingsMenuSummary(config: UrlPolicyConfig): string {
-  return [
-    `Policy file: ${POLICY_FILE_RELATIVE_PATH}`,
-    `Summary: ${summarizePolicy(config)}`,
-  ].join("\n");
+  return `${POLICY_FILE_RELATIVE_PATH} · ${summarizePolicy(config)}`;
 }
 
 function stripLeadingHttpProtocols(raw: string): string {
@@ -74,8 +71,7 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
   ];
 
   const summary = createSettingsMenuSummary(config);
-  ctx.ui.notify(`⚠ ${summary}`, "warning");
-  return ctx.ui.select("Playwright settings", choices);
+  return ctx.ui.select(`Playwright settings (${summary})`, choices);
 }
 
 async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
@@ -135,15 +131,11 @@ async function showSummary(ctx: ExtensionContext, config: UrlPolicyConfig) {
 
 async function promptRuleInput(
   ctx: ExtensionContext,
-  typeLabel: "allow" | "deny",
+  title: string,
 ): Promise<string | undefined> {
-  return ctx.ui.input(
-    `Add ${typeLabel} rule`,
-    "localhost:3000 or https://*.example.com",
-    {
-      timeout: 120_000,
-    },
-  );
+  return ctx.ui.input(title, "localhost:3000 or https://*.example.com", {
+    timeout: 120_000,
+  });
 }
 
 async function promptProtocolSelection(
@@ -244,7 +236,7 @@ export function registerPlaywrightSettingsCommand(
         }
 
         if (action === SETTINGS_ACTIONS.addAllowRule) {
-          const rawInput = await promptRuleInput(ctx, "allow");
+          const rawInput = await promptRuleInput(ctx, "Add allow rule");
           if (rawInput) {
             const rules = await buildRulesFromUserInput(ctx, rawInput);
             if (rules.length === 0) {
@@ -271,12 +263,10 @@ export function registerPlaywrightSettingsCommand(
         }
 
         if (action === SETTINGS_ACTIONS.addDenyRule) {
-          ctx.ui.notify(
-            "⚠ Policy reminder: allowlist-only. URLs are blocked by default unless they match an allow rule.",
-            "warning",
+          const rawInput = await promptRuleInput(
+            ctx,
+            "Add deny rule (deny overrides allow)",
           );
-
-          const rawInput = await promptRuleInput(ctx, "deny");
           if (rawInput) {
             const rules = await buildRulesFromUserInput(ctx, rawInput);
             if (rules.length === 0) {
