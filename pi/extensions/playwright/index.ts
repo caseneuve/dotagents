@@ -68,6 +68,21 @@ export default function (pi: ExtensionAPI) {
     await session.dispose();
   });
 
+  pi.on("tool_result", async (event) => {
+    if (event.toolName !== TOOL_NAMES.open) {
+      return;
+    }
+
+    const details = (event.details ?? {}) as { policyBlocked?: boolean };
+    if (!details.policyBlocked) {
+      return;
+    }
+
+    return {
+      isError: true,
+    };
+  });
+
   pi.registerTool({
     name: TOOL_NAMES.open,
     label: "Playwright Open",
