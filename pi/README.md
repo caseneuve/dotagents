@@ -125,7 +125,7 @@ What it does:
 - scans the current repo `./todos` directory for todo markdown files
 - groups parent items and sub-tasks into a navigable tree
 - treats `done`, `closed`, and `completed` as completed state for filtering
-- shows a side-by-side list and preview in a centered framed overlay
+- shows a responsive list/preview overlay that switches to a stacked vertical split in narrow terminals
 - supports summary and markdown preview modes
 - stays read-only in this first iteration
 

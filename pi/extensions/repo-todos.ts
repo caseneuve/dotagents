@@ -61,7 +61,7 @@ const COMMAND_NAME = "repo-todos";
 const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
-const OVERLAY_MIN_WIDTH = 90;
+const OVERLAY_MIN_WIDTH = 42;
 const OVERLAY_MARGIN = 1;
 const MIN_TERMINAL_COLUMNS = OVERLAY_MIN_WIDTH + OVERLAY_MARGIN * 2;
 const FRAME_HEADER_HEIGHT = 7;
@@ -74,6 +74,8 @@ const LIST_MIN_WIDTH = 28;
 const LIST_MAX_WIDTH = 56;
 const PREVIEW_MIN_WIDTH = 24;
 const DIVIDER_WIDTH = 3;
+const HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH =
+  LIST_MIN_WIDTH + DIVIDER_WIDTH + PREVIEW_MIN_WIDTH;
 const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
 const VERTICAL_LIST_MIN_HEIGHT = 6;
 const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
@@ -471,6 +473,13 @@ class RepoTodosComponent {
     private onClose: (payload?: MarkedTodosPayload) => void,
     private onEdit: (path: string) => Promise<void>,
   ) {
+    const termWidth = process.stdout.columns ?? 0;
+    if (
+      termWidth > 0 &&
+      this.getContentWidth(termWidth) < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      this.splitMode = "vertical";
+    }
     this.filterInput.onSubmit = () => {
       this.queryFocus = "none";
       this.invalidateTreeCache();
@@ -547,8 +556,26 @@ class RepoTodosComponent {
     );
   }
 
-  private getListPaneHeight(bodyHeight: number): number {
-    if (this.splitMode === "horizontal") {
+  private getContentWidth(width: number): number {
+    return Math.max(40, width - 2);
+  }
+
+  private getEffectiveSplitMode(width: number): SplitMode {
+    const contentWidth = this.getContentWidth(width);
+    if (
+      this.splitMode === "horizontal" &&
+      contentWidth < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      return "vertical";
+    }
+    return this.splitMode;
+  }
+
+  private getListPaneHeight(
+    bodyHeight: number,
+    splitMode: SplitMode = this.splitMode,
+  ): number {
+    if (splitMode === "horizontal") {
       return bodyHeight;
     }
 
@@ -1125,10 +1152,12 @@ class RepoTodosComponent {
   }
 
   render(width: number): string[] {
-    const contentWidth = Math.max(40, width - 2);
+    const contentWidth = this.getContentWidth(width);
     const bodyHeight = this.getBodyHeight();
     const isPreviewFocused = this.focusPane === "preview";
-    const isVerticalSplit = !isPreviewFocused && this.splitMode === "vertical";
+    const effectiveSplitMode = this.getEffectiveSplitMode(width);
+    const isVerticalSplit =
+      !isPreviewFocused && effectiveSplitMode === "vertical";
     const leftWidth = isPreviewFocused
       ? 0
       : isVerticalSplit
@@ -1147,7 +1176,7 @@ class RepoTodosComponent {
         : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
     const listHeight = isPreviewFocused
       ? 0
-      : this.getListPaneHeight(bodyHeight);
+      : this.getListPaneHeight(bodyHeight, effectiveSplitMode);
     const previewHeight = isPreviewFocused
       ? bodyHeight
       : isVerticalSplit
@@ -1165,7 +1194,7 @@ class RepoTodosComponent {
         : this.theme.fg("accent", "[preview]");
     const subTitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • layout:${this.splitMode}`,
+      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
     );
     const queryValue = this.getQuery();
     const queryDisplay = queryValue || FILTER_INPUT_HINT;
