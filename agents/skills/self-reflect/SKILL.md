@@ -56,7 +56,8 @@ Only apply changes the user explicitly confirms. Summarize what was changed.
 
 For symlink-managed agent configs:
 - Apply edits in the source-of-truth repository, not only in the live local path (unless the user explicitly asks for local-only setup changes).
-- If the source-of-truth location is unclear, ask once before editing.
+- Default source-of-truth for skills/rules in this setup is `~/git/dotagents`.
+- If the source-of-truth location is unclear or differs from that default, ask once before editing.
 
 ## Guidelines
 
