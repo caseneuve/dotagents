@@ -165,6 +165,8 @@ What it does:
 - parses `#+TITLE`, `#+DATE`, `#+FILETAGS`, and `:LLM_PROJECT:` metadata
 - defaults to the current git-root project when that project can be inferred from cwd
 - shows a list on the left and an Org-ish formatted preview on the right
+- lets you mark one or more entries with `m` from either list or preview focus
+- on close, pastes plain paths for marked entries into the editor
 - opens the selected entry in `$EDITOR` / `$VISUAL` with `e`
 
 Usage:
@@ -180,9 +182,10 @@ Keybindings:
 - `t` — toggle horizontal/vertical split in list mode
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom
+- `m` — mark/unmark the selected entry (from list or preview focus)
 - `e` — open selected entry in the editor
 - `r` — rescan the journal tree
-- `q` / `esc` — close
+- `q` / `esc` — close, and load plain paths for marked entries into the editor if any were selected
 
 Notes:
 

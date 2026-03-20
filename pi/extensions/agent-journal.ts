@@ -35,6 +35,11 @@ type JournalScanResult = {
   issues: string[];
 };
 
+type MarkedEntriesPayload = {
+  count: number;
+  text: string;
+};
+
 type JournalFilter = {
   query: string;
   currentProject: string | null;
@@ -113,6 +118,14 @@ function wrapBlock(text: string, width: number): string[] {
 
 function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+function formatMarkedEntriesEditorText(entries: JournalEntry[]): string {
+  const lines = [
+    "# read the following journal entries:",
+    ...entries.map((entry) => entry.path),
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 function parseFileTags(rawValue: string | undefined): string[] {
@@ -446,13 +459,14 @@ class AgentJournalComponent {
   private filterInput = new Input();
   private pendingG = false;
   private currentProjectFilterEnabled = false;
+  private markedPaths = new Set<string>();
 
   constructor(
     private journalRoot: string,
     private currentProject: string | null,
     private theme: Theme,
     private requestRender: (full?: boolean) => void,
-    private onClose: () => void,
+    private onClose: (payload?: MarkedEntriesPayload) => void,
     private onEdit: (path: string) => Promise<void>,
   ) {
     this.currentProjectFilterEnabled = Boolean(this.currentProject);
@@ -516,6 +530,7 @@ class AgentJournalComponent {
       const { entries, issues } = await scanJournalEntries(this.journalRoot);
       this.entries = entries;
       this.issues = issues;
+      this.pruneMarkedPaths();
       this.refreshFilters();
       this.selectedPath =
         this.filteredEntries.find((entry) => entry.path === previousSelection)
@@ -587,6 +602,47 @@ class AgentJournalComponent {
     this.selectedPath = this.filteredEntries[nextIndex]?.path;
     this.previewScroll = 0;
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
+  private collectEntriesByPath(): Map<string, JournalEntry> {
+    return new Map(this.entries.map((entry) => [entry.path, entry]));
+  }
+
+  private pruneMarkedPaths(): void {
+    const byPath = this.collectEntriesByPath();
+    for (const markedPath of this.markedPaths) {
+      if (!byPath.has(markedPath)) {
+        this.markedPaths.delete(markedPath);
+      }
+    }
+  }
+
+  private toggleMarkForSelected(): void {
+    const entry = this.getSelectedEntry();
+    if (!entry) return;
+
+    if (this.markedPaths.has(entry.path)) {
+      this.markedPaths.delete(entry.path);
+    } else {
+      this.markedPaths.add(entry.path);
+    }
+  }
+
+  private buildMarkedEntriesPayload(): MarkedEntriesPayload | undefined {
+    if (this.markedPaths.size === 0) return undefined;
+
+    const byPath = this.collectEntriesByPath();
+    const entries = [...this.markedPaths]
+      .map((entryPath) => byPath.get(entryPath))
+      .filter((entry): entry is JournalEntry => Boolean(entry))
+      .sort(compareByRecencyDesc);
+
+    if (entries.length === 0) return undefined;
+
+    return {
+      count: entries.length,
+      text: formatMarkedEntriesEditorText(entries),
+    };
   }
 
   private toggleCurrentProjectFilter(): void {
@@ -665,8 +721,12 @@ class AgentJournalComponent {
     );
     const lines = slice.map((entry) => {
       const isSelected = entry.path === this.selectedPath;
+      const isMarked = this.markedPaths.has(entry.path);
       const project = entry.metadata.project ?? MISSING_PROJECT_LABEL;
-      const line = `${entry.metadata.title} ${this.theme.fg("dim", `[${project}]`)}`;
+      let line = `${entry.metadata.title} ${this.theme.fg("dim", `[${project}]`)}`;
+      if (isMarked) {
+        line = this.theme.bold(line);
+      }
       const padded = padVisible(line, width);
       return isSelected ? this.theme.bg("selectedBg", padded) : padded;
     });
@@ -675,11 +735,8 @@ class AgentJournalComponent {
   }
 
   private renderPreviewPane(width: number, height: number): string[] {
-    const allLines = buildPreviewLines(
-      this.theme,
-      this.getSelectedEntry(),
-      width,
-    );
+    const entry = this.getSelectedEntry();
+    const allLines = buildPreviewLines(this.theme, entry, width);
     const maxScroll = Math.max(0, allLines.length - height);
     this.previewScroll = Math.max(0, Math.min(this.previewScroll, maxScroll));
     const visible = allLines
@@ -724,7 +781,7 @@ class AgentJournalComponent {
       data === "q"
     ) {
       this.pendingG = false;
-      this.onClose();
+      this.onClose(this.buildMarkedEntriesPayload());
       return;
     }
 
@@ -795,6 +852,12 @@ class AgentJournalComponent {
       if (entry) {
         void this.onEdit(entry.path);
       }
+      return;
+    }
+
+    if (data === "m") {
+      this.toggleMarkForSelected();
+      this.requestRender();
       return;
     }
 
@@ -885,11 +948,8 @@ class AgentJournalComponent {
         ? `${queryPrefix}${this.filterInput.render(Math.max(8, contentWidth - queryPrefix.length))[0] ?? ""}`
         : `${queryPrefix}${this.theme.fg(queryValue ? "text" : "muted", queryDisplay)}`;
     const selectedLine = selected
-      ? this.theme.fg(
-          "muted",
-          `Selected: ${selected.metadata.date} ${selected.metadata.title}`,
-        )
-      : this.theme.fg("muted", "Selected: none");
+      ? `${this.theme.fg(this.markedPaths.has(selected.path) ? "success" : "muted", this.markedPaths.has(selected.path) ? "☑" : "☐")} ${this.theme.fg("muted", `${selected.metadata.date} ${selected.metadata.title}`)}`
+      : this.theme.fg("muted", "☐ none");
     const filterSummary = this.theme.fg("dim", this.getFilterSummary());
 
     const makeBorderLine = (
@@ -952,7 +1012,7 @@ class AgentJournalComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • p project • t layout • enter/tab preview • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • p project • t layout • enter/tab preview • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
@@ -994,7 +1054,9 @@ export default function agentJournalExtension(pi: ExtensionAPI) {
 
       const currentProject = detectCurrentProject(ctx.cwd);
 
-      await ctx.ui.custom<void>(
+      const markedEntries = await ctx.ui.custom<
+        MarkedEntriesPayload | undefined
+      >(
         (tui, theme, _kb, done) => {
           const openEditor = async (filePath: string) => {
             const editorCmd = process.env.VISUAL || process.env.EDITOR;
@@ -1036,7 +1098,7 @@ export default function agentJournalExtension(pi: ExtensionAPI) {
             currentProject,
             theme,
             (full) => tui.requestRender(Boolean(full)),
-            () => done(undefined),
+            (payload) => done(payload),
             openEditor,
           );
           void component.init();
@@ -1053,6 +1115,14 @@ export default function agentJournalExtension(pi: ExtensionAPI) {
           },
         },
       );
+
+      if (markedEntries) {
+        ctx.ui.setEditorText(markedEntries.text);
+        ctx.ui.notify(
+          `Loaded ${markedEntries.count} marked journal entr${markedEntries.count === 1 ? "y" : "ies"} into the editor`,
+          "info",
+        );
+      }
     },
   });
 }
