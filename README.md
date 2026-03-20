@@ -61,6 +61,16 @@ bb test:unit
 bb test:e2e
 ```
 
+E2E tests live in `test/e2e/cases.edn` and use the declarative `end2edn` authoring format:
+
+- suites use `:cases`, not legacy `:tests`
+- scenarios use `:when` / `:then`
+- prefer `:given` / `:cleanup` fixtures over shell-heavy setup/teardown
+- use `:given :vars` placeholders like `{home}` and `{work}` to keep paths readable
+- prefer built-in `:fs-layout` assertions for filesystem and JSON layout checks
+
+When adding or refactoring E2E coverage, follow the existing style in `test/e2e/cases.edn`: keep repeated roots in vars, push setup into fixtures, and avoid custom assertions unless the built-in API is genuinely insufficient.
+
 ## Port Assessment
 
 The Claude skills were mostly portable because their real behavior lives in shell and Babashka helper scripts. The main incompatibilities were:
