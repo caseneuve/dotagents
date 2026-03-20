@@ -1,8 +1,7 @@
 #!/usr/bin/env bb
 
 (ns e2e.runner
-  (:require [e2e.assertions]
-            [end2edn.core :as e2e]))
+  (:require [end2edn.core :as e2e]))
 
 (defn -main [& args]
   (println "• Running E2E tests via end2edn...")

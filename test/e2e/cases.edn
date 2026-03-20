@@ -1,71 +1,67 @@
 [{:suite :bootstrap
   :desc "Bootstrap behavior through bb tasks in isolated temp homes"
-  :tests
-  [{:test :pi-installs-only-extensions-and-themes
-    :cwd "/work"
-    :env {"HOME" "/tmp/dotagents-e2e-pi/home"}
-    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-pi"]
-                ["mkdir" "-p" "/tmp/dotagents-e2e-pi/home"]]
-    :cmd ["bb" "bootstrap" "pi"]
-    :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-pi"]
-    :expect [[:exit-code 0]
-             [:stdout-contains "== Pi =="]
-             [:home-layout "/tmp/dotagents-e2e-pi/home"
-              {:symlinks [["/.pi/agent/extensions/bookmark.ts" "/work/pi/extensions/bookmark.ts"]
-                          ["/.pi/agent/extensions/branch-status.ts" "/work/pi/extensions/branch-status.ts"]
-                          ["/.pi/agent/themes/modus-operandi.json" "/work/pi/themes/modus-operandi.json"]]
-               :missing ["/.pi/agent/settings.json"
-                         "/.pi/agent/justfile"]}]]}
+  :cases
+  [{:scenario :pi-installs-only-extensions-and-themes
+    :given {:fixtures [[:remove "/tmp/dotagents-e2e-pi"]
+                       [:dir "/tmp/dotagents-e2e-pi/home"]]}
+    :cleanup {:fixtures [[:remove "/tmp/dotagents-e2e-pi"]]}
+    :when {:cwd "/work"
+           :env {"HOME" "/tmp/dotagents-e2e-pi/home"}
+           :run ["bb" "bootstrap" "pi"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "== Pi =="]
+           [:fs-layout {:symlinks [["/tmp/dotagents-e2e-pi/home/.pi/agent/extensions/bookmark.ts" "/work/pi/extensions/bookmark.ts"]
+                                   ["/tmp/dotagents-e2e-pi/home/.pi/agent/extensions/branch-status.ts" "/work/pi/extensions/branch-status.ts"]
+                                   ["/tmp/dotagents-e2e-pi/home/.pi/agent/themes/modus-operandi.json" "/work/pi/themes/modus-operandi.json"]]
+                        :missing ["/tmp/dotagents-e2e-pi/home/.pi/agent/settings.json"
+                                  "/tmp/dotagents-e2e-pi/home/.pi/agent/justfile"]}]]}
 
-   {:test :agents-copies-docs-and-links-helpers
-    :cwd "/work"
-    :env {"HOME" "/tmp/dotagents-e2e-agents/home"}
-    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-agents"]
-                ["mkdir" "-p" "/tmp/dotagents-e2e-agents/home"]]
-    :cmd ["bb" "bootstrap" "agents"]
-    :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-agents"]
-    :expect [[:exit-code 0]
-             [:stdout-contains "== Agents =="]
-             [:home-layout "/tmp/dotagents-e2e-agents/home"
-              {:symlinks [["/.agents/AGENTS.md" "/work/agents/AGENTS.md"]
-                          ["/.codex/AGENTS.md" "/work/agents/AGENTS.md"]
-                          ["/.agents/skills/add-todo/todo-new.sh" "/work/shared/skills/add-todo/todo-new.sh"]]
-               :regular-files ["/.agents/skills/add-todo/SKILL.md"]}]]}
+   {:scenario :agents-copies-docs-and-links-helpers
+    :given {:fixtures [[:remove "/tmp/dotagents-e2e-agents"]
+                       [:dir "/tmp/dotagents-e2e-agents/home"]]}
+    :cleanup {:fixtures [[:remove "/tmp/dotagents-e2e-agents"]]}
+    :when {:cwd "/work"
+           :env {"HOME" "/tmp/dotagents-e2e-agents/home"}
+           :run ["bb" "bootstrap" "agents"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "== Agents =="]
+           [:fs-layout {:symlinks [["/tmp/dotagents-e2e-agents/home/.agents/AGENTS.md" "/work/agents/AGENTS.md"]
+                                   ["/tmp/dotagents-e2e-agents/home/.codex/AGENTS.md" "/work/agents/AGENTS.md"]
+                                   ["/tmp/dotagents-e2e-agents/home/.agents/skills/add-todo/todo-new.sh" "/work/shared/skills/add-todo/todo-new.sh"]]
+                        :regular-files ["/tmp/dotagents-e2e-agents/home/.agents/skills/add-todo/SKILL.md"]}]]}
 
-   {:test :claude-merges-settings
-    :cwd "/work"
-    :env {"HOME" "/tmp/dotagents-e2e-claude/home"}
-    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-claude"]
-                ["mkdir" "-p" "/tmp/dotagents-e2e-claude/home/.claude"]
-                ["cp" "test/fixtures/claude-settings.json" "/tmp/dotagents-e2e-claude/home/.claude/settings.json"]]
-    :cmd ["bb" "bootstrap" "claude"]
-    :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-claude"]
-    :expect [[:exit-code 0]
-             [:stdout-contains "== Claude =="]
-             [:home-layout "/tmp/dotagents-e2e-claude/home"
-              {:json-equals [["/.claude/settings.json" [:model] "keep-me"]
-                             ["/.claude/settings.json" [:custom] {:nested true}]
-                             ["/.claude/settings.json"
-                              [:hooks :PostToolUse 0 :hooks 0 :command]
-                              "/tmp/dotagents-e2e-claude/home/.claude/hooks/smart-lint.sh"]]
-               :json-contains [["/.claude/settings.json"
-                                [:permissions :allow]
-                                "Bash(/tmp/existing:*)"]
-                               ["/.claude/settings.json"
-                                [:permissions :allow]
-                                "Bash(/tmp/dotagents-e2e-claude/home/.claude/skills/pk-tmux/tmux-status.sh:*)"]]}]]}
+   {:scenario :claude-merges-settings
+    :given {:fixtures [[:remove "/tmp/dotagents-e2e-claude"]
+                       [:dir "/tmp/dotagents-e2e-claude/home/.claude"]
+                       [:copy "test/fixtures/claude-settings.json" "/tmp/dotagents-e2e-claude/home/.claude/settings.json"]]}
+    :cleanup {:fixtures [[:remove "/tmp/dotagents-e2e-claude"]]}
+    :when {:cwd "/work"
+           :env {"HOME" "/tmp/dotagents-e2e-claude/home"}
+           :run ["bb" "bootstrap" "claude"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "== Claude =="]
+           [:fs-layout {:json-equals [["/tmp/dotagents-e2e-claude/home/.claude/settings.json" [:model] "keep-me"]
+                                      ["/tmp/dotagents-e2e-claude/home/.claude/settings.json" [:custom] {:nested true}]
+                                      ["/tmp/dotagents-e2e-claude/home/.claude/settings.json"
+                                       [:hooks :PostToolUse 0 :hooks 0 :command]
+                                       "/tmp/dotagents-e2e-claude/home/.claude/hooks/smart-lint.sh"]]
+                        :json-contains [["/tmp/dotagents-e2e-claude/home/.claude/settings.json"
+                                         [:permissions :allow]
+                                         "Bash(/tmp/existing:*)"]
+                                        ["/tmp/dotagents-e2e-claude/home/.claude/settings.json"
+                                         [:permissions :allow]
+                                         "Bash(/tmp/dotagents-e2e-claude/home/.claude/skills/pk-tmux/tmux-status.sh:*)"]]}]]}
 
-   {:test :dry-run-makes-no-changes
-    :cwd "/work"
-    :env {"HOME" "/tmp/dotagents-e2e-dry/home"}
-    :setup-cmd [["rm" "-rf" "/tmp/dotagents-e2e-dry"]
-                ["mkdir" "-p" "/tmp/dotagents-e2e-dry/home"]]
-    :cmd ["bb" "bootstrap" "all" "--dry-run"]
-    :teardown-cmd ["rm" "-rf" "/tmp/dotagents-e2e-dry"]
-    :expect [[:exit-code 0]
-             [:stdout-contains "Dry run: enabled"]
-             [:stdout-contains "Would merge Claude settings"]
-             [:home-layout "/tmp/dotagents-e2e-dry/home"
-              {:missing ["/.claude"
-                         "/.agents"
-                         "/.pi"]}]]}]}]
+   {:scenario :dry-run-makes-no-changes
+    :given {:fixtures [[:remove "/tmp/dotagents-e2e-dry"]
+                       [:dir "/tmp/dotagents-e2e-dry/home"]]}
+    :cleanup {:fixtures [[:remove "/tmp/dotagents-e2e-dry"]]}
+    :when {:cwd "/work"
+           :env {"HOME" "/tmp/dotagents-e2e-dry/home"}
+           :run ["bb" "bootstrap" "all" "--dry-run"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "Dry run: enabled"]
+           [:stdout-contains "Would merge Claude settings"]
+           [:fs-layout {:missing ["/tmp/dotagents-e2e-dry/home/.claude"
+                                  "/tmp/dotagents-e2e-dry/home/.agents"
+                                  "/tmp/dotagents-e2e-dry/home/.pi"]}]]}]}]
