@@ -142,6 +142,7 @@ Keybindings:
 - `/` or `ctrl-f` — focus the filter input (matches todo id and title)
 - `tab` — fold/unfold the selected item
 - `enter` — focus/unfocus preview and collapse/restore the list
+- `p` — show/hide the preview pane while staying in list view
 - `t` — toggle horizontal/vertical split
 - `s` — toggle sort mode
 - `d` — hide/show completed items

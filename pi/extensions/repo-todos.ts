@@ -452,6 +452,7 @@ class RepoTodosComponent {
   private focusPane: FocusPane = "list";
   private queryFocus: QueryFocus = "none";
   private splitMode: SplitMode = "horizontal";
+  private previewVisibleInList = true;
   private hideDone = true;
   private selectedId?: string;
   private expanded = new Set<string>();
@@ -790,6 +791,11 @@ class RepoTodosComponent {
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
+  private togglePreviewVisibilityInList(): void {
+    this.previewVisibleInList = !this.previewVisibleInList;
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
   private focusFilterInput(): void {
     this.queryFocus = "input";
     this.requestRender();
@@ -1092,6 +1098,13 @@ class RepoTodosComponent {
       this.requestRender();
       return;
     }
+    if (data === "p") {
+      if (this.focusPane === "list") {
+        this.togglePreviewVisibilityInList();
+        this.requestRender();
+      }
+      return;
+    }
     if (data === "r") {
       void this.reload();
       return;
@@ -1156,11 +1169,12 @@ class RepoTodosComponent {
     const bodyHeight = this.getBodyHeight();
     const isPreviewFocused = this.focusPane === "preview";
     const effectiveSplitMode = this.getEffectiveSplitMode(width);
+    const isListOnly = !isPreviewFocused && !this.previewVisibleInList;
     const isVerticalSplit =
-      !isPreviewFocused && effectiveSplitMode === "vertical";
+      !isPreviewFocused && !isListOnly && effectiveSplitMode === "vertical";
     const leftWidth = isPreviewFocused
       ? 0
-      : isVerticalSplit
+      : isListOnly || isVerticalSplit
         ? contentWidth
         : Math.max(
             LIST_MIN_WIDTH,
@@ -1171,17 +1185,26 @@ class RepoTodosComponent {
           );
     const rightWidth = isPreviewFocused
       ? contentWidth
-      : isVerticalSplit
-        ? contentWidth
-        : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
+      : isListOnly
+        ? 0
+        : isVerticalSplit
+          ? contentWidth
+          : Math.max(
+              PREVIEW_MIN_WIDTH,
+              contentWidth - leftWidth - DIVIDER_WIDTH,
+            );
     const listHeight = isPreviewFocused
       ? 0
-      : this.getListPaneHeight(bodyHeight, effectiveSplitMode);
+      : isListOnly
+        ? bodyHeight
+        : this.getListPaneHeight(bodyHeight, effectiveSplitMode);
     const previewHeight = isPreviewFocused
       ? bodyHeight
-      : isVerticalSplit
-        ? bodyHeight - listHeight - 1
-        : bodyHeight;
+      : isListOnly
+        ? 0
+        : isVerticalSplit
+          ? bodyHeight - listHeight - 1
+          : bodyHeight;
 
     const visibleRows = this.getVisibleRows();
     const selected = this.getSelectedTodo();
@@ -1194,7 +1217,7 @@ class RepoTodosComponent {
         : this.theme.fg("accent", "[preview]");
     const subTitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
+      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
     );
     const queryValue = this.getQuery();
     const queryDisplay = queryValue || FILTER_INPUT_HINT;
@@ -1238,12 +1261,19 @@ class RepoTodosComponent {
     const left = isPreviewFocused
       ? []
       : this.renderListPane(leftWidth, listHeight);
-    const right = this.renderPreviewPane(rightWidth, previewHeight);
+    const right =
+      isPreviewFocused || !isListOnly
+        ? this.renderPreviewPane(rightWidth, previewHeight)
+        : [];
     const body: string[] = [];
 
     if (isPreviewFocused) {
       for (let i = 0; i < bodyHeight; i += 1) {
         body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else if (isListOnly) {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        body.push(frameLine(padVisible(left[i] ?? "", contentWidth)));
       }
     } else if (isVerticalSplit) {
       for (let i = 0; i < listHeight; i += 1) {
@@ -1263,7 +1293,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • tab fold • enter focus/unfocus • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • p preview • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
