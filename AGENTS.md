@@ -51,6 +51,12 @@ Canonical entrypoint:
 bb bootstrap
 ```
 
+Shortcut alias:
+
+```bash
+bb boot
+```
+
 Supported modes:
 
 ```bash

@@ -38,6 +38,10 @@
   {:doc "Run bootstrap script with forwarded args"
    :task (apply shell "bb" "-m" "bootstrap" *command-line-args*)}
 
+  boot
+  {:doc "Alias for bootstrap"
+   :task (run 'bootstrap)}
+
   test:ci
   {:doc "Run tests directly (CI only)"
    :task (do

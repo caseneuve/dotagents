@@ -29,6 +29,12 @@ Run via the Babashka task:
 bb bootstrap
 ```
 
+Shortcut alias:
+
+```bash
+bb boot
+```
+
 Modes:
 
 - `bb bootstrap claude` links the Claude setup into `~/.claude/` and merges Claude settings fragments into `~/.claude/settings.json`
