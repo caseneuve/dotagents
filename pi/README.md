@@ -142,7 +142,7 @@ Keybindings:
 - `/` or `ctrl-f` — focus the filter input (matches todo id and title)
 - `tab` — fold/unfold the selected item
 - `enter` — focus/unfocus preview and collapse/restore the list
-- `p` — show/hide the preview pane while staying in list view
+- `v` — show/hide the preview pane while staying in list view
 - `t` — toggle horizontal/vertical split
 - `s` — toggle sort mode
 - `d` — hide/show completed items
@@ -165,7 +165,7 @@ What it does:
 - recursively scans the full journal tree for `.org` entries and sorts them by recency
 - parses `#+TITLE`, `#+DATE`, `#+FILETAGS`, and `:LLM_PROJECT:` metadata
 - defaults to the current git-root project when that project can be inferred from cwd
-- shows a list on the left and an Org-ish formatted preview on the right
+- shows a responsive list/preview overlay that stacks vertically in narrow terminals
 - lets you mark one or more entries with `m` from either list or preview focus
 - on close, pastes plain paths for marked entries into the editor
 - opens the selected entry in `$EDITOR` / `$VISUAL` with `e`
@@ -180,6 +180,7 @@ Keybindings:
 - `enter` or `tab` — focus the preview pane and collapse the left list
 - `/` or `ctrl-f` — focus the filter input
 - `p` — toggle current-project filtering on/off
+- `v` — show/hide the preview pane while staying in list view
 - `t` — toggle horizontal/vertical split in list mode
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom

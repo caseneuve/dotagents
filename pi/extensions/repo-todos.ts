@@ -1098,7 +1098,7 @@ class RepoTodosComponent {
       this.requestRender();
       return;
     }
-    if (data === "p") {
+    if (data === "v") {
       if (this.focusPane === "list") {
         this.togglePreviewVisibilityInList();
         this.requestRender();
@@ -1293,7 +1293,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • tab fold • enter focus/unfocus • p preview • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • v preview • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`

@@ -58,7 +58,7 @@ const JOURNAL_FILE_EXTENSION = ".org";
 const INDEX_BASENAME = "index.org";
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
-const OVERLAY_MIN_WIDTH = 100;
+const OVERLAY_MIN_WIDTH = 42;
 const OVERLAY_MARGIN = 1;
 const MIN_TERMINAL_COLUMNS = OVERLAY_MIN_WIDTH + OVERLAY_MARGIN * 2;
 const FRAME_HEADER_HEIGHT = 7;
@@ -77,6 +77,8 @@ const VERTICAL_LIST_MIN_HEIGHT = 6;
 const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
 const CONTENT_MIN_WIDTH = 40;
 const DIVIDER_WIDTH = 3;
+const HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH =
+  LIST_MIN_WIDTH + DIVIDER_WIDTH + PREVIEW_MIN_WIDTH;
 const MAX_QUERY_TOKENS = 8;
 const ORG_META_HEADING = "Meta";
 const ORG_PROPERTIES_DRAWER = ":PROPERTIES:";
@@ -456,6 +458,7 @@ class AgentJournalComponent {
   private focusPane: FocusPane = "list";
   private queryFocus: QueryFocus = "none";
   private splitMode: SplitMode = "horizontal";
+  private previewVisibleInList = true;
   private filterInput = new Input();
   private pendingG = false;
   private currentProjectFilterEnabled = false;
@@ -469,6 +472,13 @@ class AgentJournalComponent {
     private onClose: (payload?: MarkedEntriesPayload) => void,
     private onEdit: (path: string) => Promise<void>,
   ) {
+    const termWidth = process.stdout.columns ?? 0;
+    if (
+      termWidth > 0 &&
+      this.getContentWidth(termWidth) < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      this.splitMode = "vertical";
+    }
     this.currentProjectFilterEnabled = Boolean(this.currentProject);
     this.filterInput.onSubmit = () => {
       this.queryFocus = "none";
@@ -552,6 +562,21 @@ class AgentJournalComponent {
       BODY_MIN_HEIGHT,
       maxOverlayHeight - FRAME_CHROME_HEIGHT - HEIGHT_SAFETY_MARGIN,
     );
+  }
+
+  private getContentWidth(width: number): number {
+    return Math.max(CONTENT_MIN_WIDTH, width - 2);
+  }
+
+  private getEffectiveSplitMode(width: number): SplitMode {
+    const contentWidth = this.getContentWidth(width);
+    if (
+      this.splitMode === "horizontal" &&
+      contentWidth < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      return "vertical";
+    }
+    return this.splitMode;
   }
 
   private getSelectedIndex(): number {
@@ -669,11 +694,19 @@ class AgentJournalComponent {
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
-  private getListPaneHeight(bodyHeight: number): number {
+  private togglePreviewVisibilityInList(): void {
+    this.previewVisibleInList = !this.previewVisibleInList;
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
+  private getListPaneHeight(
+    bodyHeight: number,
+    splitMode: SplitMode = this.splitMode,
+  ): number {
     if (this.focusPane === "preview") {
       return bodyHeight;
     }
-    if (this.splitMode === "horizontal") {
+    if (splitMode === "horizontal") {
       return bodyHeight;
     }
 
@@ -836,6 +869,14 @@ class AgentJournalComponent {
       return;
     }
 
+    if (data === "v") {
+      if (this.focusPane === "list") {
+        this.togglePreviewVisibilityInList();
+        this.requestRender();
+      }
+      return;
+    }
+
     if (data === "t") {
       this.toggleSplitMode();
       this.requestRender();
@@ -901,13 +942,16 @@ class AgentJournalComponent {
   render(width: number): string[] {
     this.syncFocusableChildren();
 
-    const contentWidth = Math.max(CONTENT_MIN_WIDTH, width - 2);
+    const contentWidth = this.getContentWidth(width);
     const bodyHeight = this.getBodyHeight();
     const isPreviewFocused = this.focusPane === "preview";
-    const isVerticalSplit = !isPreviewFocused && this.splitMode === "vertical";
+    const effectiveSplitMode = this.getEffectiveSplitMode(width);
+    const isListOnly = !isPreviewFocused && !this.previewVisibleInList;
+    const isVerticalSplit =
+      !isPreviewFocused && !isListOnly && effectiveSplitMode === "vertical";
     const leftWidth = isPreviewFocused
       ? 0
-      : isVerticalSplit
+      : isListOnly || isVerticalSplit
         ? contentWidth
         : Math.max(
             LIST_MIN_WIDTH,
@@ -918,15 +962,24 @@ class AgentJournalComponent {
           );
     const rightWidth = isPreviewFocused
       ? Math.max(PREVIEW_MIN_WIDTH, contentWidth - PREVIEW_ONLY_WIDTH_OFFSET)
-      : isVerticalSplit
-        ? contentWidth
-        : Math.max(PREVIEW_MIN_WIDTH, contentWidth - leftWidth - DIVIDER_WIDTH);
-    const listHeight = this.getListPaneHeight(bodyHeight);
+      : isListOnly
+        ? 0
+        : isVerticalSplit
+          ? contentWidth
+          : Math.max(
+              PREVIEW_MIN_WIDTH,
+              contentWidth - leftWidth - DIVIDER_WIDTH,
+            );
+    const listHeight = isListOnly
+      ? bodyHeight
+      : this.getListPaneHeight(bodyHeight, effectiveSplitMode);
     const previewHeight = isPreviewFocused
       ? bodyHeight
-      : isVerticalSplit
-        ? bodyHeight - listHeight - 1
-        : bodyHeight;
+      : isListOnly
+        ? 0
+        : isVerticalSplit
+          ? bodyHeight - listHeight - 1
+          : bodyHeight;
     const selected = this.getSelectedEntry();
 
     const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
@@ -937,7 +990,7 @@ class AgentJournalComponent {
         : this.theme.fg("accent", "[preview]");
     const subtitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.journalRoot)} • ${this.filteredEntries.length}/${this.entries.length} shown • newest first • layout:${this.splitMode}`,
+      `${formatHomePath(this.journalRoot)} • ${this.filteredEntries.length}/${this.entries.length} shown • newest first • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
     );
 
     const queryValue = this.filterInput.getValue();
@@ -984,15 +1037,19 @@ class AgentJournalComponent {
     const left = isPreviewFocused
       ? []
       : this.renderListPane(leftWidth, listHeight);
-    const right = this.renderPreviewPane(
-      rightWidth,
-      Math.max(0, previewHeight),
-    );
+    const right =
+      isPreviewFocused || !isListOnly
+        ? this.renderPreviewPane(rightWidth, Math.max(0, previewHeight))
+        : [];
     const body: string[] = [];
 
     if (isPreviewFocused) {
       for (let i = 0; i < bodyHeight; i += 1) {
         body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
+      }
+    } else if (isListOnly) {
+      for (let i = 0; i < bodyHeight; i += 1) {
+        body.push(frameLine(padVisible(left[i] ?? "", contentWidth)));
       }
     } else if (isVerticalSplit) {
       for (let i = 0; i < listHeight; i += 1) {
@@ -1012,7 +1069,7 @@ class AgentJournalComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • p project • t layout • enter/tab preview • m mark • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • p project • v preview • t layout • enter/tab preview • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`
