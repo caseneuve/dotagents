@@ -73,8 +73,10 @@ if [[ -n "$SOCK" ]] && [[ -n "$SESSION" ]]; then
     fi
 else
     PROJECT="$(basename "$PWD")"
-    SOCK="/tmp/$(detect_socket_prefix)-${PROJECT}.sock"
-    SESSION="$PROJECT"
+    BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'default')"
+    HASH="$(echo "$BRANCH" | md5sum | head -c 6)"
+    SOCK="/tmp/$(detect_socket_prefix)-${PROJECT}-${HASH}.sock"
+    SESSION="${PROJECT}-${HASH}"
 
     if ! [[ -S "$SOCK" ]] || ! tmux -S "$SOCK" has-session -t "$SESSION" 2>/dev/null; then
         tmux -S "$SOCK" new-session -d -s "$SESSION" -c "$PWD"
