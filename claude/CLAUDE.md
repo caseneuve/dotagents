@@ -12,6 +12,7 @@
 - Keep functions short (5–15 lines), flat, with type hints/specs
 - Ask before making changes (unless instructed otherwise)
 - Use fixtures, factories, parametrization in tests
+- **Check git state before amend**: Always run `git log --oneline -3` before `git commit --amend` to confirm you're amending the right commit
 
 ### MUST NOT
 - Commit or push without explicit permission
