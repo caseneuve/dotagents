@@ -36,4 +36,5 @@ export type AssistantOutlineCommentState = {
 export type ExportedSectionsPayload = {
   count: number;
   text: string;
+  kind: "sections" | "commands";
 };

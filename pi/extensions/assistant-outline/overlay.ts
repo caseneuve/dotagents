@@ -7,6 +7,8 @@ import {
   visibleWidth,
 } from "@mariozechner/pi-tui";
 import { buildExportedSectionsPayload } from "./comments";
+import { formatMarkedCommandsForPiEditor } from "./command-editor-export";
+import type { CommandSnippet } from "./command-extract";
 import {
   flattenVisibleOutline,
   getNodeMarkdown,
@@ -20,6 +22,7 @@ import type {
   SectionComments,
 } from "./types";
 
+type ViewMode = "outline" | "commands";
 type FocusPane = "outline" | "preview";
 type SplitMode = "horizontal" | "vertical";
 
@@ -32,7 +35,11 @@ type OverlayCallbacks = {
     error?: string;
   }>;
   onEditComment: (node: OutlineNode) => Promise<void>;
+  onOpenCommandSnippet: (snippet: CommandSnippet) => Promise<void>;
+  onOpenAllCommands: () => Promise<void>;
+  onCopyCommandSnippet: (snippet: CommandSnippet) => Promise<void>;
   getComments: () => SectionComments;
+  getCommandSnippets: () => CommandSnippet[];
 };
 
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
@@ -117,6 +124,7 @@ export class AssistantOutlineOverlay {
   private messageTimestamp?: number;
   private loading = true;
   private error?: string;
+  private mode: ViewMode = "outline";
   private focusPane: FocusPane = "outline";
   private splitMode: SplitMode = "horizontal";
   private selectedId = "root";
@@ -125,6 +133,9 @@ export class AssistantOutlineOverlay {
   private pendingG = false;
   private markedIds = new Set<string>();
   private expanded = new Set<string>(["root"]);
+  private selectedCommandId?: string;
+  private commandScroll = 0;
+  private markedCommandIds = new Set<string>();
 
   constructor(
     private theme: Theme,
@@ -186,6 +197,23 @@ export class AssistantOutlineOverlay {
     return flattenVisibleOutline(this.document.root, this.expanded);
   }
 
+  private getCommandSnippets(): CommandSnippet[] {
+    return this.callbacks.getCommandSnippets();
+  }
+
+  private getSelectedCommandIndex(
+    snippets = this.getCommandSnippets(),
+  ): number {
+    const index = snippets.findIndex(
+      (snippet) => snippet.id === this.selectedCommandId,
+    );
+    return index >= 0 ? index : 0;
+  }
+
+  private getSelectedCommand(): CommandSnippet | undefined {
+    return this.getCommandSnippets()[this.getSelectedCommandIndex()];
+  }
+
   private getSelectedRowIndex(rows = this.getVisibleRows()): number {
     const index = rows.findIndex((row) => row.node.id === this.selectedId);
     return index >= 0 ? index : 0;
@@ -226,6 +254,44 @@ export class AssistantOutlineOverlay {
     this.selectedId = rows[next]?.node.id ?? this.selectedId;
     this.previewScroll = 0;
     this.clampSelectionIntoView(
+      this.getOutlinePaneHeight(this.getBodyHeight()),
+    );
+  }
+
+  private clampSelectedCommandIntoView(bodyHeight: number): void {
+    const snippets = this.getCommandSnippets();
+    if (snippets.length === 0) {
+      this.selectedCommandId = undefined;
+      this.commandScroll = 0;
+      return;
+    }
+
+    if (
+      !this.selectedCommandId ||
+      !snippets.some((snippet) => snippet.id === this.selectedCommandId)
+    ) {
+      this.selectedCommandId = snippets[0]?.id;
+    }
+
+    const index = this.getSelectedCommandIndex(snippets);
+    if (index < this.commandScroll) {
+      this.commandScroll = index;
+    } else if (index >= this.commandScroll + bodyHeight) {
+      this.commandScroll = index - bodyHeight + 1;
+    }
+
+    const maxScroll = Math.max(0, snippets.length - bodyHeight);
+    this.commandScroll = Math.max(0, Math.min(this.commandScroll, maxScroll));
+  }
+
+  private moveCommandSelection(delta: number): void {
+    const snippets = this.getCommandSnippets();
+    if (snippets.length === 0) return;
+    const current = this.getSelectedCommandIndex(snippets);
+    const next = Math.max(0, Math.min(snippets.length - 1, current + delta));
+    this.selectedCommandId = snippets[next]?.id;
+    this.previewScroll = 0;
+    this.clampSelectedCommandIntoView(
       this.getOutlinePaneHeight(this.getBodyHeight()),
     );
   }
@@ -310,6 +376,14 @@ export class AssistantOutlineOverlay {
     this.callbacks.requestRender(true);
   }
 
+  private toggleMarkedCommandSelected(): void {
+    const snippet = this.getSelectedCommand();
+    if (!snippet) return;
+    if (this.markedCommandIds.has(snippet.id))
+      this.markedCommandIds.delete(snippet.id);
+    else this.markedCommandIds.add(snippet.id);
+  }
+
   async reload(): Promise<void> {
     this.loading = true;
     this.error = undefined;
@@ -336,13 +410,27 @@ export class AssistantOutlineOverlay {
       : "root";
     this.previewScroll = 0;
     this.outlineScroll = 0;
+    this.selectedCommandId = this.getCommandSnippets()[0]?.id;
+    this.commandScroll = 0;
+    this.markedCommandIds = new Set(
+      [...this.markedCommandIds].filter((id) =>
+        this.getCommandSnippets().some((snippet) => snippet.id === id),
+      ),
+    );
     this.clampSelectionIntoView(
+      this.getOutlinePaneHeight(this.getBodyHeight()),
+    );
+    this.clampSelectedCommandIntoView(
       this.getOutlinePaneHeight(this.getBodyHeight()),
     );
     this.callbacks.requestRender(true);
   }
 
   private renderOutlinePane(width: number, height: number): string[] {
+    if (this.mode === "commands") {
+      return this.renderCommandListPane(width, height);
+    }
+
     if (this.loading) {
       return this.fillHeight(
         [this.theme.fg("muted", "Loading latest assistant response...")],
@@ -393,6 +481,10 @@ export class AssistantOutlineOverlay {
   }
 
   private renderPreviewPane(width: number, height: number): string[] {
+    if (this.mode === "commands") {
+      return this.renderCommandPreviewPane(width, height);
+    }
+
     if (this.loading) {
       return this.fillHeight(
         [this.theme.fg("muted", "Waiting for assistant response...")],
@@ -431,6 +523,102 @@ export class AssistantOutlineOverlay {
     return this.fillHeight(visible, width, height);
   }
 
+  private renderCommandListPane(width: number, height: number): string[] {
+    if (this.loading) {
+      return this.fillHeight(
+        [this.theme.fg("muted", "Extracting commands...")],
+        width,
+        height,
+      );
+    }
+    const snippets = this.getCommandSnippets();
+    if (snippets.length === 0) {
+      return this.fillHeight(
+        [this.theme.fg("muted", "No shell-like command snippets found.")],
+        width,
+        height,
+      );
+    }
+
+    this.clampSelectedCommandIntoView(height);
+    const slice = snippets.slice(
+      this.commandScroll,
+      this.commandScroll + height,
+    );
+    const comments = this.callbacks.getComments();
+    const lines = slice.map((snippet) => {
+      const isSelected = snippet.id === this.selectedCommandId;
+      const label = snippet.commandText.split(/\r?\n/)[0] ?? "(empty)";
+      const hasComment = Boolean(comments[snippet.nodeId]?.trim());
+      const checked = this.markedCommandIds.has(snippet.id) ? "x" : " ";
+      const line = `[${checked}]${hasComment ? "+" : " "} ${snippet.path} :: ${label}`;
+      const padded = padVisible(line, width);
+      return isSelected ? this.theme.bg("selectedBg", padded) : padded;
+    });
+
+    return this.fillHeight(lines, width, height);
+  }
+
+  private renderCommandPreviewPane(width: number, height: number): string[] {
+    if (this.loading) {
+      return this.fillHeight(
+        [this.theme.fg("muted", "Extracting commands...")],
+        width,
+        height,
+      );
+    }
+
+    const snippet = this.getSelectedCommand();
+    if (!snippet) {
+      return this.fillHeight(
+        [this.theme.fg("muted", "No command snippet selected.")],
+        width,
+        height,
+      );
+    }
+
+    const lines = [
+      this.theme.fg("accent", this.theme.bold(snippet.path)),
+      this.theme.fg(
+        "dim",
+        `lines ${snippet.startLine + 1}-${snippet.endLine} • ${snippet.language ?? "shell-like"}`,
+      ),
+    ];
+
+    const comment = this.callbacks.getComments()[snippet.nodeId]?.trim();
+    if (comment) {
+      lines.push("");
+      lines.push(this.theme.fg("success", this.theme.bold("Comment")));
+      lines.push(...comment.split(/\r?\n/));
+    }
+
+    lines.push("");
+    lines.push(...snippet.commandText.split(/\r?\n/));
+
+    const maxScroll = Math.max(0, lines.length - height);
+    this.previewScroll = Math.max(0, Math.min(this.previewScroll, maxScroll));
+    const visible = lines
+      .slice(this.previewScroll, this.previewScroll + height)
+      .map((line) => padVisible(line, width));
+    return this.fillHeight(visible, width, height);
+  }
+
+  private buildMarkedCommandsPayload(): ExportedSectionsPayload | undefined {
+    const snippets = this.getCommandSnippets().filter((snippet) =>
+      this.markedCommandIds.has(snippet.id),
+    );
+    if (snippets.length === 0) return undefined;
+
+    return {
+      kind: "commands",
+      count: snippets.length,
+      text: formatMarkedCommandsForPiEditor(
+        snippets,
+        this.callbacks.getComments(),
+      ),
+    };
+  }
+
   private fillHeight(lines: string[], width: number, height: number): string[] {
     const next = [...lines];
     while (next.length < height) next.push(" ".repeat(width));
@@ -443,7 +631,9 @@ export class AssistantOutlineOverlay {
       matchesKey(data, Key.ctrl("c")) ||
       data === "q"
     ) {
-      if (this.document) {
+      if (this.mode === "commands") {
+        this.callbacks.onClose(this.buildMarkedCommandsPayload());
+      } else if (this.document) {
         this.callbacks.onClose(
           buildExportedSectionsPayload(
             this.document,
@@ -461,6 +651,7 @@ export class AssistantOutlineOverlay {
       if (this.pendingG) {
         this.pendingG = false;
         if (this.focusPane === "preview") this.previewScroll = 0;
+        else if (this.mode === "commands") this.moveCommandSelection(-9999);
         else this.moveSelection(-9999);
         this.callbacks.requestRender();
       } else {
@@ -471,9 +662,13 @@ export class AssistantOutlineOverlay {
 
     if (data === "G") {
       this.pendingG = false;
-      if (this.focusPane === "preview")
+      if (this.focusPane === "preview") {
         this.previewScroll = Number.MAX_SAFE_INTEGER;
-      else this.moveSelection(9999);
+      } else if (this.mode === "commands") {
+        this.moveCommandSelection(9999);
+      } else {
+        this.moveSelection(9999);
+      }
       this.callbacks.requestRender();
       return;
     }
@@ -483,6 +678,14 @@ export class AssistantOutlineOverlay {
     if (matchesKey(data, Key.enter)) {
       this.focusPane = this.focusPane === "outline" ? "preview" : "outline";
       this.callbacks.requestRender();
+      return;
+    }
+
+    if (data === "c") {
+      this.mode = this.mode === "outline" ? "commands" : "outline";
+      this.focusPane = "outline";
+      this.previewScroll = 0;
+      this.callbacks.requestRender(true);
       return;
     }
 
@@ -499,8 +702,20 @@ export class AssistantOutlineOverlay {
     }
 
     if (data === "m") {
-      this.toggleMarkedSelected();
+      if (this.mode === "commands") {
+        this.toggleMarkedCommandSelected();
+      } else {
+        this.toggleMarkedSelected();
+      }
       this.callbacks.requestRender();
+      return;
+    }
+
+    if (data === "y" && this.mode === "commands") {
+      const snippet = this.getSelectedCommand();
+      if (snippet) {
+        void this.callbacks.onCopyCommandSnippet(snippet);
+      }
       return;
     }
 
@@ -510,10 +725,22 @@ export class AssistantOutlineOverlay {
     }
 
     if (data === "e") {
-      const node = this.getSelectedNode();
-      if (node) {
-        void this.callbacks.onEditComment(node);
+      if (this.mode === "commands") {
+        const snippet = this.getSelectedCommand();
+        if (snippet) {
+          void this.callbacks.onOpenCommandSnippet(snippet);
+        }
+      } else {
+        const node = this.getSelectedNode();
+        if (node) {
+          void this.callbacks.onEditComment(node);
+        }
       }
+      return;
+    }
+
+    if (data === "E" && this.mode === "commands") {
+      void this.callbacks.onOpenAllCommands();
       return;
     }
 
@@ -543,7 +770,17 @@ export class AssistantOutlineOverlay {
       return;
     }
 
-    if (matchesKey(data, Key.up) || data === "k") this.moveSelection(-1);
+    if (this.mode === "commands") {
+      if (matchesKey(data, Key.up) || data === "k")
+        this.moveCommandSelection(-1);
+      else if (matchesKey(data, Key.down) || data === "j")
+        this.moveCommandSelection(1);
+      else if (matchesKey(data, "pageUp")) this.moveCommandSelection(-page);
+      else if (matchesKey(data, "pageDown")) this.moveCommandSelection(page);
+      else if (matchesKey(data, Key.home)) this.moveCommandSelection(-9999);
+      else if (matchesKey(data, Key.end)) this.moveCommandSelection(9999);
+      else return;
+    } else if (matchesKey(data, Key.up) || data === "k") this.moveSelection(-1);
     else if (matchesKey(data, Key.down) || data === "j") this.moveSelection(1);
     else if (matchesKey(data, "pageUp")) this.moveSelection(-page);
     else if (matchesKey(data, "pageDown")) this.moveSelection(page);
@@ -594,28 +831,39 @@ export class AssistantOutlineOverlay {
         : bodyHeight;
 
     const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
-    const title = this.theme.bold(" Assistant Outline ");
+    const title = this.theme.bold(
+      this.mode === "outline" ? " Assistant Outline " : " Assistant Commands ",
+    );
     const focusLabel = this.theme.fg(
       "accent",
-      this.focusPane === "outline" ? "[outline]" : "[preview]",
+      `${this.mode === "outline" ? "[outline]" : "[commands]"} ${this.focusPane === "outline" ? "[list]" : "[preview]"}`,
     );
     const subtitle = this.theme.fg(
       "dim",
       this.document
-        ? `last assistant response • ${formatTimestamp(this.messageTimestamp)} • marked:${this.markedIds.size} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`
+        ? `last assistant response • ${formatTimestamp(this.messageTimestamp)} • marked:${this.markedIds.size} • commands:${this.getCommandSnippets().length} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`
         : "last assistant response",
     );
-    const selected = this.getSelectedNode();
+    const selected =
+      this.mode === "commands"
+        ? this.getSelectedCommand()
+        : this.getSelectedNode();
     const selectionLine =
-      selected && this.document
-        ? this.theme.fg(
-            "muted",
-            getNodePath(this.document, selected.id).join(" > "),
-          )
-        : this.theme.fg("muted", "No section selected");
+      this.mode === "commands"
+        ? selected && "path" in selected
+          ? this.theme.fg("muted", selected.path)
+          : this.theme.fg("muted", "No command selected")
+        : selected && this.document && "id" in selected
+          ? this.theme.fg(
+              "muted",
+              getNodePath(this.document, selected.id).join(" > "),
+            )
+          : this.theme.fg("muted", "No section selected");
     const hintLine = this.theme.fg(
       "dim",
-      "[*] marked for export • [+] has comment • root shows the whole response",
+      this.mode === "outline"
+        ? "[*] marked for export • [+] has comment • root shows the whole response"
+        : "[x] marked for Pi editor • [+] section has comment • m toggle mark • y copy • e open selected • E open all",
     );
 
     const makeBorderLine = (
@@ -683,7 +931,9 @@ export class AssistantOutlineOverlay {
     }
 
     const footerText =
-      "↑/↓ or j/k move • h/l collapse/expand • tab fold • enter preview-only • e comment • m mark • ctrl-u/d page • r reload • t layout • q close";
+      this.mode === "outline"
+        ? "↑/↓ or j/k move • h/l collapse/expand • tab fold • enter preview-only • c commands • e comment • m mark • ctrl-u/d page • r reload • t layout • q close"
+        : "↑/↓ or j/k move • enter preview-only • c outline • m mark • y copy • e open selected • E open all • ctrl-u/d page • r reload • t layout • q close";
     const footerExtra = this.error ? ` • error: ${this.error}` : "";
     const footer = [
       makeDividerLine(),

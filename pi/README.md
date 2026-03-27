@@ -223,7 +223,7 @@ Notes:
 
 ### `extensions/assistant-outline/`
 
-Adds an `/assistant-outline` command for browsing the latest assistant response as a heading tree with per-section preview and comments.
+Adds an `/assistant-outline` command for browsing the latest assistant response as a heading tree and as an extracted shell-commands view.
 
 What it does:
 
@@ -235,6 +235,10 @@ What it does:
 - persists those comments in Pi session custom entries keyed to the assistant message id
 - loads marked sections into the main Pi editor when you close the overlay
 - exports section paths by default, and adds comments only for sections that have them, to keep follow-up prompts compact
+- adds a commands mode that extracts shell-like fenced code blocks from the whole response, associates them with outline paths, and previews them in a dedicated list/preview view with command checkboxes
+- lets you open either the selected extracted command snippet or the full extracted command export in `$EDITOR` / `$VISUAL`
+- inserts marked command snippets into the Pi editor without a shebang so they can be used for further discussion with the agent
+- copies only bare command text to the clipboard in commands mode, so pasted snippets work directly in a shell
 
 Usage:
 
@@ -248,15 +252,20 @@ Keybindings:
 - `enter` — toggle preview-only focus
 - `ctrl-u` / `ctrl-d` — page the preview
 - `gg` / `G` — jump to top/bottom
-- `m` — mark/unmark the selected section for export back into the Pi editor
-- `e` — open the focused section in the external editor with an editable comment block
+- `m` — in outline mode, mark/unmark the selected section for export back into the Pi editor; in commands mode, mark/unmark the selected command snippet for insertion into the Pi editor when the overlay closes
+- `y` — in commands mode, copy the selected command snippet's bare code to the system clipboard
+- `e` — in outline mode, open the focused section in the external editor with an editable comment block; in commands mode, open the selected command snippet in `$EDITOR`
+- `E` — in commands mode, open the full extracted commands export in `$EDITOR`
+- `c` — toggle between outline mode and commands mode
 - `r` — reload from the latest assistant response on the current branch
 - `t` — toggle horizontal/vertical split when not in preview-only mode
 - `q` / `esc` — close, loading marked sections into the editor and including comments where present
 
 Notes:
 
-- the first iteration parses ATX headings (`#` through `######`) and ignores headings inside fenced code blocks
+- the outline view parses ATX headings (`#` through `######`) and ignores headings inside fenced code blocks
+- the commands view extracts shell-like fenced code blocks (`bash`, `sh`, `shell`, `zsh`, plus untyped shell-looking blocks) and splits them by blank-line-separated command chunks
+- external-editor command exports normalize to a single top-level bash shebang, while Pi-editor insertion stays shebang-free
 - comments are stored separately from the assistant response; the overlay treats the section text as reference content and the comment block as the editable part
 
 ### `extensions/playwright/`

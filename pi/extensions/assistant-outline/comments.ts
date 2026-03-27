@@ -86,6 +86,7 @@ export function buildExportedSectionsPayload(
     .join("\n\n");
 
   return {
+    kind: "sections",
     count: sections.length,
     text:
       (hasAnyComments
