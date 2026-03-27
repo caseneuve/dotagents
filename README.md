@@ -13,6 +13,8 @@ scripts/  # Repo-local Babashka scripts (e.g. bootstrap)
 test/     # Unit and E2E tests
 ```
 
+The `pi/` tree includes focused TUI extensions such as repo todo browsing, agent-journal browsing, and an assistant-response outline viewer for navigating long markdown answers.
+
 The `agents/` tree includes:
 
 - `AGENTS.md`
@@ -87,14 +89,14 @@ To reduce maintenance overhead, the helper scripts and hooks now live once under
 
 ## Skills
 
-| Skill | Claude tree | Agents tree |
-|-------|-------------|-------------|
-| add-todo | Yes | Yes |
-| code-review | Yes | Yes |
-| journal | Yes | Yes |
-| org-journal | Yes | Yes |
-| pk-tmux | Yes | Yes |
+| Skill        | Claude tree | Agents tree |
+| ------------ | ----------- | ----------- |
+| add-todo     | Yes         | Yes         |
+| code-review  | Yes         | Yes         |
+| journal      | Yes         | Yes         |
+| org-journal  | Yes         | Yes         |
+| pk-tmux      | Yes         | Yes         |
 | project-init | `CLAUDE.md` | `AGENTS.md` |
-| sandbox | Yes | Yes |
+| sandbox      | Yes         | Yes         |
 
 See [claude/skills/README.md](claude/skills/README.md) and [agents/skills/README.md](agents/skills/README.md).

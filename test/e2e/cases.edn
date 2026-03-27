@@ -16,6 +16,7 @@
            [:stdout-contains "== Pi =="]
            [:fs-layout {:symlinks [["{home}/.pi/agent/extensions/bookmark.ts" "{work}/pi/extensions/bookmark.ts"]
                                    ["{home}/.pi/agent/extensions/branch-status.ts" "{work}/pi/extensions/branch-status.ts"]
+                                   ["{home}/.pi/agent/extensions/assistant-outline/index.ts" "{work}/pi/extensions/assistant-outline/index.ts"]
                                    ["{home}/.pi/agent/themes/modus-operandi.json" "{work}/pi/themes/modus-operandi.json"]]
                         :missing ["{home}/.pi/agent/settings.json"
                                   "{home}/.pi/agent/justfile"]}]]}

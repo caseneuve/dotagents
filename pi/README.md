@@ -221,6 +221,44 @@ Notes:
 - the first backend implementation covers the ChatGPT subscription / `wham/usage` endpoint only
 - model-to-backend matching is heuristic for now and can be refined as more backends are added
 
+### `extensions/assistant-outline/`
+
+Adds an `/assistant-outline` command for browsing the latest assistant response as a heading tree with per-section preview and comments.
+
+What it does:
+
+- scans the current branch for the most recent completed assistant message with text content
+- parses markdown ATX headings into a navigable outline, with a synthetic root for the whole response
+- shows a two-pane outline/preview overlay and collapses into preview-only mode when you press `enter`
+- previews the selected heading subtree, so parent headings include their children while leaf headings stay narrow
+- lets you open `$EDITOR` / `$VISUAL` on the focused section to capture a stored comment for that section
+- persists those comments in Pi session custom entries keyed to the assistant message id
+- loads marked sections into the main Pi editor when you close the overlay
+- exports section paths by default, and adds comments only for sections that have them, to keep follow-up prompts compact
+
+Usage:
+
+- `/assistant-outline`
+
+Keybindings:
+
+- `↑/↓` or `j/k` — move through the outline
+- `←/→` or `h/l` — collapse/expand outline nodes
+- `tab` — fold/unfold the selected heading
+- `enter` — toggle preview-only focus
+- `ctrl-u` / `ctrl-d` — page the preview
+- `gg` / `G` — jump to top/bottom
+- `m` — mark/unmark the selected section for export back into the Pi editor
+- `e` — open the focused section in the external editor with an editable comment block
+- `r` — reload from the latest assistant response on the current branch
+- `t` — toggle horizontal/vertical split when not in preview-only mode
+- `q` / `esc` — close, loading marked sections into the editor and including comments where present
+
+Notes:
+
+- the first iteration parses ATX headings (`#` through `######`) and ignores headings inside fenced code blocks
+- comments are stored separately from the assistant response; the overlay treats the section text as reference content and the comment block as the editable part
+
 ### `extensions/playwright/`
 
 Adds native Playwright browser-debug tools for frontend verification loops.
