@@ -5,7 +5,6 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import {
   Container,
-  getEditorKeybindings,
   matchesKey,
   type SelectItem,
   SelectList,
@@ -140,7 +139,7 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
   const options = buildSettingsActionOptions(config);
   const summary = createSettingsMenuSummary(config);
 
-  return ctx.ui.custom<string | undefined>((tui, theme, _keybindings, done) => {
+  return ctx.ui.custom<string | undefined>((tui, theme, keybindings, done) => {
     const container = new Container();
     container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
     container.addChild(
@@ -193,12 +192,11 @@ async function chooseAction(ctx: ExtensionContext, config: UrlPolicyConfig) {
           return;
         }
 
-        const editorKeys = getEditorKeybindings();
         if (
-          editorKeys.matches(data, "selectUp") ||
-          editorKeys.matches(data, "selectDown") ||
-          editorKeys.matches(data, "selectConfirm") ||
-          editorKeys.matches(data, "selectCancel")
+          keybindings.matches(data, "tui.select.up") ||
+          keybindings.matches(data, "tui.select.down") ||
+          keybindings.matches(data, "tui.select.confirm") ||
+          keybindings.matches(data, "tui.select.cancel")
         ) {
           selectList.handleInput(data);
           tui.requestRender();

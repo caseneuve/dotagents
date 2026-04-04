@@ -5,7 +5,6 @@ import type {
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import {
   Container,
-  getEditorKeybindings,
   type SelectItem,
   SelectList,
   Spacer,
@@ -131,7 +130,7 @@ async function selectPromptForBookmark(
   });
 
   const selectedId = await ctx.ui.custom<string | null>(
-    (tui, theme, _kb, done) => {
+    (tui, theme, keybindings, done) => {
       const container = new Container();
       container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
       container.addChild(
@@ -182,12 +181,11 @@ async function selectPromptForBookmark(
           container.invalidate();
         },
         handleInput(data: string) {
-          const kb = getEditorKeybindings();
           if (
-            kb.matches(data, "selectUp") ||
-            kb.matches(data, "selectDown") ||
-            kb.matches(data, "selectConfirm") ||
-            kb.matches(data, "selectCancel")
+            keybindings.matches(data, "tui.select.up") ||
+            keybindings.matches(data, "tui.select.down") ||
+            keybindings.matches(data, "tui.select.confirm") ||
+            keybindings.matches(data, "tui.select.cancel")
           ) {
             selectList.handleInput(data);
             tui.requestRender();
