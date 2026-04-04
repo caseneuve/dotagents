@@ -58,7 +58,9 @@ type MarkedTodosPayload = {
 };
 
 const COMMAND_NAME = "repo-todos";
-const TODO_FILENAME_RE = /^(\d{4}(?:\.\d+)?)-(.+)\.md$/;
+const TODO_DIRECTORIES = ["todos", "todo", "tasks"] as const;
+const TODO_IGNORED_FILENAMES = new Set(["template.md", "readme.md"]);
+const TODO_FILENAME_RE = /^(\d+(?:\.\d+)*)-([^.].*)\.md$/i;
 const OVERLAY_MAX_HEIGHT = "90%";
 const OVERLAY_MAX_HEIGHT_RATIO = 0.9;
 const OVERLAY_MIN_WIDTH = 42;
@@ -82,7 +84,7 @@ const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
 const FILTER_INPUT_LABEL = "Filter";
 const FILTER_INPUT_HINT = "id/title";
 const MAX_QUERY_TOKENS = 8;
-const REQUIRED_FIELDS = [
+const RECOMMENDED_FIELDS = [
   "title",
   "status",
   "priority",
@@ -97,7 +99,31 @@ const STATUS_ORDER = new Map<string, number>([
   ["open", 1],
   ["blocked", 2],
   ["done", 3],
+  ["unknown", 4],
 ]);
+const STATUS_ALIASES = new Map<string, TodoFrontmatter["status"]>([
+  ["todo", "open"],
+  ["open", "open"],
+  ["in_progress", "in_progress"],
+  ["in-progress", "in_progress"],
+  ["in progress", "in_progress"],
+  ["doing", "in_progress"],
+  ["blocked", "blocked"],
+  ["done", "done"],
+  ["closed", "done"],
+  ["completed", "done"],
+]);
+
+type TodoFile = {
+  name: string;
+  id: string;
+  slug: string;
+};
+
+type TodoDirectoryScan = {
+  dir: string;
+  entries: string[];
+};
 
 function stripQuotes(value: string): string {
   const trimmed = value.trim();
@@ -112,25 +138,27 @@ function stripQuotes(value: string): string {
 
 function parseArrayValue(value: string): string[] {
   const trimmed = value.trim();
-  if (trimmed === "[]") return [];
+  if (!trimmed || trimmed === "[]") return [];
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     const inner = trimmed.slice(1, -1).trim();
     if (!inner) return [];
     return inner
       .split(",")
-      .map((item) => stripQuotes(item))
-      .map((item) => item.trim())
+      .map((item) => stripQuotes(item).trim())
       .filter(Boolean);
   }
-  return [stripQuotes(trimmed)].filter(Boolean);
+  return trimmed
+    .split(",")
+    .map((item) => stripQuotes(item).trim())
+    .filter(Boolean);
 }
 
-function normalizeStatus(status: string): string {
-  const normalized = stripQuotes(status).trim().toLowerCase();
-  if (normalized === "closed" || normalized === "completed") {
-    return "done";
-  }
-  return normalized;
+function normalizeStatus(status: string): TodoFrontmatter["status"] {
+  const normalized = stripQuotes(status)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  return STATUS_ALIASES.get(normalized) ?? "unknown";
 }
 
 function normalizeParent(value: string): string | null {
@@ -139,6 +167,22 @@ function normalizeParent(value: string): string | null {
     return null;
   }
   return normalized;
+}
+
+function parseTodoFilename(name: string): TodoFile | null {
+  const match = name.match(TODO_FILENAME_RE);
+  if (!match) return null;
+  return { name, id: match[1], slug: match[2] };
+}
+
+function isIgnoredTodoFilename(name: string): boolean {
+  return TODO_IGNORED_FILENAMES.has(name.trim().toLowerCase());
+}
+
+function inferParentFromId(id: string): string | null {
+  const parts = id.split(".");
+  if (parts.length <= 1) return null;
+  return parts.slice(0, -1).join(".");
 }
 
 function parseFrontmatter(content: string): {
@@ -161,6 +205,51 @@ function parseFrontmatter(content: string): {
   }
 
   return { raw, body };
+}
+
+async function discoverTodoDirectory(cwd: string): Promise<{
+  todosDir: string;
+  entries: string[];
+  issues: string[];
+}> {
+  const scans: TodoDirectoryScan[] = [];
+
+  for (const dirName of TODO_DIRECTORIES) {
+    const dir = path.join(cwd, dirName);
+    try {
+      const entries = await fs.readdir(dir);
+      scans.push({ dir, entries });
+    } catch {
+      // ignore missing directory
+    }
+  }
+
+  if (scans.length === 0) {
+    const searched = TODO_DIRECTORIES.map((dirName) => path.join(cwd, dirName));
+    return {
+      todosDir: path.join(cwd, TODO_DIRECTORIES[0]),
+      entries: [],
+      issues: [`No todo directory found. Searched: ${searched.join(", ")}`],
+    };
+  }
+
+  const selected =
+    scans.find((scan) =>
+      scan.entries.some((entry) => entry.toLowerCase().endsWith(".md")),
+    ) ?? scans[0];
+
+  const issues: string[] = [];
+  if (scans.length > 1) {
+    const others = scans
+      .map((scan) => scan.dir)
+      .filter((dir) => dir !== selected.dir)
+      .map((dir) => path.basename(dir));
+    issues.push(
+      `Multiple todo directories found; using ${path.basename(selected.dir)} (also found: ${others.join(", ")})`,
+    );
+  }
+
+  return { todosDir: selected.dir, entries: selected.entries, issues };
 }
 
 function parseSections(body: string): Map<string, string> {
@@ -311,30 +400,27 @@ function formatMarkedTodosEditorText(todoPaths: string[]): string {
 async function scanTodos(
   cwd: string,
 ): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
-  const todosDir = path.join(cwd, "todos");
-  const issues: string[] = [];
-  let entries: string[] = [];
+  const discovered = await discoverTodoDirectory(cwd);
+  const todosDir = discovered.todosDir;
+  const issues = [...discovered.issues];
 
-  try {
-    entries = await fs.readdir(todosDir);
-  } catch {
-    return {
-      todosDir,
-      roots: [],
-      issues: [`No todos directory found at ${todosDir}`],
-    };
-  }
-
-  const files = entries
-    .map((name) => {
-      const match = name.match(TODO_FILENAME_RE);
-      if (!match) return null;
-      return { name, id: match[1], slug: match[2] };
-    })
-    .filter((entry): entry is { name: string; id: string; slug: string } =>
-      Boolean(entry),
-    )
+  const files: TodoFile[] = discovered.entries
+    .filter((name) => name.toLowerCase().endsWith(".md"))
+    .filter((name) => !isIgnoredTodoFilename(name))
+    .map((name) => parseTodoFilename(name))
+    .filter((entry): entry is TodoFile => Boolean(entry))
     .sort((a, b) => compareIds(a.id, b.id));
+
+  const unmatchedMarkdownFiles = discovered.entries
+    .filter((name) => name.toLowerCase().endsWith(".md"))
+    .filter((name) => !isIgnoredTodoFilename(name))
+    .filter((name) => !parseTodoFilename(name));
+
+  if (unmatchedMarkdownFiles.length > 0) {
+    issues.push(
+      `Ignored markdown files that do not match todo pattern: ${unmatchedMarkdownFiles.join(", ")}`,
+    );
+  }
 
   const todos: TodoRecord[] = [];
 
@@ -365,42 +451,45 @@ async function scanTodos(
           priority: "unknown",
           type: "unknown",
           created: "",
-          parent: null,
+          parent: inferParentFromId(file.id),
           blockedBy: [],
           blocks: [],
         },
         body: content,
         sections: new Map(),
         children: [],
-        warnings: ["Malformed or missing frontmatter"],
+        warnings: ["Missing frontmatter block"],
         valid: false,
       });
       continue;
     }
 
-    for (const field of REQUIRED_FIELDS) {
-      if (!parsed.raw.has(field)) {
-        warnings.push(`Missing field: ${field}`);
-      }
-    }
-
-    const status = normalizeStatus(parsed.raw.get("status") ?? "unknown");
+    const rawStatus = parsed.raw.get("status");
+    const status = normalizeStatus(rawStatus ?? "");
     const type = stripQuotes(parsed.raw.get("type") ?? "unknown")
       .trim()
       .toLowerCase();
     const priority = stripQuotes(parsed.raw.get("priority") ?? "unknown")
       .trim()
       .toLowerCase();
-    const parent = normalizeParent(parsed.raw.get("parent") ?? "null");
+    const explicitParent = normalizeParent(parsed.raw.get("parent") ?? "null");
+    const parent = explicitParent ?? inferParentFromId(file.id);
 
-    if (!["feature", "bug", "refactor", "chore", "epic"].includes(type)) {
+    if (rawStatus && status === "unknown") {
+      warnings.push(`Unexpected status value: ${stripQuotes(rawStatus)}`);
+    }
+
+    for (const field of RECOMMENDED_FIELDS) {
+      if (!parsed.raw.has(field)) {
+        warnings.push(`Missing recommended field: ${field}`);
+      }
+    }
+
+    if (type !== "unknown" && !["feature", "bug", "refactor", "chore", "epic"].includes(type)) {
       warnings.push(`Unexpected type: ${type}`);
     }
-    if (!["high", "medium", "low"].includes(priority)) {
+    if (priority !== "unknown" && !["high", "medium", "low"].includes(priority)) {
       warnings.push(`Unexpected priority: ${priority}`);
-    }
-    if (!["open", "in_progress", "blocked", "done"].includes(status)) {
-      warnings.push(`Unexpected status: ${status}`);
     }
 
     todos.push({
@@ -434,13 +523,14 @@ async function scanTodos(
     const parentId = todo.frontmatter.parent;
     if (parentId && byId.has(parentId)) {
       byId.get(parentId)!.children.push(todo);
-    } else {
-      if (parentId && !byId.has(parentId)) {
-        todo.warnings.push(`Parent not found: ${parentId}`);
-        todo.valid = false;
-      }
-      roots.push(todo);
+      continue;
     }
+
+    if (parentId && !byId.has(parentId)) {
+      todo.warnings.push(`Parent not found: ${parentId}`);
+      todo.valid = false;
+    }
+    roots.push(todo);
   }
 
   return { todosDir, roots, issues };
