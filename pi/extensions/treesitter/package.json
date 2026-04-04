@@ -1,0 +1,9 @@
+{
+  "name": "dotagents-treesitter-poc",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Python-first Tree-sitter POC extension scaffold for Pi",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

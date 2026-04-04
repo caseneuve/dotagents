@@ -286,6 +286,24 @@ Notes:
 - policy is stored project-locally at `.pi/playwright-policy.json`
 - install extension-local dependencies with Bun in `pi/extensions/playwright/`
 
+### `extensions/treesitter/` (POC scaffold)
+
+Adds a Python-first Tree-sitter proof-of-concept scaffold focused on syntax-aware
+inspection workflows.
+
+Current state:
+
+- includes a canonical design doc at `pi/extensions/treesitter/DESIGN.md`
+- defines v0 tool contracts for `treesitter_outline`, `treesitter_context`, and `treesitter_find`
+- defines a generic language-adapter boundary plus an initial Python adapter metadata module
+- intentionally does not register runnable tools yet in this milestone
+
+Notes:
+
+- this is design scaffolding for todo `0006.1`
+- parser loading and first runnable tools land in `0006.2` and `0006.3`
+- v0 scope is read-only inspection, not AST-driven code mutation
+
 ## Design Notes
 
 These extensions are intentionally small and composable.
