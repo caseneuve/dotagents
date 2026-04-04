@@ -122,6 +122,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.query,
     label: "Playwright Query",
     description: "Query DOM elements by CSS selector.",
+    promptSnippet: "Query DOM elements and read attributes by CSS selector",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
       all: Type.Optional(Type.Boolean({ description: "Return all matches" })),
@@ -145,6 +146,7 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Snapshot",
     description:
       "Capture an accessibility tree snapshot for the page or a root selector.",
+    promptSnippet: "Capture an accessibility snapshot of page or subtree",
     parameters: Type.Object({
       selector: Type.Optional(
         Type.String({
@@ -171,6 +173,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.computedStyle,
     label: "Playwright Computed Style",
     description: "Read computed CSS properties for a selector.",
+    promptSnippet: "Read computed CSS properties for an element",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
       props: Type.Array(Type.String(), {
@@ -190,6 +193,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.hover,
     label: "Playwright Hover",
     description: "Hover over the first element matching a selector.",
+    promptSnippet: "Hover the first matching element",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
     }),
@@ -207,6 +211,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.click,
     label: "Playwright Click",
     description: "Click the first element matching a selector.",
+    promptSnippet: "Click the first matching element",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
     }),
@@ -225,6 +230,8 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Type",
     description:
       "Type text into an input/textarea selected by CSS selector. By default this appends text unless clear=true.",
+    promptSnippet:
+      "Type text into an input or textarea (optional clear and typing delay)",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
       text: Type.String({ description: "Text to type" }),
@@ -258,6 +265,7 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Fill Form",
     description:
       "Fill multiple fields in one call using CSS selectors. Each field clears first by default unless clear=false.",
+    promptSnippet: "Fill multiple form fields in one call",
     parameters: Type.Object({
       fields: Type.Array(
         Type.Object({
@@ -290,6 +298,7 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Select Option",
     description:
       "Select an option in a <select> element by value, label, or index.",
+    promptSnippet: "Select a <select> option by value, label, or index",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
       value: Type.Optional(Type.String({ description: "Option value" })),
@@ -311,6 +320,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.pressKey,
     label: "Playwright Press Key",
     description: "Press a keyboard key on page or focused selector.",
+    promptSnippet: "Press a keyboard key on page or focused selector",
     parameters: Type.Object({
       key: Type.String({
         description: "Key name, e.g. Enter, ArrowDown, Control+A",
@@ -339,6 +349,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.drag,
     label: "Playwright Drag",
     description: "Drag from source selector to target selector.",
+    promptSnippet: "Drag from one selector to another",
     parameters: Type.Object({
       sourceSelector: Type.String({ description: "Source CSS selector" }),
       targetSelector: Type.String({ description: "Target CSS selector" }),
@@ -361,6 +372,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.scrollTo,
     label: "Playwright Scroll To",
     description: "Scroll the first matching element into view.",
+    promptSnippet: "Scroll the first matching element into view",
     parameters: Type.Object({
       selector: Type.String({ description: "CSS selector" }),
     }),
@@ -378,6 +390,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.navigateHash,
     label: "Playwright Navigate Hash",
     description: "Update location hash on the active page.",
+    promptSnippet: "Set the location hash on the active page",
     parameters: Type.Object({
       hash: Type.String({ description: "Hash value, with or without #" }),
     }),
@@ -396,6 +409,7 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Screenshot",
     description:
       "Capture a screenshot of viewport or selector. Writes only under .pi/playwright/.",
+    promptSnippet: "Capture a screenshot to .pi/playwright/",
     parameters: Type.Object({
       selector: Type.Optional(Type.String({ description: "CSS selector" })),
       fullPage: Type.Optional(
@@ -421,6 +435,7 @@ export default function (pi: ExtensionAPI) {
     label: "Playwright Wait For",
     description:
       "Wait for a selector, network idle, or timeout. If selector is set it takes precedence.",
+    promptSnippet: "Wait for a selector, network idle, or timeout",
     parameters: Type.Object({
       selector: Type.Optional(
         Type.String({ description: "Wait for this selector" }),
@@ -447,6 +462,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAMES.consoleErrors,
     label: "Playwright Console Errors",
     description: "Return captured page console errors and pageerror events.",
+    promptSnippet: "Read captured console errors and pageerror events",
     parameters: Type.Object({}),
     async execute() {
       const result = session.getConsoleErrors();
