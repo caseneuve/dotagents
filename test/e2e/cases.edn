@@ -3,7 +3,7 @@
   :given {:vars {:work "/work"
                   :fixtures-dir "test/fixtures"}}
   :cases
-  [{:scenario :pi-installs-only-extensions-and-themes
+  [{:scenario :pi-writes-settings-for-extensions-themes-and-theme-name
     :given {:vars {:root "/tmp/dotagents-e2e-pi"
                    :home "/tmp/dotagents-e2e-pi/home"}
              :fixtures [[:remove "{root}"]
@@ -14,11 +14,12 @@
            :run ["bb" "bootstrap" "pi"]}
     :then [[:exit-code 0]
            [:stdout-contains "== Pi =="]
-           [:fs-layout {:symlinks [["{home}/.pi/agent/extensions/bookmark.ts" "{work}/pi/extensions/bookmark.ts"]
-                                   ["{home}/.pi/agent/extensions/branch-status.ts" "{work}/pi/extensions/branch-status.ts"]
-                                   ["{home}/.pi/agent/extensions/assistant-outline/index.ts" "{work}/pi/extensions/assistant-outline/index.ts"]
-                                   ["{home}/.pi/agent/themes/modus-operandi.json" "{work}/pi/themes/modus-operandi.json"]]
-                        :missing ["{home}/.pi/agent/settings.json"
+           [:stdout-contains "Merging Pi settings"]
+           [:fs-layout {:json-equals [["{home}/.pi/agent/settings.json" [:theme] "modus-operandi"]
+                                      ["{home}/.pi/agent/settings.json" [:extensions] ["{work}/pi/extensions"]]
+                                      ["{home}/.pi/agent/settings.json" [:themes] ["{work}/pi/themes"]]]
+                        :missing ["{home}/.pi/agent/extensions"
+                                  "{home}/.pi/agent/themes"
                                   "{home}/.pi/agent/justfile"]}]]}
 
    {:scenario :agents-copies-docs-and-links-helpers
@@ -73,6 +74,7 @@
     :then [[:exit-code 0]
            [:stdout-contains "Dry run: enabled"]
            [:stdout-contains "Would merge Claude settings"]
+           [:stdout-contains "Would merge Pi settings"]
            [:fs-layout {:missing ["{home}/.claude"
                                   "{home}/.agents"
                                   "{home}/.pi"]}]]}]}]

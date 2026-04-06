@@ -175,14 +175,12 @@
                :markdown-mode :link})))
 
 (defn plan-pi [p]
-  (concat
-   [(section "Pi")]
-   (tree-ops {:src (str (fs/path (:pi-src p) "extensions"))
-              :dst (str (fs/path (:pi-dst p) "extensions"))
-              :mode :link})
-   (tree-ops {:src (str (fs/path (:pi-src p) "themes"))
-              :dst (str (fs/path (:pi-dst p) "themes"))
-              :mode :link})))
+  [{:op :section :title "Pi"}
+   {:op :merge-pi-settings
+    :target-dir (:pi-dst p)
+    :extensions [(str (fs/path (:pi-src p) "extensions"))]
+    :themes [(str (fs/path (:pi-src p) "themes"))]
+    :theme "modus-operandi"}])
 
 (defn plan [p {:keys [mode]}]
   (case mode
@@ -209,9 +207,12 @@
     (seq? x) (doall (map #(replace-home % home) x))
     :else x))
 
-(defn merge-permission-allows [existing incoming]
+(defn merge-distinct-vec [existing incoming]
   (vec (distinct (concat (vec (or existing []))
                          (vec (or incoming []))))))
+
+(defn merge-permission-allows [existing incoming]
+  (merge-distinct-vec existing incoming))
 
 (defn merge-claude-settings [base hooks perms home]
   (let [hooks* (some-> hooks (replace-home home))
@@ -228,6 +229,19 @@
         hooks (some-> hooks-json slurp-json)
         perms (some-> perms-json slurp-json)]
     (merge-claude-settings base hooks perms home)))
+
+(defn merge-pi-settings [base {:keys [extensions themes theme]}]
+  (cond-> (or base {})
+    (seq extensions) (update :extensions merge-distinct-vec extensions)
+    (seq themes) (update :themes merge-distinct-vec themes)
+    theme (assoc :theme theme)))
+
+(defn merge-pi-settings-data [{:keys [target-dir extensions themes theme]}]
+  (let [settings-file (str (fs/path target-dir "settings.json"))
+        base (or (slurp-json settings-file) {})]
+    (merge-pi-settings base {:extensions extensions
+                             :themes themes
+                             :theme theme})))
 
 (defn say [dry-run? live-msg dry-msg]
   (println (if dry-run? dry-msg live-msg)))
@@ -333,7 +347,15 @@
            (str "Merging Claude settings: " settings-file)
            (str "Would merge Claude settings: " settings-file))
       (when-not dry-run?
-        (spit-json! settings-file (merge-claude-settings-data action home))))))
+        (spit-json! settings-file (merge-claude-settings-data action home))))
+
+    :merge-pi-settings
+    (let [settings-file (str (fs/path (:target-dir action) "settings.json"))]
+      (say dry-run?
+           (str "Merging Pi settings: " settings-file)
+           (str "Would merge Pi settings: " settings-file))
+      (when-not dry-run?
+        (spit-json! settings-file (merge-pi-settings-data action))))))
 
 (defn validate! [p {:keys [mode]}]
   (letfn [(require-dir! [path label]

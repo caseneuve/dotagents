@@ -74,11 +74,11 @@ bb bootstrap --force
 ```
 
 Expected behavior:
-- preserve directory structure
+- preserve directory structure where runtime install trees are still used
 - skip already-correct links
 - replace stale symlinks
 - do not overwrite regular files unless `--force`
-- keep Pi bootstrap limited to extensions + themes
+- keep Pi bootstrap limited to extensions + themes via settings, not mirrored install trees
 
 When changing bootstrap behavior:
 - update tests first or alongside the code

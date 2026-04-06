@@ -7,10 +7,13 @@ Pi-specific themes and extensions for this dotagents repo.
 - `extensions/` — small focused extensions following a composable, Unix-style philosophy
 - `themes/` — custom themes
 
-These resources are intended to be linked into Pi's default discovery locations under:
+These resources are intended to be loaded directly from this repo by entries in `~/.pi/agent/settings.json`:
 
-- `~/.pi/agent/extensions/`
-- `~/.pi/agent/themes/`
+- `"extensions": ["/path/to/dotagents/pi/extensions"]`
+- `"themes": ["/path/to/dotagents/pi/themes"]`
+- `"theme": "modus-operandi"`
+
+The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/` and `~/.pi/agent/themes/`.
 
 ## Extensions
 

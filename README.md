@@ -41,17 +41,18 @@ Modes:
 
 - `bb bootstrap claude` links the Claude setup into `~/.claude/` and merges Claude settings fragments into `~/.claude/settings.json`
 - `bb bootstrap agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
-- `bb bootstrap pi` links only Pi extensions and themes into `~/.pi/agent/`
+- `bb bootstrap pi` writes Pi resource paths into `~/.pi/agent/settings.json` and sets the theme to `modus-operandi`
 - `bb bootstrap` defaults to `all`
 - all modes accept `--force` to overwrite existing non-symlink files
 - all modes accept `--dry-run` to print planned changes without writing
 
 Behavior:
 
-- preserve directory structure
+- preserve directory structure where runtime install trees are still used
 - skip already-correct links
 - replace stale symlinks
 - avoid overwriting regular files unless forced
+- configure Pi via `~/.pi/agent/settings.json` instead of symlinking Pi extensions/themes
 
 ## Testing
 

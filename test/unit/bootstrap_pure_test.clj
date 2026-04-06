@@ -14,14 +14,38 @@
                               :untouched 1}
                              "/tmp/home")))))
 
-(deftest merge-permission-allows-test
+(deftest merge-distinct-vec-test
   (testing "deduplicates while preserving order"
     (is (= ["a" "b" "c"]
-           (sut/merge-permission-allows ["a" "b"] ["b" "c"]))))
+           (sut/merge-distinct-vec ["a" "b"] ["b" "c"]))))
   (testing "handles nil inputs"
-    (is (= [] (sut/merge-permission-allows nil nil)))
-    (is (= ["a"] (sut/merge-permission-allows nil ["a"])))
-    (is (= ["a"] (sut/merge-permission-allows ["a"] nil)))))
+    (is (= [] (sut/merge-distinct-vec nil nil)))
+    (is (= ["a"] (sut/merge-distinct-vec nil ["a"])))
+    (is (= ["a"] (sut/merge-distinct-vec ["a"] nil)))))
+
+(deftest merge-permission-allows-test
+  (testing "reuses generic distinct merge semantics"
+    (is (= ["a" "b" "c"]
+           (sut/merge-permission-allows ["a" "b"] ["b" "c"])))))
+
+(deftest merge-pi-settings-test
+  (let [base {:theme "dark"
+              :extensions ["/existing/ext"]
+              :custom {:nested true}}
+        merged (sut/merge-pi-settings base {:extensions ["/existing/ext" "/repo/pi/extensions"]
+                                            :themes ["/repo/pi/themes"]
+                                            :theme "modus-operandi"})]
+    (testing "preserves unrelated base settings"
+      (is (= {:nested true} (:custom merged))))
+
+    (testing "merges extension and theme search paths"
+      (is (= ["/existing/ext" "/repo/pi/extensions"]
+             (:extensions merged)))
+      (is (= ["/repo/pi/themes"]
+             (:themes merged))))
+
+    (testing "sets the configured Pi theme"
+      (is (= "modus-operandi" (:theme merged))))))
 
 (deftest merge-claude-settings-test
   (let [base {:model "keep-me"
