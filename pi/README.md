@@ -286,6 +286,27 @@ Notes:
 - policy is stored project-locally at `.pi/playwright-policy.json`
 - install extension-local dependencies with Bun in `pi/extensions/playwright/`
 
+### `extensions/subagents.ts`
+
+Adds an alpha subagent manager primitive with async background delegation.
+
+What it does:
+
+- registers a generic `spawn_subagent` tool for non-blocking delegated tasks
+- runs each delegated job in an isolated child Pi process and returns a job id immediately
+- tracks transient job state in-memory (status, origin entry id, activity, output previews)
+- shows compact live job status in a widget
+- provides command-based control from the main frame:
+  - `/subagents`
+  - `/subagent <id>`
+  - `/subagent-kill <id>`
+
+Notes:
+
+- this is an alpha spike: runtime state is transient and intentionally minimal
+- child reasoning/transcript is kept separate from parent context by default
+- parent tree navigation does not implicitly stop running child jobs
+
 ## Design Notes
 
 These extensions are intentionally small and composable.

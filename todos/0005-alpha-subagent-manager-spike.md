@@ -1,6 +1,6 @@
 ---
 title: alpha subagent manager spike
-status: open
+status: in_progress
 priority: medium
 type: feature
 created: 2026-04-04
