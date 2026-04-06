@@ -1,6 +1,6 @@
 ---
 title: experiment with agent communication runtime via sqlite
-status: open
+status: in_progress
 priority: medium
 type: feature
 created: 2026-04-06
