@@ -40,6 +40,31 @@ if [[ ! -d "$dir" ]]; then
   exit 0
 fi
 
+validate_top_level_ids() {
+  local invalid=()
+  local file base prefix
+
+  for file in "$dir"/*.md; do
+    [[ -f "$file" ]] || continue
+    base=$(basename "$file")
+    [[ "$base" == "TEMPLATE.md" ]] && continue
+
+    prefix=${base%%-*}
+    [[ "$prefix" == *.* ]] && continue
+
+    if [[ ! "$prefix" =~ ^[0-9]{4}$ ]]; then
+      invalid+=("$base")
+    fi
+  done
+
+  if [[ ${#invalid[@]} -gt 0 ]]; then
+    echo "error: top-level todo files must use 4-digit IDs (found: ${invalid[*]})" >&2
+    exit 1
+  fi
+}
+
+validate_top_level_ids
+
 if [[ -n "$parent" ]]; then
   # Sub-task: find highest PARENT.N and increment
   last=$(find "$dir" -maxdepth 1 -name "${parent}.[0-9]*-*.md" \

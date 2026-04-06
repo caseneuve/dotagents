@@ -42,14 +42,40 @@ detect_config_dir() {
     fi
 }
 
-# Validate ticket exists (match with optional leading zeros)
-TICKET_FILE=$(find "${MAIN_REPO}/todos" -maxdepth 1 -name "0*${BARE_NUM}-*.md" 2>/dev/null | head -1)
+resolve_ticket_file() {
+    local todos_dir="$1"
+    local requested_num="$2"
+    local requested_bare="$3"
+    local file prefix bare_prefix
+
+    for file in "$todos_dir"/*.md; do
+        [[ -f "$file" ]] || continue
+        prefix=$(basename "$file" | sed 's/-.*//')
+
+        # Exact non-numeric fallback, e.g. custom ticket prefixes.
+        if [[ "$prefix" == "$requested_num" ]]; then
+            echo "$file"
+            return 0
+        fi
+
+        # Numeric prefix match with optional leading zeros, but exact value only.
+        if [[ "$prefix" =~ ^[0-9]+$ ]]; then
+            bare_prefix=$(echo "$prefix" | sed 's/^0*//')
+            bare_prefix="${bare_prefix:-0}"
+            if [[ "$bare_prefix" == "$requested_bare" ]]; then
+                echo "$file"
+                return 0
+            fi
+        fi
+    done
+
+    return 1
+}
+
+# Validate ticket exists (exact numeric prefix match, allowing leading zeros)
+TICKET_FILE=$(resolve_ticket_file "${MAIN_REPO}/todos" "$TICKET_NUM" "$BARE_NUM" || true)
 if [[ -z "$TICKET_FILE" ]]; then
-    # Fallback: try exact match for non-numeric prefixes
-    TICKET_FILE=$(find "${MAIN_REPO}/todos" -maxdepth 1 -name "${TICKET_NUM}-*.md" 2>/dev/null | head -1)
-fi
-if [[ -z "$TICKET_FILE" ]]; then
-    echo "ERROR: No ticket matching todos/*${BARE_NUM}-*.md found" >&2
+    echo "ERROR: No ticket matching todo prefix ${TICKET_NUM} found" >&2
     exit 1
 fi
 
