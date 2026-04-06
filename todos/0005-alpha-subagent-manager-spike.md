@@ -73,5 +73,27 @@ Keep this spike small and opinionated:
 - no generalized workflow engine yet
 - no automatic result import into the current parent branch
 
+### Progress comments (2026-04-06)
+
+Implemented in `agentbox/dotagents-0005` branch:
+
+- Added `pi/extensions/subagents.ts` with a generic `spawn_subagent` tool.
+- Background delegated jobs now run asynchronously and return a job id
+  immediately.
+- Added transient in-memory job registry with status, origin entry id, and
+  activity summaries.
+- Added main-frame observability (`setStatus` + widget) and command controls:
+  `/subagents`, `/subagent <id>`, `/subagent-kill <id>`.
+- Updated `pi/README.md` with alpha behavior and usage notes.
+
+Known gaps / follow-up:
+
+- Current child runs are process-isolated but `--no-session` (session-less), so
+  durable child-session inspection is not available yet.
+- Parent LLM cannot fetch subagent output directly yet without user relay; add a
+  parent-facing communication/result tool next.
+- This spike is now informing a separate experiment epic (`0007-*`) focused on
+  SQLite-backed agent communication and optional tmux-spawned interactive agents.
+
 The goal is to learn from real usage and only then decide how much of the
 existing `0004-*` framework draft should be kept, reordered, or replaced.
