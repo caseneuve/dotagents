@@ -49,6 +49,36 @@ type ChatGptWhamUsageResponse = {
   promo: unknown;
 };
 
+type OpenRouterKeyData = {
+  label: string | null;
+  is_management_key: boolean;
+  is_provisioning_key: boolean;
+  limit: number | null;
+  limit_reset: string | null;
+  limit_remaining: number | null;
+  include_byok_in_limit: boolean;
+  usage: number | null;
+  usage_daily: number | null;
+  usage_weekly: number | null;
+  usage_monthly: number | null;
+  byok_usage: number | null;
+  byok_usage_daily: number | null;
+  byok_usage_weekly: number | null;
+  byok_usage_monthly: number | null;
+  is_free_tier: boolean;
+  expires_at: string | null;
+  creator_user_id: string | null;
+  rate_limit: {
+    requests: number;
+    interval: string;
+    note?: string;
+  } | null;
+};
+
+type OpenRouterKeyResponse = {
+  data: OpenRouterKeyData;
+};
+
 type UsageCardTone = "success" | "warning" | "error" | "muted" | "accent";
 
 type UsageCard = {
@@ -89,9 +119,14 @@ type ComponentState =
 const COMMAND_NAME = "usage";
 const HOME_DIR = process.env.HOME || os.homedir();
 const AUTH_PATH = path.join(HOME_DIR, ".codex", "auth.json");
+const PI_AUTH_PATH = path.join(HOME_DIR, ".pi", "agent", "auth.json");
 const CHATGPT_BACKEND_KEY = "chatgpt-wham";
 const CHATGPT_BACKEND_NAME = "ChatGPT subscription";
 const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
+const OPENROUTER_BACKEND_KEY = "openrouter-key";
+const OPENROUTER_BACKEND_NAME = "OpenRouter credits";
+const OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key";
+const OPENROUTER_CREDITS_URL = "https://openrouter.ai/api/v1/credits";
 const INTERACTIVE_MODE_ERROR = `/${COMMAND_NAME} requires interactive mode`;
 const TITLE_TEXT = "Usage";
 const REFRESH_KEY = "r";
@@ -111,7 +146,7 @@ const METER_EMPTY_CHAR = "░";
 const OVERLAY_MIN_WIDTH = 88;
 const OVERLAY_MARGIN = 1;
 const OVERLAY_MAX_HEIGHT = "88%";
-const CARD_GAP = 2;
+const CARD_GAP = 1;
 const MIN_TWO_COLUMN_WIDTH = 88;
 
 function formatModel(model: ModelLike | undefined): string {
@@ -309,6 +344,11 @@ function hJoinBlocks(left: string[], right: string[], gap: number): string[] {
   return lines;
 }
 
+function formatCurrency(value: number | null | undefined): string {
+  if (!Number.isFinite(value ?? NaN)) return "unknown";
+  return `$${Number(value).toFixed(2)}`;
+}
+
 function normalizeChatGptSnapshot(
   response: ChatGptWhamUsageResponse,
 ): BackendSnapshot {
@@ -379,6 +419,33 @@ function normalizeChatGptSnapshot(
   };
 }
 
+function maskOpenRouterLabel(
+  label: string | null | undefined,
+): string | undefined {
+  if (!label) return undefined;
+  const trimmed = label.trim();
+  if (trimmed.length <= 10) return "OpenRouter key";
+  return `${trimmed.slice(0, 7)}…${trimmed.slice(-4)}`;
+}
+
+function parseOpenRouterAuthEntryKey(auth: unknown): string | null {
+  if (!auth || typeof auth !== "object") return null;
+  const openrouter = (auth as Record<string, unknown>).openrouter;
+  if (!openrouter || typeof openrouter !== "object") return null;
+  const key = (openrouter as Record<string, unknown>).key;
+  if (typeof key !== "string" || key.length === 0) return null;
+
+  if (key.startsWith("!")) {
+    throw new Error(
+      "OpenRouter auth uses command-based key resolution; set OPENROUTER_API_KEY in env for /usage",
+    );
+  }
+
+  const envValue = process.env[key];
+  if (envValue) return envValue;
+  return key;
+}
+
 async function readCodexAccessToken(): Promise<string> {
   const authRaw = await fs.readFile(AUTH_PATH, "utf8");
   const auth = JSON.parse(authRaw) as {
@@ -389,6 +456,134 @@ async function readCodexAccessToken(): Promise<string> {
     throw new Error(`Missing tokens.access_token in ${AUTH_PATH}`);
   }
   return token;
+}
+
+async function readOpenRouterToken(): Promise<string> {
+  const envToken =
+    process.env.OPENROUTER_MANAGEMENT_KEY || process.env.OPENROUTER_API_KEY;
+  if (envToken) return envToken;
+
+  try {
+    const authRaw = await fs.readFile(PI_AUTH_PATH, "utf8");
+    const auth = JSON.parse(authRaw);
+    const token = parseOpenRouterAuthEntryKey(auth);
+    if (token) return token;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  throw new Error(
+    "Missing OpenRouter credentials (OPENROUTER_API_KEY env or ~/.pi/agent/auth.json openrouter entry)",
+  );
+}
+
+function tryExtractOpenRouterCreditsAmount(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const readNumber = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
+  };
+
+  const root = payload as Record<string, unknown>;
+  const data =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : null;
+
+  const tryRemainingFrom = (
+    obj: Record<string, unknown> | null,
+  ): number | null => {
+    if (!obj) return null;
+    const total =
+      readNumber(obj.total_credits) ??
+      readNumber(obj.totalCredits) ??
+      readNumber(obj.total);
+    const usage =
+      readNumber(obj.total_usage) ??
+      readNumber(obj.usage) ??
+      readNumber(obj.used) ??
+      readNumber(obj.spent);
+
+    if (total !== null && usage !== null) {
+      return Math.max(0, total - usage);
+    }
+
+    return null;
+  };
+
+  // Prefer explicit "remaining" style fields first.
+  const explicitCandidates = [
+    data?.remaining_credits,
+    data?.available_credits,
+    root.remaining_credits,
+    root.available_credits,
+  ];
+
+  for (const candidate of explicitCandidates) {
+    const parsed = readNumber(candidate);
+    if (parsed !== null) return parsed;
+  }
+
+  const computedFromData = tryRemainingFrom(data);
+  if (computedFromData !== null) return computedFromData;
+
+  const computedFromRoot = tryRemainingFrom(root);
+  if (computedFromRoot !== null) return computedFromRoot;
+
+  return null;
+}
+
+function normalizeOpenRouterSnapshot(
+  response: OpenRouterKeyResponse,
+  accountCredits: number | null,
+  extraNotes: string[] = [],
+): BackendSnapshot {
+  const keyData = response.data;
+
+  const cards: UsageCard[] = [
+    {
+      title: "Credits remaining",
+      value:
+        accountCredits === null ? "Unknown" : formatCurrency(accountCredits),
+      subtitle:
+        accountCredits === null
+          ? "Account wallet balance not exposed to this key/API"
+          : "Account wallet balance",
+      tone: accountCredits === null ? "muted" : "success",
+    },
+    {
+      title: "Spent today",
+      value: formatCurrency(keyData.usage_daily),
+      subtitle: "Daily spend from OpenRouter /key",
+      tone: "muted",
+    },
+  ];
+
+  const notes: string[] = [];
+  if (keyData.expires_at) {
+    notes.push(`Key expires at ${keyData.expires_at}`);
+  }
+
+  notes.push(...extraNotes);
+
+  return {
+    backendKey: OPENROUTER_BACKEND_KEY,
+    backendName: OPENROUTER_BACKEND_NAME,
+    accountLabel: maskOpenRouterLabel(keyData.label),
+    planLabel: keyData.is_free_tier ? "Free tier" : "API key",
+    accessLabel: "Usage: available via /key",
+    accessTone: COLOR_SUCCESS,
+    cards,
+    notes,
+    fetchedAt: Date.now(),
+  };
 }
 
 const chatGptBackend: UsageBackend = {
@@ -427,7 +622,95 @@ const chatGptBackend: UsageBackend = {
   },
 };
 
-const usageBackends: UsageBackend[] = [chatGptBackend];
+const openRouterBackend: UsageBackend = {
+  key: OPENROUTER_BACKEND_KEY,
+  name: OPENROUTER_BACKEND_NAME,
+  matchesModel(model) {
+    if (!model) return false;
+    const provider = model.provider.toLowerCase();
+    const id = model.id.toLowerCase();
+    return provider === "openrouter" || id.startsWith("openrouter/");
+  },
+  async fetch(signal) {
+    try {
+      const token = await readOpenRouterToken();
+      const response = await fetch(OPENROUTER_KEY_URL, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `OpenRouter request failed: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const data = (await response.json()) as OpenRouterKeyResponse;
+
+      let accountCredits: number | null = null;
+      const extraNotes: string[] = [];
+      try {
+        const creditsResponse = await fetch(OPENROUTER_CREDITS_URL, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          signal,
+        });
+
+        if (creditsResponse.ok) {
+          const creditsData = (await creditsResponse.json()) as unknown;
+          accountCredits = tryExtractOpenRouterCreditsAmount(creditsData);
+          if (accountCredits === null) {
+            extraNotes.push(
+              "Account credits endpoint returned an unrecognized schema.",
+            );
+          }
+        } else {
+          extraNotes.push(
+            `Account credits endpoint unavailable (${creditsResponse.status}).`,
+          );
+        }
+      } catch {
+        // Best-effort only; /key data still renders.
+      }
+
+      return normalizeOpenRouterSnapshot(data, accountCredits, extraNotes);
+    } catch (error) {
+      return {
+        backendKey: OPENROUTER_BACKEND_KEY,
+        backendName: OPENROUTER_BACKEND_NAME,
+        planLabel: "API key",
+        accessLabel: "Usage: unavailable",
+        accessTone: COLOR_WARNING,
+        cards: [
+          {
+            title: "Credits remaining",
+            value: "Unavailable",
+            subtitle:
+              error instanceof Error
+                ? error.message
+                : "Unable to fetch OpenRouter /key",
+            tone: "warning",
+          },
+          {
+            title: "Auto-top-up",
+            value: "Unknown",
+            subtitle: "Not exposed by OpenRouter /key API response",
+            tone: "muted",
+          },
+        ],
+        notes: [],
+        fetchedAt: Date.now(),
+      };
+    }
+  },
+};
+
+const usageBackends: UsageBackend[] = [chatGptBackend, openRouterBackend];
 
 class UsageOverlayComponent {
   private state: ComponentState = {
@@ -519,67 +802,62 @@ class UsageOverlayComponent {
       );
     };
 
-    const currentBackend = usageBackends.find((backend) =>
-      backend.matchesModel(this.model),
-    );
-    const modelLine = this.theme.fg(
-      COLOR_DIM,
-      `Model: ${formatModel(this.model)}`,
-    );
-    const backendLine = this.theme.fg(
-      COLOR_DIM,
-      currentBackend
-        ? `Backend: ${currentBackend.name}`
-        : "Backend: no usage backend mapped for current model",
-    );
-
-    const body: string[] = [modelLine, backendLine, ""];
+    const body: string[] = [];
+    let footerRight = "";
 
     if (this.state.kind === "loading") {
       body.push(this.theme.fg(COLOR_MUTED, this.state.message));
-      body.push("");
     } else if (this.state.kind === "error") {
       body.push(this.theme.fg(COLOR_ERROR, this.state.message));
       body.push(this.theme.fg(COLOR_DIM, `Auth source: ${AUTH_PATH}`));
-      body.push("");
     } else {
+      const latestFetchedAt = this.state.snapshots.reduce(
+        (max, snapshot) => Math.max(max, snapshot.fetchedAt),
+        0,
+      );
+      if (latestFetchedAt > 0) {
+        footerRight = this.theme.fg(
+          COLOR_DIM,
+          `Fetched ${new Date(latestFetchedAt).toLocaleTimeString()}`,
+        );
+      }
+
       for (const [index, snapshot] of this.state.snapshots.entries()) {
         const isCurrent = usageBackends.some(
           (backend) =>
             backend.key === snapshot.backendKey &&
             backend.matchesModel(this.model),
         );
-        const heading = isCurrent
+        const headingLeft = isCurrent
           ? this.theme.fg(
               COLOR_ACCENT,
               this.theme.bold(`${snapshot.backendName} · current`),
             )
           : this.theme.bold(snapshot.backendName);
+        const accessIcon = snapshot.accessLabel
+          ? /unavailable/i.test(snapshot.accessLabel)
+            ? colorize(this.theme, "error", this.theme.bold(" ✗ "))
+            : /available/i.test(snapshot.accessLabel)
+              ? colorize(this.theme, "success", this.theme.bold(" ✓ "))
+              : colorize(
+                  this.theme,
+                  snapshot.accessTone ?? COLOR_MUTED,
+                  this.theme.bold(" • "),
+                )
+          : "";
+        const heading = accessIcon
+          ? `${padRight(headingLeft, Math.max(1, contentWidth - 3))}${accessIcon}`
+          : headingLeft;
+
         const metaLeft = snapshot.planLabel
           ? this.theme.fg(COLOR_MUTED, `Plan: ${snapshot.planLabel}`)
           : this.theme.fg(COLOR_MUTED, "Plan: unknown");
         const metaRight = snapshot.accountLabel
           ? this.theme.fg(COLOR_DIM, snapshot.accountLabel)
           : this.theme.fg(COLOR_DIM, "No account label");
-        const accessLine = snapshot.accessLabel
-          ? colorize(
-              this.theme,
-              snapshot.accessTone ?? COLOR_MUTED,
-              snapshot.accessLabel,
-            )
-          : undefined;
-        const fetchedLine = this.theme.fg(
-          COLOR_DIM,
-          `Fetched ${new Date(snapshot.fetchedAt).toLocaleTimeString()}`,
-        );
 
         body.push(heading);
         body.push(joinColumns(metaLeft, metaRight, contentWidth));
-        if (accessLine) {
-          body.push(accessLine);
-        }
-        body.push(fetchedLine);
-        body.push("");
 
         const cardWidth =
           contentWidth >= MIN_TWO_COLUMN_WIDTH
@@ -615,14 +893,12 @@ class UsageOverlayComponent {
         if (cardWidth === contentWidth) {
           for (const block of cardBlocks) {
             body.push(...block);
-            body.push("");
           }
         } else {
           for (let i = 0; i < cardBlocks.length; i += 2) {
             const left = cardBlocks[i]!;
             const right = cardBlocks[i + 1];
             body.push(...(right ? hJoinBlocks(left, right, CARD_GAP) : left));
-            body.push("");
           }
         }
 
@@ -630,20 +906,24 @@ class UsageOverlayComponent {
           for (const note of snapshot.notes) {
             body.push(this.theme.fg(COLOR_DIM, `• ${note}`));
           }
-          body.push("");
         }
 
         if (index < this.state.snapshots.length - 1) {
           body.push(
             this.theme.fg(COLOR_BORDER_MUTED, "─".repeat(contentWidth)),
           );
-          body.push("");
         }
       }
     }
 
+    const footerLeft = this.theme.fg(
+      COLOR_DIM,
+      `${REFRESH_KEY} refresh • ${CLOSE_KEY} close`,
+    );
     body.push(
-      this.theme.fg(COLOR_DIM, `${REFRESH_KEY} refresh • ${CLOSE_KEY} close`),
+      footerRight
+        ? joinColumns(footerLeft, footerRight, contentWidth)
+        : footerLeft,
     );
 
     return [
