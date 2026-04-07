@@ -157,6 +157,7 @@ Notes:
 
 - operates on the current working directory only
 - intended for todo files following the add-todo-style frontmatter schema
+- supports todo types: `feature`, `bug`, `refactor`, `chore`, `epic`, `docs`
 - epics and parents with children can be folded and unfolded
 
 ### `extensions/agent-journal.ts`

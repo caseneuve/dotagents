@@ -485,10 +485,16 @@ async function scanTodos(
       }
     }
 
-    if (type !== "unknown" && !["feature", "bug", "refactor", "chore", "epic"].includes(type)) {
+    if (
+      type !== "unknown" &&
+      !["feature", "bug", "refactor", "chore", "epic", "docs"].includes(type)
+    ) {
       warnings.push(`Unexpected type: ${type}`);
     }
-    if (priority !== "unknown" && !["high", "medium", "low"].includes(priority)) {
+    if (
+      priority !== "unknown" &&
+      !["high", "medium", "low"].includes(priority)
+    ) {
       warnings.push(`Unexpected priority: ${priority}`);
     }
 
