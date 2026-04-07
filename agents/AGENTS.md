@@ -9,6 +9,7 @@
 - Lint before commit unless the change is docs-only
 - Work in small, reviewable chunks
 - Prefer DRY, YAGNI, and clear pure/impure boundaries
+- For review requests, assess scope before running the full workflow; if the visible diff seems too small or administrative, say so explicitly before proceeding
 
 ### MUST NOT
 - Commit or push without explicit user approval
@@ -21,6 +22,7 @@
 - Editing existing files over creating new ones
 - Short functions, guard clauses, and flat control flow
 - Existing codebase conventions unless they are clearly harmful
+- Reviewing from clean context when the user has not asked for comparison with prior reviews
 
 ## Development Flow
 
