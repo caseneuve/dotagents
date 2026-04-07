@@ -16,8 +16,16 @@ function formatCwd(): string {
   return cwd;
 }
 
+function formatProvider(ctx: ExtensionContext): string {
+  return ctx.model?.provider ?? "no-provider";
+}
+
 function formatModel(ctx: ExtensionContext): string {
   return ctx.model?.id ?? "no-model";
+}
+
+function formatThinking(pi: ExtensionAPI): string {
+  return pi.getThinkingLevel();
 }
 
 function formatCost(ctx: ExtensionContext): string | null {
@@ -78,10 +86,15 @@ function renderLeft(
 }
 
 function renderRight(
+  pi: ExtensionAPI,
   ctx: ExtensionContext,
   theme: ExtensionContext["ui"]["theme"],
 ): string {
-  const dimParts: string[] = [formatModel(ctx)];
+  const dimParts: string[] = [
+    formatProvider(ctx),
+    formatModel(ctx),
+    formatThinking(pi),
+  ];
   const cost = formatCost(ctx);
   const context = formatContextUsage(ctx, theme);
 
@@ -125,7 +138,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         render(width: number): string[] {
           const statuses = footerData.getExtensionStatuses();
           const left = renderLeft(theme, footerData.getGitBranch());
-          const right = renderRight(ctx, theme);
+          const right = renderRight(pi, ctx, theme);
           const lines = [renderFooterLine(width, left, right)];
           const branchStatus = statuses.get("branch-status");
 
