@@ -64,6 +64,16 @@ Create the file using the template below, filling in detected and provided infor
 - Only include sections that are relevant
 - Keep it concise - this is a reference, not documentation
 
+### Optional project rule packs (on-demand)
+
+For project-specific concerns (for example UI-heavy debugging workflows), prefer dedicated project rule files over global runtime rules.
+
+Use the reusable template shipped with this skill:
+
+- `rules/ui-iteration.md`
+
+After `bb boot` installs skills, copy this template into the target project only when needed (for example `.claude/rules/ui-iteration.md`).
+
 ---
 
 ## Template

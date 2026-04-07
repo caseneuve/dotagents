@@ -47,6 +47,9 @@ Produce a list of **findings**, each with:
 | **Fix**     | Specific doc/rule change that would prevent recurrence     |
 | **Where**   | Which file to change (`CLAUDE.md`, skill, memory, etc.)    |
 
+Repeated-loop check:
+- If the same bug was declared fixed more than twice, require a structural pivot proposal in findings.
+
 ### 3. Ask the user clarifying questions
 
 If any finding is ambiguous — e.g., the user redirected but the reason isn't clear — ask concise, targeted questions:

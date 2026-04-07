@@ -38,6 +38,9 @@ Produce findings, each with:
 - **Fix**: specific doc or rule change to prevent recurrence
 - **Where**: target file (`AGENTS.md`, skill, memory, journal)
 
+Repeated-loop check:
+- If the same bug was declared fixed more than twice, require a structural pivot proposal in findings.
+
 ### 3. Ask the user clarifying questions
 
 If any finding is ambiguous, ask concise targeted questions. Do not ask things answerable from the conversation or docs.

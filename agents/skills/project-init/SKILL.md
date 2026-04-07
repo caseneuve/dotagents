@@ -38,6 +38,16 @@ Create a concise file tailored to the repo. Show the draft before writing when t
 
 Only include sections that add operational value. Prefer a short, high-signal file over exhaustive project documentation.
 
+## Optional project rule packs (on-demand)
+
+For project-specific concerns (for example UI-heavy debugging workflows), prefer dedicated project rule files over global runtime rules.
+
+Use the reusable template shipped with this skill:
+
+- `rules/ui-iteration.md`
+
+After `bb boot` installs skills, copy this template into the target project only when needed (for example `.claude/rules/ui-iteration.md` or project-local equivalent).
+
 ## Template
 
     # AGENTS.md
