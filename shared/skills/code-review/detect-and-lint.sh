@@ -402,7 +402,19 @@ run_bb_tests() {
     # Extract test-related task names from bb.edn :tasks map.
     # Matches keys that start with "test" (e.g. :test, :test:unit, :test-integration).
     local test_tasks
-    test_tasks=$(grep -oP '(?<=:)test[^\s{}\]]*' bb.edn 2>/dev/null | sort -u)
+    if command -v bb &>/dev/null; then
+        # Prefer reader-based extraction to avoid false positives from strings like "src:test:".
+        test_tasks=$(bb -e '(require (quote clojure.string))
+                             (let [tasks (-> "bb.edn" slurp read-string :tasks)]
+                               (doseq [k (->> (keys tasks)
+                                              (map name)
+                                              (filter #(clojure.string/starts-with? % "test"))
+                                              sort)]
+                                 (println k)))' 2>/dev/null || true)
+    else
+        # Fallback heuristic when bb is unavailable: task keys at line start only.
+        test_tasks=$(grep -oP '^\s*test[^\s{]*\s+\{' bb.edn 2>/dev/null | awk '{print $1}' | sort -u)
+    fi
 
     if [[ -z "$test_tasks" ]]; then
         # No explicit test tasks — check for a test directory as fallback
