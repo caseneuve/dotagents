@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-type SortMode = "number" | "state";
+type SortMode = "number" | "state" | "priority";
 type FocusPane = "list" | "preview";
 type QueryFocus = "none" | "input";
 type SplitMode = "horizontal" | "vertical";
@@ -112,6 +112,12 @@ const STATUS_ALIASES = new Map<string, TodoFrontmatter["status"]>([
   ["done", "done"],
   ["closed", "done"],
   ["completed", "done"],
+]);
+const PRIORITY_ORDER = new Map<string, number>([
+  ["high", 0],
+  ["medium", 1],
+  ["low", 2],
+  ["unknown", 3],
 ]);
 
 type TodoFile = {
@@ -316,6 +322,13 @@ function compareTodos(
     const bState = STATUS_ORDER.get(b.frontmatter.status) ?? 99;
     if (aState !== bState) return aState - bState;
   }
+
+  if (sortMode === "priority") {
+    const aPriority = PRIORITY_ORDER.get(a.frontmatter.priority) ?? 99;
+    const bPriority = PRIORITY_ORDER.get(b.frontmatter.priority) ?? 99;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+  }
+
   return compareIds(a.id, b.id);
 }
 
@@ -869,7 +882,12 @@ class RepoTodosComponent {
   }
 
   private cycleSortMode(): void {
-    this.sortMode = this.sortMode === "number" ? "state" : "number";
+    this.sortMode =
+      this.sortMode === "number"
+        ? "state"
+        : this.sortMode === "state"
+          ? "priority"
+          : "number";
     this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
