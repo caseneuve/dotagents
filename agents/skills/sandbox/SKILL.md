@@ -37,6 +37,7 @@ After creation:
 - Keep commits scoped to the ticket and follow the repo's commit conventions.
 - At ticket start, inspect recent commit subjects in the worktree root (`git log --oneline -n 20`) and mirror the established format.
 - Keep commit cadence aligned with TDD slices (red -> green -> refactor), unless the user requests batching/squashing.
+- In non-interactive harness sessions, avoid editor-blocking VCS flows. For example, use `GIT_EDITOR=true git rebase --continue` (and equivalent for cherry-pick/revert) unless the user explicitly asks to edit commit messages interactively.
 
 ## Submodule flow
 
