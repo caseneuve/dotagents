@@ -14,6 +14,7 @@
   - `/sandbox`: sandbox/worktree mode
   - `/code-review`: review mode
 - Never start implementation unless the user explicitly asks for implementation.
+- If the user asks a question, answer it directly first. Do not treat questions as implicit permission to take actions.
 - For review requests, assess scope before running the full workflow; if the visible diff seems too small or administrative, say so explicitly before proceeding
 
 ### MUST NOT
