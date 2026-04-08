@@ -64,7 +64,8 @@ Typical flow:
    ```
 3. If no review exists, run the `code-review` skill or tell the user a separate review is still needed.
 4. If a review exists, verify all Critical and Important findings are resolved before proposing merge.
-5. After explicit approval, finish from the main repo:
+5. Before finish, ensure ticket tracking artifacts are committed when applicable (for example `todos/<ticket>.md` in todo-driven projects).
+6. After explicit approval, finish from the main repo:
    ```bash
    cd <main-repo-path>
    ~/.agents/skills/sandbox/sandbox-finish.sh <ticket-num>

@@ -9,6 +9,11 @@
 - Lint before commit unless the change is docs-only
 - Work in small, reviewable chunks
 - Prefer DRY, YAGNI, and clear pure/impure boundaries
+- Treat explicit workflow commands as mode switches until completion or explicit user redirection:
+  - `/add-todo`: todo-management mode
+  - `/sandbox`: sandbox/worktree mode
+  - `/code-review`: review mode
+- Never start implementation unless the user explicitly asks for implementation.
 - For review requests, assess scope before running the full workflow; if the visible diff seems too small or administrative, say so explicitly before proceeding
 
 ### MUST NOT

@@ -59,6 +59,7 @@ When the user wants to resume work rather than create a fresh item:
 
 ## Workflow
 
+0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: “todo-only” vs “create todo, then implement”).
 1. Assess size first. Split work that spans multiple days, many unrelated files, or vague acceptance criteria.
 2. Gather the title, type, priority, and optional parent item.
 3. Create the item with `todo-new.sh`.

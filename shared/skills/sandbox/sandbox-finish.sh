@@ -70,6 +70,19 @@ if [[ "$CURRENT_TOP" == "$WORKTREE_PATH" ]]; then
     exit 1
 fi
 
+# Safety: block finish when worktree has uncommitted/untracked changes
+if [[ -d "$WORKTREE_PATH" ]]; then
+    WT_STATUS=$(git -C "$WORKTREE_PATH" status --porcelain)
+    if [[ -n "$WT_STATUS" ]]; then
+        echo "ERROR: Worktree has uncommitted or untracked changes; refusing to finish." >&2
+        echo "Worktree: $WORKTREE_PATH" >&2
+        echo "Commit/stash/clean the worktree first, then rerun sandbox-finish." >&2
+        echo "" >&2
+        echo "$WT_STATUS" >&2
+        exit 1
+    fi
+fi
+
 # Squash merge
 if git diff --quiet "${BASE_BRANCH}...$BRANCH"; then
     echo "No changes to merge — branch is identical to ${BASE_BRANCH}" >&2
