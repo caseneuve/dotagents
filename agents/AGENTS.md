@@ -13,12 +13,15 @@
   - `/add-todo`: todo-management mode
   - `/sandbox`: sandbox/worktree mode
   - `/code-review`: review mode
+- For development work, prefer sandbox/worktree or feature-branch flow with frequent checkpoint commits so history is traceable.
 - Never start implementation unless the user explicitly asks for implementation.
 - If the user asks a question, answer it directly first. Do not treat questions as implicit permission to take actions.
+- For diagnostic/status questions (e.g. "what failed?", "why?", "is it done?"), answer first; do not run tools unless the user asks to verify.
+- If the user says `STOP`, make no further tool calls until the user gives a new explicit action.
 - For review requests, assess scope before running the full workflow; if the visible diff seems too small or administrative, say so explicitly before proceeding
 
 ### MUST NOT
-- Commit or push without explicit user approval
+- Push to remote or merge into the main branch without explicit user approval
 - Add generated commit trailers
 - Write implementation before tests
 - Run destructive code without sandboxing
@@ -54,7 +57,10 @@ Before the first commit on a ticket:
 - Inspect recent history (`git log --oneline -n 20`) and match the repo's established subject style.
 
 During implementation:
-- Keep commits aligned to TDD slices (red -> green -> refactor) unless the user explicitly asks to batch or squash.
+- Default to checkpoint commits at TDD slice boundaries (red -> green -> refactor) in sandbox/worktree or feature branch flows.
+- Checkpoint gate: after each RED/GREEN/REFACTOR slice result, create the checkpoint commit before starting the next slice.
+- If the user reminds/corrects checkpoint cadence, switch to strict mode for the rest of the session (no exceptions without explicit user approval).
+- If the user explicitly asks to batch/squash or avoid commits, follow that request.
 
 ## Safety
 
