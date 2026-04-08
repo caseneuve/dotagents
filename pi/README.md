@@ -198,6 +198,39 @@ Notes:
 - the initial query filter matches title, project, and filetags
 - the preview strips Org metadata and drawers, then renders headings and basic inline markup in a cleaner reading view
 
+### `extensions/session-notes.ts`
+
+Adds a `/session-notes` command for managing transient per-session notes outside model context.
+
+What it does:
+
+- stores note state as `custom` session entries via `pi.appendEntry()` (not sent to the LLM)
+- supports multiple notes per branch (create, edit, delete)
+- exposes a compact notes status (`📝 N`) for the runtime footer/status area when notes exist
+- opens a list/preview overlay inspired by `repo-todos` / `agent-journal`
+- lets you mark notes and load only marked notes into the editor on close
+- supports quick one-line note creation via `/session-notes <text>`
+
+Usage:
+
+- `/session-notes`
+- `/session-notes remember to verify migration rollback path`
+
+Keybindings (overlay):
+
+- `a` — add a note in `$EDITOR` / `$VISUAL`
+- `e` — edit selected note in `$EDITOR` / `$VISUAL`
+- `X` — delete selected note (no confirmation)
+- `m` — mark/unmark selected note for export to the editor
+- `enter` or `tab` — toggle preview focus
+- `j/k` or `↑/↓` — move/scroll (depending on focus)
+- `q` / `esc` — close (loads marked notes into the editor)
+
+Notes:
+
+- notes are branch-aware because they are reconstructed from the active session branch
+- updates in `/tree` refresh the status indicator to match the currently selected branch
+
 ### `extensions/usage.ts`
 
 Adds a `/usage` command for fetching and viewing subscription usage in an overlay.

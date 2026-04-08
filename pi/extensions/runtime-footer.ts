@@ -75,11 +75,16 @@ function formatContextUsage(
 function renderLeft(
   theme: ExtensionContext["ui"]["theme"],
   gitBranch: string | null,
+  sessionNotesStatus: string | undefined,
 ): string {
   const parts: string[] = [formatCwd()];
 
   if (gitBranch) {
     parts.push(gitBranch);
+  }
+
+  if (sessionNotesStatus) {
+    parts.push(sessionNotesStatus);
   }
 
   return theme.fg("dim", parts.join(" · "));
@@ -137,7 +142,11 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         invalidate() {},
         render(width: number): string[] {
           const statuses = footerData.getExtensionStatuses();
-          const left = renderLeft(theme, footerData.getGitBranch());
+          const left = renderLeft(
+            theme,
+            footerData.getGitBranch(),
+            statuses.get("session-notes"),
+          );
           const right = renderRight(pi, ctx, theme);
           const lines = [renderFooterLine(width, left, right)];
           const branchStatus = statuses.get("branch-status");
