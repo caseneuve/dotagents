@@ -7,13 +7,15 @@ description: Create and maintain `./todos` work items, including helper-script-d
 
 Use this skill when the user wants to create, split, or update work items stored in `./todos/`.
 
+`labels` are optional metadata (for example `MVP`, `NEXT_VER`) used for filtering. Older todo files may omit `labels`; treat missing labels as empty.
+
 Helper scripts live in `~/.agents/skills/add-todo/` after bootstrap and print parseable `key=value` output.
 
 ## Helper scripts
 
 - `todo-next-id.sh [--dir DIR] [PARENT]`
-- `todo-new.sh --type TYPE --slug SLUG [--priority P] [--parent ID] [--dir DIR]`
-- `todo-list.sh [--status S] [--type T] [--priority P] [--parent ID] [--dir DIR]`
+- `todo-new.sh --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]`
+- `todo-list.sh [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]`
 - `todo-status.sh ID STATUS [--dir DIR]`
 
 ## Item types
@@ -61,8 +63,8 @@ When the user wants to resume work rather than create a fresh item:
 
 0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: “todo-only” vs “create todo, then implement”).
 1. Assess size first. Split work that spans multiple days, many unrelated files, or vague acceptance criteria.
-2. Gather the title, type, priority, and optional parent item.
-3. Create the item with `todo-new.sh`.
+2. Gather the title, type, priority, optional labels (for example `MVP`, `NEXT_VER`), and optional parent item. If labels are not provided, default to none.
+3. Create the item with `todo-new.sh` (include `--labels` when provided).
 4. Edit the generated file to fill in context, acceptance criteria, affected files, and the E2E spec when required.
 5. Show the draft to the user before treating it as finalized.
 
@@ -74,6 +76,7 @@ title: [Title]
 status: open
 priority: [high | medium | low]
 type: [feature | bug | refactor | chore]
+labels: []
 created: YYYY-MM-DD
 parent: null
 blocked-by: []

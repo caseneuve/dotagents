@@ -77,4 +77,53 @@
            [:stdout-contains "Would merge Pi settings"]
            [:fs-layout {:missing ["{home}/.claude"
                                   "{home}/.agents"
-                                  "{home}/.pi"]}]]}]}]
+                                  "{home}/.pi"]}]]}]}
+
+ {:suite :add-todo-helpers
+  :desc "Add-todo helper script behavior"
+  :given {:vars {:work "/work"
+                  :fixtures-dir "test/fixtures"}}
+  :cases
+  [{:scenario :todo-new-adds-empty-labels-by-default
+    :given {:vars {:root "/tmp/dotagents-e2e-todo-labels-default"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bash" "{work}/shared/skills/add-todo/todo-new.sh"
+                 "--type" "feature"
+                 "--slug" "labels-default"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "id=0001"]
+           [:fs-layout {:contains [["{root}/todos/0001-labels-default.md" "labels: []"]]}]]}
+
+   {:scenario :todo-new-writes-normalized-labels
+    :given {:vars {:root "/tmp/dotagents-e2e-todo-labels-custom"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bash" "{work}/shared/skills/add-todo/todo-new.sh"
+                 "--type" "feature"
+                 "--slug" "labels-custom"
+                 "--labels" "MVP, NEXT_VER, MVP"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "id=0001"]
+           [:fs-layout {:contains [["{root}/todos/0001-labels-custom.md" "labels: [MVP, NEXT_VER]"]]}]]}
+
+   {:scenario :todo-list-filters-by-label-and-ignores-missing-labels
+    :given {:vars {:root "/tmp/dotagents-e2e-todo-label-filter"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]
+                        [:copy "{fixtures-dir}/todos/0002-no-labels.md" "{root}/todos/0002-no-labels.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bash" "{work}/shared/skills/add-todo/todo-list.sh"
+                 "--label" "MVP"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "0001"]
+           [:stderr-contains "1 todo(s) found"]]}]}]

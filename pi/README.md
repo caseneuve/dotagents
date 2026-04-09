@@ -142,7 +142,7 @@ Keybindings:
 - `←/→` or `h/l` — collapse/expand in the todo tree
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom
-- `/` or `ctrl-f` — focus the filter input (matches todo id and title)
+- `/` or `ctrl-f` — focus the filter input (matches todo id, title, and labels)
 - `tab` — fold/unfold the selected item
 - `enter` — focus/unfocus preview and collapse/restore the list
 - `v` — show/hide the preview pane while staying in list view
@@ -158,6 +158,7 @@ Notes:
 - operates on the current working directory only
 - intended for todo files following the add-todo-style frontmatter schema
 - supports todo types: `feature`, `bug`, `refactor`, `chore`, `epic`, `docs`
+- supports optional `labels: [MVP, NEXT_VER]`; older files without labels are treated as having no labels
 - epics and parents with children can be folded and unfolded
 
 ### `extensions/agent-journal.ts`

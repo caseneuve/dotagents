@@ -16,13 +16,15 @@ allowedPrompts:
 
 Items stored in `./todos/`. Scripts in `~/.claude/skills/add-todo/`, output `key=value` on stdout.
 
+`labels` are optional metadata (for example `MVP`, `NEXT_VER`) used for filtering. Older todos may omit `labels`; treat missing labels as empty.
+
 ## Helper Scripts
 
 | Script                                                             | Usage                                                           |
 |--------------------------------------------------------------------|-----------------------------------------------------------------|
 | `todo-next-id.sh [PARENT]`                                         | `todo-next-id.sh` → `0005`, `todo-next-id.sh 0001` → `0001.4` |
-| `todo-new.sh --type TYPE --slug SLUG [--priority P] [--parent ID]` | Scaffold from template                                          |
-| `todo-list.sh [--status S] [--type T]`                             | List/filter todos                                               |
+| `todo-new.sh --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID]` | Scaffold from template                                          |
+| `todo-list.sh [--status S] [--type T] [--priority P] [--label L] [--parent ID]`    | List/filter todos                                               |
 | `todo-status.sh ID STATUS`                                         | Update status (`open`, `in_progress`, `closed`, `blocked`)      |
 
 ## Item Types
@@ -54,8 +56,8 @@ When splitting: create a parent story (high-level + full E2E spec) and sub-tasks
 ## Process
 
 1. **Assess complexity** — suggest splitting if too large; explain the split before creating anything
-2. **Gather:** Title, Type, Priority (`high/medium/low`), Parent ID (if sub-task)
-3. **Create:** `todo-new.sh --type feature --slug my-feature --priority high [--parent 0001]`
+2. **Gather:** Title, Type, Priority (`high/medium/low`), optional Labels (for example `MVP,NEXT_VER`), Parent ID (if sub-task)
+3. **Create:** `todo-new.sh --type feature --slug my-feature --priority high [--labels MVP,NEXT_VER] [--parent 0001]`
 4. **Edit** generated file — fill in Context, Acceptance Criteria, Affected Files, E2E Spec
 5. **Show to user** for review before finalizing
 
@@ -67,6 +69,7 @@ title: [Title]
 status: open
 priority: [high | medium | low]
 type: [feature | bug | refactor | chore]
+labels: []
 created: YYYY-MM-DD
 parent: null
 blocked-by: []

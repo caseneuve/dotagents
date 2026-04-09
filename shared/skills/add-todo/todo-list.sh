@@ -9,6 +9,7 @@
 #   --type TYPE       Filter by type (feature|bug|refactor|chore)
 #   --priority PRI    Filter by priority (high|medium|low)
 #   --parent PARENT   Show only sub-tasks of PARENT (e.g. 0001)
+#   --label LABEL     Filter by a single label (e.g. MVP)
 #   --dir DIR         Todos directory (default: ./todos)
 #
 # Output (stdout):
@@ -18,6 +19,7 @@
 #   todo-list.sh                        # all todos
 #   todo-list.sh --status open          # only open
 #   todo-list.sh --type bug --status open  # open bugs
+#   todo-list.sh --label MVP               # only todos with label MVP
 
 set -euo pipefail
 
@@ -26,6 +28,7 @@ filter_status=""
 filter_type=""
 filter_priority=""
 filter_parent=""
+filter_label=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --type)     filter_type="$2"; shift 2 ;;
     --priority) filter_priority="$2"; shift 2 ;;
     --parent)   filter_parent="$2"; shift 2 ;;
+    --label)    filter_label="$2"; shift 2 ;;
     --dir)      dir="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -49,6 +53,47 @@ extract_field() {
   sed -n "/^---$/,/^---$/{ s/^${field}: *//p; }" "$file" | head -1
 }
 
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf "%s" "$value"
+}
+
+field_has_label() {
+  local field_value="$1"
+  local expected="$2"
+
+  local trimmed
+  trimmed=$(trim "$field_value")
+  [[ -z "$trimmed" ]] && return 1
+
+  if [[ "$trimmed" == "[]" ]]; then
+    return 1
+  fi
+
+  if [[ "$trimmed" == \[*\] ]]; then
+    trimmed="${trimmed#[}"
+    trimmed="${trimmed%]}"
+  fi
+
+  local -a tokens
+  local token
+  IFS=',' read -r -a tokens <<< "$trimmed"
+  for token in "${tokens[@]}"; do
+    token=$(trim "$token")
+    token="${token#\"}"
+    token="${token%\"}"
+    token="${token#\'}"
+    token="${token%\'}"
+    if [[ "$token" == "$expected" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # Collect and filter
 count=0
 for file in "$dir"/[0-9]*-*.md; do
@@ -60,12 +105,14 @@ for file in "$dir"/[0-9]*-*.md; do
   priority=$(extract_field "$file" "priority")
   title=$(extract_field "$file" "title")
   parent=$(extract_field "$file" "parent")
+  labels=$(extract_field "$file" "labels")
 
   # Apply filters
   if [[ -n "$filter_status" && "$status" != "$filter_status" ]]; then continue; fi
   if [[ -n "$filter_type" && "$type" != "$filter_type" ]]; then continue; fi
   if [[ -n "$filter_priority" && "$priority" != "$filter_priority" ]]; then continue; fi
   if [[ -n "$filter_parent" && "$parent" != "$filter_parent" ]]; then continue; fi
+  if [[ -n "$filter_label" ]] && ! field_has_label "$labels" "$filter_label"; then continue; fi
 
   printf "%-8s | %-11s | %-6s | %-8s | %s\n" "$id" "$status" "$priority" "$type" "$title"
   (( ++count ))

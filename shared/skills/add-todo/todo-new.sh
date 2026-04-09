@@ -12,6 +12,7 @@
 #   --title TITLE       Human-readable title (default: slug with dashes→spaces)
 #   --priority PRIORITY high | medium | low (default: medium)
 #   --parent PARENT     Parent ID for sub-tasks (e.g. 0001)
+#   --labels LABELS     Comma-separated labels (e.g. MVP,NEXT_VER)
 #   --dir DIR           Todos directory (default: ./todos)
 #
 # Output (stdout):
@@ -31,6 +32,7 @@ slug=""
 title=""
 priority="medium"
 parent=""
+labels_input=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --title)    title="$2"; shift 2 ;;
     --priority) priority="$2"; shift 2 ;;
     --parent)   parent="$2"; shift 2 ;;
+    --labels)   labels_input="$2"; shift 2 ;;
     --dir)      dir="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -64,6 +67,62 @@ case "$priority" in
   *) echo "error: --priority must be high|medium|low" >&2; exit 1 ;;
 esac
 
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf "%s" "$value"
+}
+
+normalize_labels_field() {
+  local input="$1"
+  local cleaned
+  cleaned=$(trim "$input")
+
+  if [[ -z "$cleaned" ]]; then
+    echo "[]"
+    return
+  fi
+
+  local -a raw_parts normalized=()
+  IFS=',' read -r -a raw_parts <<< "$cleaned"
+
+  declare -A seen=()
+  local raw label
+  for raw in "${raw_parts[@]}"; do
+    label=$(trim "$raw")
+    [[ -z "$label" ]] && continue
+
+    if [[ ! "$label" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      echo "error: invalid label '$label' (allowed: letters, digits, ., _, -)" >&2
+      exit 1
+    fi
+
+    if [[ -n "${seen[$label]:-}" ]]; then
+      continue
+    fi
+
+    seen[$label]=1
+    normalized+=("$label")
+  done
+
+  if [[ ${#normalized[@]} -eq 0 ]]; then
+    echo "[]"
+    return
+  fi
+
+  local rendered="["
+  local i
+  for ((i = 0; i < ${#normalized[@]}; i++)); do
+    if [[ $i -gt 0 ]]; then
+      rendered+=", "
+    fi
+    rendered+="${normalized[$i]}"
+  done
+  rendered+="]"
+  echo "$rendered"
+}
+
 # Default title from slug
 if [[ -z "$title" ]]; then
   title="${slug//-/ }"
@@ -87,6 +146,8 @@ if [[ -n "$parent" ]]; then
   parent_field="$parent"
 fi
 
+labels_field=$(normalize_labels_field "$labels_input")
+
 # Build E2E section
 e2e_section=""
 if [[ "$type" == "feature" || "$type" == "bug" ]]; then
@@ -105,6 +166,7 @@ title: ${title}
 status: open
 priority: ${priority}
 type: ${type}
+labels: ${labels_field}
 created: ${today}
 parent: ${parent_field}
 blocked-by: []

@@ -21,6 +21,7 @@ type TodoFrontmatter = {
   status: string;
   priority: string;
   type: string;
+  labels: string[];
   created: string;
   parent: string | null;
   blockedBy: string[];
@@ -82,7 +83,7 @@ const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
 const VERTICAL_LIST_MIN_HEIGHT = 6;
 const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
 const FILTER_INPUT_LABEL = "Filter";
-const FILTER_INPUT_HINT = "id/title";
+const FILTER_INPUT_HINT = "id/title/label";
 const MAX_QUERY_TOKENS = 8;
 const RECOMMENDED_FIELDS = [
   "title",
@@ -313,9 +314,12 @@ function todoMatchesQuery(todo: TodoRecord, query: string): boolean {
   const tokens = trimmed.split(" ").filter(Boolean).slice(0, MAX_QUERY_TOKENS);
   if (tokens.length === 0) return true;
 
-  const haystack = [todo.id, todo.frontmatter.title, todo.slug].map((value) =>
-    value.toLowerCase(),
-  );
+  const haystack = [
+    todo.id,
+    todo.frontmatter.title,
+    todo.slug,
+    ...todo.frontmatter.labels,
+  ].map((value) => value.toLowerCase());
   return tokens.every((token) =>
     haystack.some((value) => value.includes(token)),
   );
@@ -430,6 +434,11 @@ function renderPriority(theme: Theme, priority: string): string {
   return theme.fg(color, `[${priority}]`);
 }
 
+function renderLabels(theme: Theme, labels: string[]): string {
+  if (labels.length === 0) return "";
+  return theme.fg("dim", labels.map((label) => `#${label}`).join(" "));
+}
+
 function wrapBlock(text: string, width: number): string[] {
   const lines: string[] = [];
   for (const line of text.split(/\r?\n/)) {
@@ -522,6 +531,7 @@ async function scanTodos(
           status: "unknown",
           priority: "unknown",
           type: "unknown",
+          labels: [],
           created: "",
           parent: inferParentFromId(file.id),
           blockedBy: [],
@@ -578,6 +588,7 @@ async function scanTodos(
         status,
         priority,
         type,
+        labels: parseArrayValue(parsed.raw.get("labels") ?? "[]"),
         created: stripQuotes(parsed.raw.get("created") ?? ""),
         parent,
         blockedBy: parseArrayValue(parsed.raw.get("blocked-by") ?? "[]"),
@@ -1053,6 +1064,18 @@ class RepoTodosComponent {
       ...wrapBlock(this.theme.fg("dim", this.getTodoDisplayPath(todo)), width),
     );
 
+    if (todo.frontmatter.labels.length > 0) {
+      lines.push(
+        ...wrapBlock(
+          this.theme.fg(
+            "muted",
+            `Labels: ${todo.frontmatter.labels.map((label) => `#${label}`).join(" ")}`,
+          ),
+          width,
+        ),
+      );
+    }
+
     if (todo.frontmatter.parent) {
       lines.push(
         ...wrapBlock(
@@ -1163,7 +1186,9 @@ class RepoTodosComponent {
           selectedBgAnsi,
         );
         const priority = renderPriority(this.theme, todo.frontmatter.priority);
-        let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${typeBadge} ${this.theme.fg("accent", `[${todo.id}]`)} ${todo.frontmatter.title} ${priority}${warning}`;
+        const labels = renderLabels(this.theme, todo.frontmatter.labels);
+        const labelsSuffix = labels ? ` ${labels}` : "";
+        let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${typeBadge} ${this.theme.fg("accent", `[${todo.id}]`)} ${todo.frontmatter.title} ${priority}${labelsSuffix}${warning}`;
         if (isMarked) {
           line = this.theme.bold(line);
         }
