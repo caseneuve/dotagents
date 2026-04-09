@@ -355,29 +355,45 @@ function withAnsi(code: string, text: string, reset = "\u001b[0m"): string {
   return `${code}${text}${reset}`;
 }
 
-function renderInlineOrg(theme: Theme, text: string): string {
-  const segments = text.split(/(=.+?=|~.+?~|\*[^*]+\*|\/[^/]+\/|\+[^+]+\+)/g);
-  return segments
-    .map((segment) => {
-      if (!segment) return "";
-      if (segment.startsWith("=") && segment.endsWith("=")) {
-        return theme.fg("mdCode", segment.slice(1, -1));
-      }
-      if (segment.startsWith("~") && segment.endsWith("~")) {
-        return theme.fg("mdCode", segment.slice(1, -1));
-      }
-      if (segment.startsWith("*") && segment.endsWith("*")) {
-        return theme.bold(segment.slice(1, -1));
-      }
-      if (segment.startsWith("/") && segment.endsWith("/")) {
-        return withAnsi("\u001b[3m", segment.slice(1, -1), "\u001b[23m");
-      }
-      if (segment.startsWith("+") && segment.endsWith("+")) {
-        return withAnsi("\u001b[9m", segment.slice(1, -1), "\u001b[29m");
-      }
-      return segment;
-    })
-    .join("");
+const ORG_INLINE_EQ_RE =
+  /(^|[^0-9A-Za-z_])=([^=\s](?:[^=]*?[^=\s])?)=(?=$|[^0-9A-Za-z_])/g;
+const ORG_INLINE_TILDE_RE =
+  /(^|[^0-9A-Za-z_])~([^~\s](?:[^~]*?[^~\s])?)~(?=$|[^0-9A-Za-z_])/g;
+const ORG_INLINE_BOLD_RE =
+  /(^|[^0-9A-Za-z_])\*([^*\s](?:[^*]*?[^*\s])?)\*(?=$|[^0-9A-Za-z_])/g;
+const ORG_INLINE_ITALIC_RE =
+  /(^|[^0-9A-Za-z_])\/([^/\s](?:[^/]*?[^/\s])?)\/(?=$|[^0-9A-Za-z_])/g;
+const ORG_INLINE_STRIKE_RE =
+  /(^|[^0-9A-Za-z_])\+([^+\s](?:[^+]*?[^+\s])?)\+(?=$|[^0-9A-Za-z_])/g;
+
+function replaceOrgInline(
+  text: string,
+  pattern: RegExp,
+  render: (content: string) => string,
+): string {
+  return text.replace(pattern, (_match, prefix: string, content: string) => {
+    return `${prefix}${render(content)}`;
+  });
+}
+
+export function renderInlineOrg(theme: Theme, text: string): string {
+  let rendered = text;
+  rendered = replaceOrgInline(rendered, ORG_INLINE_EQ_RE, (content) =>
+    theme.fg("mdCode", content),
+  );
+  rendered = replaceOrgInline(rendered, ORG_INLINE_TILDE_RE, (content) =>
+    theme.fg("mdCode", content),
+  );
+  rendered = replaceOrgInline(rendered, ORG_INLINE_BOLD_RE, (content) =>
+    theme.bold(content),
+  );
+  rendered = replaceOrgInline(rendered, ORG_INLINE_ITALIC_RE, (content) =>
+    withAnsi("\u001b[3m", content, "\u001b[23m"),
+  );
+  rendered = replaceOrgInline(rendered, ORG_INLINE_STRIKE_RE, (content) =>
+    withAnsi("\u001b[9m", content, "\u001b[29m"),
+  );
+  return rendered;
 }
 
 function renderBodyLine(theme: Theme, line: string): string {
