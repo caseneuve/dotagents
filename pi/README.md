@@ -142,7 +142,7 @@ Keybindings:
 - `←/→` or `h/l` — collapse/expand in the todo tree
 - `ctrl-u` / `ctrl-d` — page preview up/down
 - `gg` / `G` — jump to top/bottom
-- `/` or `ctrl-f` — focus the filter input (matches todo id, title, and labels)
+- `/` or `ctrl-f` — focus the filter input (default matches id/title/labels; prefixes: `!` strict/no-parent-carry, `@` labels-only, `#` id-only, `=` title-only; combine as `!@label`)
 - `tab` — fold/unfold the selected item
 - `enter` — focus/unfocus preview and collapse/restore the list
 - `v` — show/hide the preview pane while staying in list view

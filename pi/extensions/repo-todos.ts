@@ -83,7 +83,7 @@ const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
 const VERTICAL_LIST_MIN_HEIGHT = 6;
 const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
 const FILTER_INPUT_LABEL = "Filter";
-const FILTER_INPUT_HINT = "id/title/label";
+const FILTER_INPUT_HINT = "id/title/label (! strict, @label #id =title)";
 const MAX_QUERY_TOKENS = 8;
 const RECOMMENDED_FIELDS = [
   "title",
@@ -307,21 +307,68 @@ function compareIds(a: string, b: string): number {
   return 0;
 }
 
-function todoMatchesQuery(todo: TodoRecord, query: string): boolean {
-  const trimmed = normalizeText(query).toLowerCase();
+type QueryScope = "all" | "labels" | "id" | "title";
+
+type ParsedQuery = {
+  strict: boolean;
+  scope: QueryScope;
+  value: string;
+};
+
+function parseQuery(query: string): ParsedQuery {
+  const normalized = normalizeText(query);
+  if (!normalized) return { strict: false, scope: "all", value: "" };
+
+  const strict = normalized.startsWith("!");
+  const scoped = strict ? normalizeText(normalized.slice(1)) : normalized;
+  if (!scoped) {
+    return { strict, scope: "all", value: "" };
+  }
+
+  if (scoped.startsWith("@")) {
+    return {
+      strict,
+      scope: "labels",
+      value: normalizeText(scoped.slice(1)),
+    };
+  }
+  if (scoped.startsWith("#")) {
+    return { strict, scope: "id", value: normalizeText(scoped.slice(1)) };
+  }
+  if (scoped.startsWith("=")) {
+    return {
+      strict,
+      scope: "title",
+      value: normalizeText(scoped.slice(1)),
+    };
+  }
+
+  return { strict, scope: "all", value: scoped };
+}
+
+function todoMatchesParsedQuery(todo: TodoRecord, query: ParsedQuery): boolean {
+  const { scope, value } = query;
+  const trimmed = value.toLowerCase();
   if (!trimmed) return true;
 
   const tokens = trimmed.split(" ").filter(Boolean).slice(0, MAX_QUERY_TOKENS);
   if (tokens.length === 0) return true;
 
-  const haystack = [
-    todo.id,
-    todo.frontmatter.title,
-    todo.slug,
-    ...todo.frontmatter.labels,
-  ].map((value) => value.toLowerCase());
+  const haystackByScope: Record<QueryScope, string[]> = {
+    all: [
+      todo.id,
+      todo.frontmatter.title,
+      todo.slug,
+      ...todo.frontmatter.labels,
+    ],
+    labels: todo.frontmatter.labels,
+    id: [todo.id],
+    title: [todo.frontmatter.title],
+  };
+
+  const haystack = haystackByScope[scope].map((entry) => entry.toLowerCase());
   return tokens.every((token) =>
-    haystack.some((value) => value.includes(token)),
+    haystack.some((entry) => entry.includes(token)),
   );
 }
 
@@ -458,7 +505,7 @@ function renderPriority(theme: Theme, priority: string): string {
 
 function renderLabels(theme: Theme, labels: string[]): string {
   if (labels.length === 0) return "";
-  return theme.fg("dim", labels.map((label) => `#${label}`).join(" "));
+  return theme.fg("dim", labels.map((label) => `@${label}`).join(" "));
 }
 
 function wrapBlock(text: string, width: number): string[] {
@@ -795,14 +842,18 @@ class RepoTodosComponent {
     return this.filterInput.getValue();
   }
 
-  private shouldShow(todo: TodoRecord): boolean {
-    const matchesSelf = todoMatchesQuery(todo, this.getQuery());
+  private shouldShow(
+    todo: TodoRecord,
+    parsedQuery: ParsedQuery = parseQuery(this.getQuery()),
+  ): boolean {
+    const matchesSelf = todoMatchesParsedQuery(todo, parsedQuery);
     const visibleChildren = todo.children.some((child) =>
-      this.shouldShow(child),
+      this.shouldShow(child, parsedQuery),
     );
+    const includeViaChildMatch = !parsedQuery.strict && visibleChildren;
     const visibleByDoneState =
-      !this.hideDone || !this.isDone(todo) || visibleChildren;
-    return visibleByDoneState && (matchesSelf || visibleChildren);
+      !this.hideDone || !this.isDone(todo) || includeViaChildMatch;
+    return visibleByDoneState && (matchesSelf || includeViaChildMatch);
   }
 
   private getVisibleTree(): VisibleTreeCache {
@@ -813,19 +864,45 @@ class RepoTodosComponent {
 
     const childrenById = new Map<string, TodoRecord[]>();
     const rows: FlattenedRow[] = [];
+    const parsedQuery = parseQuery(this.getQuery());
+
+    const matchesSelf = (todo: TodoRecord): boolean =>
+      todoMatchesParsedQuery(todo, parsedQuery);
+
+    const hasStrictMatchInSubtree = (todo: TodoRecord): boolean => {
+      const visibleByDoneState = !this.hideDone || !this.isDone(todo);
+      if (visibleByDoneState && matchesSelf(todo)) {
+        return true;
+      }
+      return todo.children.some((child) => hasStrictMatchInSubtree(child));
+    };
 
     const sortVisible = (todos: TodoRecord[]): TodoRecord[] =>
       [...todos]
-        .filter((todo) => this.shouldShow(todo))
+        .filter((todo) =>
+          parsedQuery.strict
+            ? hasStrictMatchInSubtree(todo)
+            : this.shouldShow(todo, parsedQuery),
+        )
         .sort((a, b) => compareTodos(a, b, this.sortMode));
 
     const walk = (todo: TodoRecord, depth: number) => {
-      rows.push({ todo, depth });
+      const renderCurrent = !parsedQuery.strict || matchesSelf(todo);
+      if (renderCurrent) {
+        rows.push({ todo, depth });
+      }
+
       const children = childrenById.get(todo.id) ?? [];
-      if (children.length > 0 && this.expanded.has(todo.id)) {
-        for (const child of children) {
-          walk(child, depth + 1);
-        }
+      const shouldTraverseChildren =
+        children.length > 0 &&
+        (parsedQuery.strict || this.expanded.has(todo.id));
+      if (!shouldTraverseChildren) {
+        return;
+      }
+
+      const nextDepth = renderCurrent ? depth + 1 : depth;
+      for (const child of children) {
+        walk(child, nextDepth);
       }
     };
 
@@ -1098,7 +1175,7 @@ class RepoTodosComponent {
         ...wrapBlock(
           this.theme.fg(
             "muted",
-            `Labels: ${todo.frontmatter.labels.map((label) => `#${label}`).join(" ")}`,
+            `Labels: ${todo.frontmatter.labels.map((label) => `@${label}`).join(" ")}`,
           ),
           width,
         ),
