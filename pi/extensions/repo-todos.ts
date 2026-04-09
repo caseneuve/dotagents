@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-type SortMode = "number" | "state" | "priority" | "type";
+type SortMode = "number" | "state" | "priority" | "type" | "labels";
 type FocusPane = "list" | "preview";
 type QueryFocus = "none" | "input";
 type SplitMode = "horizontal" | "vertical";
@@ -349,6 +349,28 @@ function compareTodos(
     const bTypeRank = TYPE_ORDER.get(bType) ?? 99;
     if (aTypeRank !== bTypeRank) return aTypeRank - bTypeRank;
     if (aType !== bType) return aType.localeCompare(bType);
+  }
+
+  if (sortMode === "labels") {
+    const normalizeLabels = (labels: string[]) =>
+      labels
+        .map((label) => normalizeText(label).toLowerCase())
+        .filter(Boolean)
+        .sort((aa, bb) => aa.localeCompare(bb));
+
+    const aLabels = normalizeLabels(a.frontmatter.labels);
+    const bLabels = normalizeLabels(b.frontmatter.labels);
+
+    if (aLabels.length === 0 && bLabels.length > 0) return 1;
+    if (bLabels.length === 0 && aLabels.length > 0) return -1;
+
+    const aFirst = aLabels[0] ?? "";
+    const bFirst = bLabels[0] ?? "";
+    if (aFirst !== bFirst) return aFirst.localeCompare(bFirst);
+
+    const aJoined = aLabels.join(",");
+    const bJoined = bLabels.join(",");
+    if (aJoined !== bJoined) return aJoined.localeCompare(bJoined);
   }
 
   return compareIds(a.id, b.id);
@@ -949,15 +971,22 @@ class RepoTodosComponent {
     }
   }
 
+  private nextSortMode(direction: 1 | -1): SortMode {
+    const order: SortMode[] = ["number", "state", "priority", "type", "labels"];
+    const currentIndex = order.indexOf(this.sortMode);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + direction + order.length) % order.length;
+    return order[nextIndex];
+  }
+
   private cycleSortMode(): void {
-    this.sortMode =
-      this.sortMode === "number"
-        ? "state"
-        : this.sortMode === "state"
-          ? "priority"
-          : this.sortMode === "priority"
-            ? "type"
-            : "number";
+    this.sortMode = this.nextSortMode(1);
+    this.invalidateTreeCache();
+    this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
+  }
+
+  private cycleSortModeBackward(): void {
+    this.sortMode = this.nextSortMode(-1);
     this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
@@ -1291,6 +1320,11 @@ class RepoTodosComponent {
       this.requestRender();
       return;
     }
+    if (data === "S") {
+      this.cycleSortModeBackward();
+      this.requestRender();
+      return;
+    }
     if (data === "t") {
       this.toggleSplitMode();
       this.requestRender();
@@ -1496,7 +1530,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • tab fold • enter focus/unfocus • v preview • t layout • s sort • d hide done • m mark • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • v preview • t layout • s/S sort • d hide done • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`

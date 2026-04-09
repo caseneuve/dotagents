@@ -147,7 +147,7 @@ Keybindings:
 - `enter` — focus/unfocus preview and collapse/restore the list
 - `v` — show/hide the preview pane while staying in list view
 - `t` — toggle horizontal/vertical split
-- `s` — toggle sort mode
+- `s` / `S` — next/previous sort mode
 - `d` — hide/show completed items
 - `m` — mark/unmark the selected todo (from list or preview focus)
 - `r` — rescan todos
