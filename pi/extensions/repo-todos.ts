@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-type SortMode = "number" | "state" | "priority";
+type SortMode = "number" | "state" | "priority" | "type";
 type FocusPane = "list" | "preview";
 type QueryFocus = "none" | "input";
 type SplitMode = "horizontal" | "vertical";
@@ -118,6 +118,15 @@ const PRIORITY_ORDER = new Map<string, number>([
   ["medium", 1],
   ["low", 2],
   ["unknown", 3],
+]);
+const TYPE_ORDER = new Map<string, number>([
+  ["bug", 0],
+  ["feature", 1],
+  ["docs", 2],
+  ["refactor", 3],
+  ["chore", 4],
+  ["epic", 5],
+  ["unknown", 6],
 ]);
 
 type TodoFile = {
@@ -329,6 +338,15 @@ function compareTodos(
     if (aPriority !== bPriority) return aPriority - bPriority;
   }
 
+  if (sortMode === "type") {
+    const aType = normalizeTodoType(a.frontmatter.type);
+    const bType = normalizeTodoType(b.frontmatter.type);
+    const aTypeRank = TYPE_ORDER.get(aType) ?? 99;
+    const bTypeRank = TYPE_ORDER.get(bType) ?? 99;
+    if (aTypeRank !== bTypeRank) return aTypeRank - bTypeRank;
+    if (aType !== bType) return aType.localeCompare(bType);
+  }
+
   return compareIds(a.id, b.id);
 }
 
@@ -359,6 +377,47 @@ function renderState(theme: Theme, status: string): string {
   return theme.fg(color, `[${status}]`);
 }
 
+function normalizeTodoType(type: string): string {
+  const normalized = stripQuotes(type).trim().toLowerCase();
+  if (normalized === "feat") return "feature";
+  return normalized || "unknown";
+}
+
+function getTypeLabel(type: string): string {
+  const normalized = normalizeTodoType(type);
+  if (normalized === "feature") return "feat";
+  return normalized;
+}
+
+function getTypeBadgeBackground(
+  type: string,
+):
+  | "toolErrorBg"
+  | "toolSuccessBg"
+  | "userMessageBg"
+  | "toolPendingBg"
+  | "customMessageBg"
+  | "selectedBg" {
+  const normalized = normalizeTodoType(type);
+  if (normalized === "bug") return "toolErrorBg";
+  if (normalized === "feature") return "toolSuccessBg";
+  if (normalized === "docs") return "userMessageBg";
+  if (normalized === "refactor") return "toolPendingBg";
+  if (normalized === "chore") return "customMessageBg";
+  return "selectedBg";
+}
+
+function renderTypeBadge(
+  theme: Theme,
+  type: string,
+  restoreBgAnsi = "",
+): string {
+  const label = getTypeLabel(type);
+  const bg = getTypeBadgeBackground(type);
+  const bgReset = "\u001b[49m";
+  return `${theme.getBgAnsi(bg)}[${label}]${bgReset}${restoreBgAnsi}`;
+}
+
 function renderPriority(theme: Theme, priority: string): string {
   const color =
     priority === "high"
@@ -366,9 +425,9 @@ function renderPriority(theme: Theme, priority: string): string {
       : priority === "medium"
         ? "warning"
         : priority === "low"
-          ? "dim"
-          : "muted";
-  return theme.fg(color, priority);
+          ? "muted"
+          : "dim";
+  return theme.fg(color, `[${priority}]`);
 }
 
 function wrapBlock(text: string, width: number): string[] {
@@ -479,9 +538,7 @@ async function scanTodos(
 
     const rawStatus = parsed.raw.get("status");
     const status = normalizeStatus(rawStatus ?? "");
-    const type = stripQuotes(parsed.raw.get("type") ?? "unknown")
-      .trim()
-      .toLowerCase();
+    const type = normalizeTodoType(parsed.raw.get("type") ?? "unknown");
     const priority = stripQuotes(parsed.raw.get("priority") ?? "unknown")
       .trim()
       .toLowerCase();
@@ -887,7 +944,9 @@ class RepoTodosComponent {
         ? "state"
         : this.sortMode === "state"
           ? "priority"
-          : "number";
+          : this.sortMode === "priority"
+            ? "type"
+            : "number";
     this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
@@ -986,7 +1045,7 @@ class RepoTodosComponent {
     );
     lines.push(
       ...wrapBlock(
-        `${renderState(this.theme, todo.frontmatter.status)}  ${this.theme.fg("muted", todo.frontmatter.type)}  ${renderPriority(this.theme, todo.frontmatter.priority)}`,
+        `${renderState(this.theme, todo.frontmatter.status)}  ${renderTypeBadge(this.theme, todo.frontmatter.type)}  ${renderPriority(this.theme, todo.frontmatter.priority)}`,
         width,
       ),
     );
@@ -1095,11 +1154,16 @@ class RepoTodosComponent {
         const warning =
           todo.warnings.length > 0 ? this.theme.fg("warning", " !") : "";
         const isMarked = this.markedIds.has(todo.id);
-        const meta = this.theme.fg(
-          "dim",
-          ` ${todo.frontmatter.type}/${todo.frontmatter.priority}`,
+        const selectedBgAnsi = isSelected
+          ? this.theme.getBgAnsi("selectedBg")
+          : "";
+        const typeBadge = renderTypeBadge(
+          this.theme,
+          todo.frontmatter.type,
+          selectedBgAnsi,
         );
-        let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${this.theme.fg("accent", todo.id)} ${todo.frontmatter.title}${meta}${warning}`;
+        const priority = renderPriority(this.theme, todo.frontmatter.priority);
+        let line = `${indent}${expander} ${renderState(this.theme, todo.frontmatter.status)} ${typeBadge} ${this.theme.fg("accent", `[${todo.id}]`)} ${todo.frontmatter.title} ${priority}${warning}`;
         if (isMarked) {
           line = this.theme.bold(line);
         }
@@ -1341,7 +1405,7 @@ class RepoTodosComponent {
         ? `${queryPrefix}${this.filterInput.render(Math.max(8, contentWidth - queryPrefix.length))[0] ?? ""}`
         : `${queryPrefix}${this.theme.fg(queryValue ? "text" : "muted", queryDisplay)}`;
     const selectedLine = selected
-      ? `${this.theme.fg(this.markedIds.has(selected.id) ? "success" : "muted", this.markedIds.has(selected.id) ? "☑" : "☐")} ${this.theme.fg("muted", `${selected.id} ${selected.frontmatter.title}`)}`
+      ? `${this.theme.fg(this.markedIds.has(selected.id) ? "success" : "muted", this.markedIds.has(selected.id) ? "☑" : "☐")} ${this.theme.fg("muted", `[${selected.id}] ${selected.frontmatter.title}`)}`
       : this.theme.fg("muted", "☐ none");
 
     const makeBorderLine = (
