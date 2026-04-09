@@ -8,6 +8,7 @@
 - **Read framework docs first**: When told to use a specific library/framework, read its documentation before implementing
 - **Lint before commit**: Run linter and fix all errors before every commit (except doc-only changes)
 - Work iteratively in small, contained chunks (see Development Flow)
+- For development work, prefer sandbox/worktree or feature-branch flow with frequent checkpoint commits so history is traceable
 - DRY, YAGNI, Functional Core / Imperative Shell
 - Keep functions short (5–15 lines), flat, with type hints/specs
 - Ask before making changes (unless instructed otherwise)
@@ -15,7 +16,7 @@
 - **Check git state before amend**: Always run `git log --oneline -3` before `git commit --amend` to confirm you're amending the right commit
 
 ### MUST NOT
-- Commit or push without explicit permission
+- Push to remote or merge into the main branch without explicit permission
 - Add Co-Authored-By or auto-generated trailers to commits
 - Write multi-line commit messages (one-line subject only)
 - Write implementation before tests / tests after implementation / all tests upfront
@@ -29,6 +30,81 @@
 - Meaningful names over documentation
 - Early returns and guard clauses over deep nesting
 - Existing codebase patterns (unless clearly wrong)
+
+## Coding Principles (anti-slop)
+
+Use these as operational guardrails for implementation quality.
+
+### 1) Contract-first model
+Before implementation, define:
+- inputs
+- outputs
+- invariants
+- failure modes
+
+Operational check: "Can I describe this function in one sentence: given X, returns Y, guarantees Z?"
+
+### 2) Data-shape-first model
+Most complexity comes from bad data modeling, not syntax.
+Design data structures first; control flow should follow data flow.
+
+Operational check: "Is this branch complexity caused by poor data shape?"
+
+### 3) Local reasoning model
+A maintainer should understand behavior with minimal cross-file jumps.
+- small functions
+- explicit dependencies
+- no hidden side effects
+
+Operational check: "Can a maintainer predict behavior from this file alone?"
+
+### 4) Semantic compression model
+Code should communicate through naming and structure, not scaffolding comments.
+- remove redundant blocks
+- prefer meaningful names over explanatory comments
+- comments should explain **why**, not **what**
+- if many scaffolding comments are needed, extract a named function so the name carries intent and the comment becomes unnecessary
+
+Operational check: "If I need scaffolding comments to explain a block, should this become a separate function with a better name?"
+Operational check: "If I delete this comment/block, does clarity drop? If not, delete."
+
+### 5) Decision visibility model
+Explain important choices where they are made:
+- why this algorithm
+- why this trade-off
+- why this failure handling
+
+Operational check: "Did I explain non-obvious decisions and hide obvious mechanics?"
+
+### 6) Feedback-loop model (anti-slop engine)
+Tight cycle:
+1. failing test/spec
+2. minimal code to pass
+3. refactor for clarity
+4. rerun checks
+
+Operational check: "How long since last failing -> passing cycle?"
+
+### 7) Delete-first model
+Slop is often excess, not missing code.
+Prefer removing complexity before adding abstraction.
+
+Operational check: "What can I remove while preserving behavior?"
+
+### Quick anti-slop checklist
+- [ ] Function has one purpose
+- [ ] Nesting depth <= 2 (or justified)
+- [ ] No duplicate logic or literals
+- [ ] Names carry meaning; comments are mostly "why"
+- [ ] Edge cases are explicit
+- [ ] Error messages are actionable
+- [ ] Tests cover contract + key failure modes
+- [ ] No meta scaffolding left behind
+
+### Highest-impact guards for this agent
+1. Contract-first
+2. Semantic compression pass
+3. Delete-first refactor after green tests
 
 ## Development Flow
 
@@ -47,6 +123,8 @@ Reference these numbers in commits. Agent drives, human navigates.
 ## Git Commit Checkpoints
 
 Format: `[#N stage]` or `[#N.M stage]` + brief description
+
+Default behavior during implementation: create checkpoint commits at TDD slice boundaries (RED/GREEN/REFACTOR) unless the user explicitly asks to batch or defer commits.
 
 | Prefix              | Meaning                    |
 |---------------------|----------------------------|
