@@ -126,4 +126,84 @@
                  "--dir" "{root}/todos"]}
     :then [[:exit-code 0]
            [:stdout-contains "0001"]
-           [:stderr-contains "1 todo(s) found"]]}]}]
+           [:stderr-contains "1 todo(s) found"]]}]}
+
+ {:suite :add-todo-bb
+  :desc "Babashka todo CLI (replaces shell helpers)"
+  :given {:vars {:work "/work"
+                  :cli "{work}/shared/skills/add-todo/src"
+                  :fixtures-dir "test/fixtures"}}
+  :cases
+  [{:scenario :bb-todo-new-creates-with-defaults
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-new"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "new" "--type" "feature" "--slug" "my-thing"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "id=0001"]
+           [:stdout-contains "filepath="]
+           [:fs-layout {:contains [["{root}/todos/0001-my-thing.md" "labels: []"]]
+                        :regular-files ["{root}/todos/0001-my-thing.md"]}]]}
+
+   {:scenario :bb-todo-new-with-labels-and-parent
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-parent"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "new" "--type" "chore" "--slug" "sub-thing"
+                 "--labels" "MVP,BETA" "--parent" "0001"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "id=0001.1"]
+           [:fs-layout {:contains [["{root}/todos/0001.1-sub-thing.md" "labels: [MVP, BETA]"]
+                                   ["{root}/todos/0001.1-sub-thing.md" "parent: 0001"]]}]]}
+
+   {:scenario :bb-todo-list-filters-by-label
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-list"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]
+                        [:copy "{fixtures-dir}/todos/0002-no-labels.md" "{root}/todos/0002-no-labels.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "list" "--label" "MVP"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "0001"]
+           [:stderr-contains "1 todo(s) found"]]}
+
+   {:scenario :bb-todo-status-updates-frontmatter
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-status"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "status" "0001" "closed"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "old_status=open"]
+           [:stdout-contains "new_status=closed"]
+           [:fs-layout {:contains [["{root}/todos/0001-labeled.md" "status: closed"]]}]]}
+
+   {:scenario :bb-todo-next-id-increments
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-nextid"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]
+                        [:copy "{fixtures-dir}/todos/0002-no-labels.md" "{root}/todos/0002-no-labels.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "next-id" "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "0003"]]}]}]
