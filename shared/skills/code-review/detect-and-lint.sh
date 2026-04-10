@@ -413,7 +413,7 @@ run_bb_tests() {
                                  (println k)))' 2>/dev/null || true)
     else
         # Fallback heuristic when bb is unavailable: task keys at line start only.
-        test_tasks=$(grep -oP '^\s*test[^\s{]*\s+\{' bb.edn 2>/dev/null | awk '{print $1}' | sort -u)
+        test_tasks=$(grep -oE '^[[:space:]]*test[^[:space:]{]*[[:space:]]+\{' bb.edn 2>/dev/null | awk '{print $1}' | sort -u)
     fi
 
     if [[ -z "$test_tasks" ]]; then
