@@ -7,8 +7,10 @@
   (println "• Running pure unit tests...")
   (require 'unit.bootstrap-pure-test)
   (require 'todo.core-test)
+  (require 'tmux-agent.core-test)
   (let [{:keys [test fail error]} (t/run-tests 'unit.bootstrap-pure-test
-                                               'todo.core-test)]
+                                               'todo.core-test
+                                               'tmux-agent.core-test)]
     (if (zero? test)
       (do
         (println "Warning: No tests found")

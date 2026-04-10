@@ -1,6 +1,8 @@
 {:paths ["scripts" "test"
          "shared/skills/add-todo/src"
-         "shared/skills/add-todo/test"]
+         "shared/skills/add-todo/test"
+         "shared/skills/pk-tmux/src"
+         "shared/skills/pk-tmux/test"]
 
  :tasks
  {:init
@@ -16,7 +18,7 @@
            "--tmpfs /var/tmp:rw,mode=1777 "
            "-w /work "
            "docker.io/babashka/babashka"))
-    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test test/unit/runner.clj")
+    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
 
   test
