@@ -60,7 +60,7 @@ fi
 old_status=$(sed -n '/^---$/,/^---$/{ s/^status: *//p; }' "$file" | head -1)
 
 # Update status in frontmatter (portable: BSD sed requires -i '')
-if sed --version &>/dev/null 2>&1; then
+if sed --version >/dev/null 2>&1; then
   # GNU sed
   sed -i "s/^status: .*/status: ${new_status}/" "$file"
 else

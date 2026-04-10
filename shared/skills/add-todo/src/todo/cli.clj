@@ -78,10 +78,9 @@
           :labels   {:desc "Comma-separated labels (e.g. MVP,NEXT_VER)" :default ""}
           :dir      {:desc "Todos directory" :default "./todos"}}
    :error-fn (fn [{:keys [cause msg option]}]
-               (when (= :org.babashka/cli (:type (ex-data (Exception.))))
-                 (binding [*out* *err*]
-                   (println (str "Error (" (name cause) "): " option " — " msg)))
-                 (System/exit 1)))})
+               (binding [*out* *err*]
+                 (println (str "Error (" (name cause) "): " option " — " msg)))
+               (System/exit 1))})
 
 (def valid-types #{"feature" "bug" "refactor" "chore"})
 (def valid-priorities #{"high" "medium" "low"})
@@ -98,7 +97,11 @@
         (println "error: --priority must be high|medium|low"))
       (System/exit 1))
 
-    (let [labels-vec (core/normalize-labels labels)
+    (let [labels-vec (try (core/normalize-labels labels)
+                         (catch Exception e
+                           (binding [*out* *err*]
+                             (println (str "error: " (ex-message e))))
+                           (System/exit 1)))
           title (or title (str/replace slug "-" " "))
           _     (fs/create-dirs dir)
           files (todo-filenames dir)

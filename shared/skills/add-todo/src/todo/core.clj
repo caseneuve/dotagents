@@ -52,7 +52,7 @@
   (if-let [[_ fm-body] (re-find #"(?s)^---\n(.*?)\n---" content)]
     (->> (str/split-lines fm-body)
          (keep (fn [line]
-                 (when-let [[_ k v] (re-matches #"^([a-z][-a-z]*): *(.*)" line)]
+                 (when-let [[_ k v] (re-matches #"^([a-z][a-z0-9_-]*): *(.*)" line)]
                    [(keyword k) (parse-yaml-value v)])))
          (into {}))
     {}))
@@ -67,7 +67,7 @@
    \"0001.2-sub-task.md\" → \"0001.2\""
   [filename]
   (let [base (str/replace filename #"\.md$" "")]
-    (re-find #"^[\d.]+" base)))
+    (re-find #"^\d+(?:\.\d+)*" base)))
 
 ;; ---------------------------------------------------------------------------
 ;; Todo construction

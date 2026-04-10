@@ -74,7 +74,11 @@ if [[ -n "$SOCK" ]] && [[ -n "$SESSION" ]]; then
 else
     PROJECT="$(basename "$PWD")"
     BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'default')"
-    HASH="$(echo "$BRANCH" | md5sum 2>/dev/null | head -c 6 || md5 -qs "$BRANCH" | head -c 6)"
+    if command -v md5sum &>/dev/null; then
+      HASH="$(echo "$BRANCH" | md5sum | head -c 6)"
+    else
+      HASH="$(md5 -qs "$BRANCH" | head -c 6)"
+    fi
     SOCK="/tmp/$(detect_socket_prefix)-${PROJECT}-${HASH}.sock"
     SESSION="${PROJECT}-${HASH}"
 

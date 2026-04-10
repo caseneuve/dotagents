@@ -72,7 +72,13 @@
 (deftest extract-id-test
   (testing "extracts id prefix from filename"
     (is (= "0001" (sut/extract-id "0001-my-task.md")))
-    (is (= "0001.2" (sut/extract-id "0001.2-sub-task.md")))))
+    (is (= "0001.2" (sut/extract-id "0001.2-sub-task.md"))))
+
+  (testing "rejects leading dots"
+    (is (nil? (sut/extract-id ".5-bad.md"))))
+
+  (testing "does not match trailing dots"
+    (is (= "0001" (sut/extract-id "0001.-weird.md")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Filtering
@@ -112,7 +118,13 @@
 
   (testing "combines filters"
     (is (= ["0001.1"]
-           (mapv :id (sut/filter-todos {:label "MVP" :parent "0001"} sample-todos))))))
+           (mapv :id (sut/filter-todos {:label "MVP" :parent "0001"} sample-todos)))))
+
+  (testing "label filter skips todos with nil labels"
+    (let [todos [{:id "1" :labels ["A"] :title "Has"}
+                 {:id "2" :labels nil :title "Missing"}
+                 {:id "3" :title "No key"}]]
+      (is (= ["1"] (mapv :id (sut/filter-todos {:label "A"} todos)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Formatting
