@@ -4,8 +4,14 @@
  {:init
   (do
     (require '[clojure.string :as str])
-    (def end2edn-root (str (System/getenv "HOME") "/git/end2edn"))
-    (def podman-base
+    (require '[babashka.fs :as fs])
+    (def end2edn-root
+      (let [home (System/getenv "HOME")
+            candidates [(str home "/git/end2edn")
+                        (str home "/Git/end2edn")]]
+        (or (first (filter fs/directory? candidates))
+            (first candidates))))
+    (def container-base
       (str "podman run --rm "
            "--network none "
            "-v " (System/getProperty "user.dir") ":/work:ro "
@@ -26,11 +32,11 @@
 
   test:unit
   {:doc "Run pure unit tests in isolated podman container"
-   :task (shell (str podman-base " " unit-runner))}
+   :task (shell (str container-base " " unit-runner))}
 
   test:e2e
   {:doc "Run end2edn E2E tests in isolated podman container"
-   :task (shell (str podman-base " " e2e-runner
+   :task (shell (str container-base " " e2e-runner
                      (when (seq *command-line-args*)
                        (str " " (str/join " " *command-line-args*)))))}
 
