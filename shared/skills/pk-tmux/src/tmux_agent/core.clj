@@ -165,46 +165,43 @@
   "Format session status as a human-readable string.
    Input: {:project :sock :cwd :state :windows}"
   [{:keys [project sock cwd state windows]}]
-  (let [lines (transient [])]
-    (conj! lines "=== TMUX SESSION STATUS ===")
-    (conj! lines (str "Project: " project))
-    (conj! lines (str "Socket:  " sock))
-    (conj! lines (str "CWD:     " cwd))
-    (conj! lines "")
+  (str/join "\n"
+    (concat
+      ["=== TMUX SESSION STATUS ==="
+       (str "Project: " project)
+       (str "Socket:  " sock)
+       (str "CWD:     " cwd)
+       ""]
 
-    (case state
-      :no-session
-      (do (conj! lines "Status: NO SESSION")
-          (conj! lines "")
-          (conj! lines "To create:")
-          (conj! lines (str "  tmux -S " sock " new-session -d -s " project " -c " cwd)))
+      (case state
+        :no-session
+        ["Status: NO SESSION" ""
+         "To create:"
+         (str "  tmux -S " sock " new-session -d -s " project " -c " cwd)]
 
-      :socket-no-session
-      (do (conj! lines "Status: SOCKET EXISTS, NO SESSION")
-          (conj! lines "")
-          (conj! lines "To create:")
-          (conj! lines (str "  tmux -S " sock " new-session -d -s " project " -c " cwd)))
+        :socket-no-session
+        ["Status: SOCKET EXISTS, NO SESSION" ""
+         "To create:"
+         (str "  tmux -S " sock " new-session -d -s " project " -c " cwd)]
 
-      :active
-      (do (conj! lines "Status: ACTIVE")
-          (conj! lines "")
-          (conj! lines "To attach:")
-          (conj! lines (str "  tmux -S " sock " attach -t " project))
-          (conj! lines "")
-          (conj! lines "=== WINDOWS ===")
-          (doseq [{:keys [index name cmd cwd busy?]} windows]
-            (conj! lines (str "  " index ": " name (when busy? " [RUNNING]")))
-            (conj! lines (str "     cmd: " cmd))
-            (conj! lines (str "     cwd: " cwd)))
-          (conj! lines "")
-          (conj! lines "=== QUICK COMMANDS ===")
-          (conj! lines (str "New window:    tmux -S " sock " new-window -t " project " -n <name> -c " cwd))
-          (conj! lines (str "Send command:  tmux -S " sock " send-keys -t " project ":<window> '<cmd>' Enter"))
-          (conj! lines (str "Capture out:   tmux -S " sock " capture-pane -t " project ":<window> -p -S -20"))
-          (conj! lines (str "Kill window:   tmux -S " sock " kill-window -t " project ":<window>"))
-          (conj! lines (str "Kill session:  tmux -S " sock " kill-session -t " project))))
-
-    (str/join "\n" (persistent! lines))))
+        :active
+        (concat
+          ["Status: ACTIVE" ""
+           "To attach:"
+           (str "  tmux -S " sock " attach -t " project) ""
+           "=== WINDOWS ==="]
+          (mapcat (fn [{:keys [index name cmd cwd busy?]}]
+                    [(str "  " index ": " name (when busy? " [RUNNING]"))
+                     (str "     cmd: " cmd)
+                     (str "     cwd: " cwd)])
+                  windows)
+          [""
+           "=== QUICK COMMANDS ==="
+           (str "New window:    tmux -S " sock " new-window -t " project " -n <name> -c " cwd)
+           (str "Send command:  tmux -S " sock " send-keys -t " project ":<window> '<cmd>' Enter")
+           (str "Capture out:   tmux -S " sock " capture-pane -t " project ":<window> -p -S -20")
+           (str "Kill window:   tmux -S " sock " kill-window -t " project ":<window>")
+           (str "Kill session:  tmux -S " sock " kill-session -t " project)])))))
 
 ;; ---------------------------------------------------------------------------
 ;; Create: output formatting

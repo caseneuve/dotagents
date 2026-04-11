@@ -9,15 +9,18 @@
   (do
     (require '[clojure.string :as str])
     (def end2edn-root (str (System/getenv "HOME") "/git/end2edn"))
-    (def podman-base
+    (def podman-args
       (str "podman run --rm "
            "--network none "
            "-v " (System/getProperty "user.dir") ":/work:ro "
            "-v " end2edn-root ":" end2edn-root ":ro "
            "--tmpfs /tmp:rw,mode=1777 "
            "--tmpfs /var/tmp:rw,mode=1777 "
-           "-w /work "
-           "docker.io/babashka/babashka"))
+           "-w /work "))
+    (def base-image "docker.io/babashka/babashka")
+    (def test-image "localhost/dotagents-test")
+    (def podman-base (str podman-args base-image))
+    (def podman-test (str podman-args test-image))
     (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
 
@@ -30,11 +33,11 @@
 
   test:unit
   {:doc "Run pure unit tests in isolated podman container"
-   :task (shell (str podman-base " " unit-runner))}
+   :task (shell (str podman-test " " unit-runner))}
 
   test:e2e
   {:doc "Run end2edn E2E tests in isolated podman container"
-   :task (shell (str podman-base " " e2e-runner
+   :task (shell (str podman-test " " e2e-runner
                      (when (seq *command-line-args*)
                        (str " " (str/join " " *command-line-args*)))))}
 

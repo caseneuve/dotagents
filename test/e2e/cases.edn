@@ -206,4 +206,23 @@
            :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
                  "next-id" "--dir" "{root}/todos"]}
     :then [[:exit-code 0]
-           [:stdout-contains "0003"]]}]}]
+           [:stdout-contains "0003"]]}]}
+
+ {:suite :tmux-agent-bb
+  :desc "Babashka tmux-agent CLI"
+  :given {:vars {:work "/work"
+                  :cli "{work}/shared/skills/pk-tmux/src"}}
+  :cases
+  [{:scenario :bb-tmux-create-and-run
+    :when {:cwd "{work}"
+           :run ["bash" "-c"
+                 "bb -cp {cli} -m tmux-agent.cli create e2e-tmux /tmp && bb -cp {cli} -m tmux-agent.cli run test-win 'echo hello-e2e' --sock /tmp/agents-e2e-tmux.sock --session e2e-tmux --timeout 10; rc=$?; tmux -S /tmp/agents-e2e-tmux.sock kill-server 2>/dev/null; exit $rc"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "hello-e2e"]]}
+
+   {:scenario :bb-tmux-create-is-idempotent
+    :when {:cwd "{work}"
+           :run ["bash" "-c"
+                 "bb -cp {cli} -m tmux-agent.cli create e2e-idem /tmp && bb -cp {cli} -m tmux-agent.cli create e2e-idem /tmp; rc=$?; tmux -S /tmp/agents-e2e-idem.sock kill-server 2>/dev/null; exit $rc"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "Session already exists"]]}]}]
