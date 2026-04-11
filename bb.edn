@@ -24,6 +24,10 @@
     (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
 
+  build:test-image
+  {:doc "Build the podman test image (with tmux)"
+   :task (shell "podman build -t dotagents-test -f test/Containerfile .")}
+
   test
   {:doc "Run unit and E2E tests in isolated podman containers"
    :task (do

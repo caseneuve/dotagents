@@ -64,7 +64,7 @@
                                                   :prefix (resolve-prefix)})
         sock    (:sock info)
         session (:session info)]
-    (if (and (tmux? sock "has-session" "-t" session))
+    (if (tmux? sock "has-session" "-t" session)
       (println (core/format-create-output
                  (assoc info :status :exists :cwd cwd)))
       (do
@@ -122,7 +122,7 @@
 
       ;; cd if requested
       (when cd
-        (tmux! sock "send-keys" "-t" target (str "cd " cd) "Enter")
+        (tmux! sock "send-keys" "-t" target (str "cd '" cd "'") "Enter")
         (Thread/sleep 300))
 
       ;; Send command with markers
@@ -272,16 +272,16 @@
 
 (def dispatch-table
   [{:cmds ["create"] :fn cmd-create
-   :spec {:project {:coerce :string} :cwd {:coerce :string}}
-   :args->opts [:project :cwd]}
+    :spec {:project {:coerce :string} :cwd {:coerce :string}}
+    :args->opts [:project :cwd]}
    {:cmds ["run"] :fn cmd-run}
    {:cmds ["status"] :fn cmd-status
-   :spec {:project {:coerce :string} :cwd {:coerce :string}}
-   :args->opts [:project :cwd]}
+    :spec {:project {:coerce :string} :cwd {:coerce :string}}
+    :args->opts [:project :cwd]}
    {:cmds ["wait"] :fn cmd-wait
-   :spec {:project {:coerce :string} :window {:coerce :string}
-          :capture-lines {:coerce :string}}
-   :args->opts [:project :window :capture-lines]}
+    :spec {:project {:coerce :string} :window {:coerce :string}
+           :capture-lines {:coerce :string}}
+    :args->opts [:project :window :capture-lines]}
    {:cmds [] :fn cmd-help}])
 
 ;; The run subcommand uses manual arg parsing (core/parse-run-args) because

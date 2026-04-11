@@ -101,7 +101,7 @@
       opts
       (let [[head & tail] args]
         (case head
-          "--timeout" (recur (next tail) (assoc opts :timeout (parse-long (first tail))))
+          "--timeout" (recur (next tail) (assoc opts :timeout (or (some-> (first tail) parse-long) 300)))
           "--cd"      (recur (next tail) (assoc opts :cd (first tail)))
           "--sock"    (recur (next tail) (assoc opts :sock (first tail)))
           "--session" (recur (next tail) (assoc opts :session (first tail)))
@@ -210,7 +210,7 @@
 (defn format-create-output
   "Format create subcommand output.
    Input: {:status :created|:exists, :sock, :session, :project, :cwd}"
-  [{:keys [status sock session project cwd]}]
+  [{:keys [status sock session cwd]}]
   (str/join "\n"
     (concat
       [(if (= status :exists) "Session already exists" "Session created")

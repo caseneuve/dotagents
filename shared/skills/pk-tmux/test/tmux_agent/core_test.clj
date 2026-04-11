@@ -90,7 +90,13 @@
     (is (= 300 (:timeout (sut/parse-run-args ["w" "c"])))))
 
   (testing "missing command"
-    (is (nil? (:command (sut/parse-run-args ["only-window"]))))))
+    (is (nil? (:command (sut/parse-run-args ["only-window"])))))
+
+  (testing "missing --timeout value falls back to default"
+    (is (= 300 (:timeout (sut/parse-run-args ["w" "c" "--timeout"])))))
+
+  (testing "extra positional replaces command"
+    (is (= "extra" (:command (sut/parse-run-args ["w" "cmd" "extra"]))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Run: marker generation
@@ -170,6 +176,28 @@
                                              :busy? true}]})]
       (is (re-find #"ACTIVE" out))
       (is (re-find #"\[RUNNING\]" out)))))
+
+;; ---------------------------------------------------------------------------
+;; Create: output formatting
+;; ---------------------------------------------------------------------------
+
+(deftest format-create-output-test
+  (testing "exists output omits CWD line"
+    (let [out (sut/format-create-output {:status :exists
+                                         :sock "/tmp/agents-myapp.sock"
+                                         :session "myapp"
+                                         :cwd "/home/user"})]
+      (is (re-find #"already exists" out))
+      (is (not (re-find #"CWD:" out)))
+      (is (re-find #"Attach:" out))))
+
+  (testing "created output includes CWD line"
+    (let [out (sut/format-create-output {:status :created
+                                         :sock "/tmp/agents-myapp.sock"
+                                         :session "myapp"
+                                         :cwd "/home/user"})]
+      (is (re-find #"Session created" out))
+      (is (re-find #"CWD:" out)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Status: window busy detection
