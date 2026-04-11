@@ -16,12 +16,46 @@ function formatCwd(): string {
   return cwd;
 }
 
+const PROVIDER_SHORT: Record<string, string> = {
+  "amazon-bedrock": "bedrock",
+  "azure-openai": "azure",
+  "google-vertex": "vertex",
+};
+
+function shortenProvider(raw: string): string {
+  return PROVIDER_SHORT[raw] ?? raw;
+}
+
+/**
+ * Strip noisy prefixes and date/version suffixes from model IDs.
+ *
+ *   us.anthropic.claude-sonnet-4-20250514-v1:0  →  claude-sonnet-4
+ *   anthropic/claude-opus-4-20250514-v1:0       →  claude-opus-4
+ *   eu.anthropic.claude-3-5-haiku-20241022-v1:0 →  claude-3-5-haiku
+ *   gpt-4.1-2025-04-14                          →  gpt-4.1
+ */
+function shortenModelId(raw: string): string {
+  let id = raw;
+
+  // Strip region+vendor dot-prefix  (e.g. "us.anthropic.")
+  id = id.replace(/^[a-z]{2,4}\.[a-z]+\./, "");
+
+  // Strip slash-prefix (e.g. "anthropic/")
+  id = id.replace(/^[^/]+\//, "");
+
+  // Strip date stamp + optional version tag at the end
+  //   -20250514-v1:0 | -20241022-v1:0 | -2025-04-14
+  id = id.replace(/-\d{4,}[-]?\d{2,}[-]?\d{2,}.*$/, "");
+
+  return id || raw;
+}
+
 function formatProvider(ctx: ExtensionContext): string {
-  return ctx.model?.provider ?? "no-provider";
+  return shortenProvider(ctx.model?.provider ?? "no-provider");
 }
 
 function formatModel(ctx: ExtensionContext): string {
-  return ctx.model?.id ?? "no-model";
+  return shortenModelId(ctx.model?.id ?? "no-model");
 }
 
 function formatThinking(pi: ExtensionAPI): string {
