@@ -282,8 +282,10 @@ export default function (pi: ExtensionAPI) {
   // Body ending with OUT  → no reply expected (triggerTurn: false)
   // Body ending with OVER → your turn, act on it (triggerTurn: true)
   // No suffix              → your turn, act on it (triggerTurn: true)
-  function shouldTriggerTurn(body: string): boolean {
-    const trimmed = body.trimEnd();
+  function shouldTriggerTurn(msg: ChannelMessage): boolean {
+    // Presence messages are informational — never wake the agent
+    if (msg.type === "presence") return false;
+    const trimmed = msg.body.trimEnd();
     // OUT at end of message = conversation done, don't trigger
     if (/\bOUT$/i.test(trimmed)) return false;
     return true;
@@ -296,17 +298,25 @@ export default function (pi: ExtensionAPI) {
       // Skip own messages
       if (msg.from === myName) continue;
 
-      const trigger = shouldTriggerTurn(msg.body);
+      const trigger = shouldTriggerTurn(msg);
       const label = `📨 [${msg.channel}] from ${msg.from}: ${msg.type}`;
-      pi.sendMessage(
-        {
-          customType: "agent-channel",
-          content: `${label}\n\n${msg.body}`,
-          display: true,
-          details: { channelMessage: msg },
-        },
-        { triggerTurn: trigger }
-      );
+      const content = `${label}\n\n${msg.body}`;
+
+      if (trigger) {
+        // Use sendUserMessage to reliably wake idle agents
+        pi.sendUserMessage(content);
+      } else {
+        // Display-only: no turn trigger needed (OUT messages, presence)
+        pi.sendMessage(
+          {
+            customType: "agent-channel",
+            content,
+            display: true,
+            details: { channelMessage: msg },
+          },
+          { triggerTurn: false }
+        );
+      }
       // Auto-ack: message was injected into conversation, no need for manual ack
       backend.ack(msg.channel, msg.id).catch(() => {});
       if (ctx?.hasUI) {
@@ -314,6 +324,9 @@ export default function (pi: ExtensionAPI) {
       }
     }
   }
+
+  // ── Track watched channels for persistence across reloads ──
+  const watchedChannels = new Set<string>();
 
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
@@ -323,6 +336,28 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("agent-ch", `channel: ${backend.name}`);
     }
     await backend.setStatus("agent", "ready", "🟢");
+
+    // Restore watches from session state
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type === "custom" && entry.customType === "agent-channel-watches") {
+        const channels: string[] = (entry as any).data?.channels ?? [];
+        for (const ch of channels) {
+          watchedChannels.add(ch);
+          poller!.watch(ch);
+        }
+        if (channels.length > 0) {
+          await backend.log(`restored watches: ${channels.join(", ")}`, "info", "channel");
+        }
+      }
+    }
+
+    // Auto-watch the lobby (CMUX_WORKSPACE_ID) if available
+    const lobbyChannel = process.env.CMUX_WORKSPACE_ID;
+    if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
+      watchedChannels.add(lobbyChannel);
+      poller!.watch(lobbyChannel);
+      await backend.log(`auto-watching lobby: ${lobbyChannel}`, "info", "channel");
+    }
   });
 
   pi.on("session_shutdown", async () => {
@@ -489,6 +524,10 @@ export default function (pi: ExtensionAPI) {
 
       poller.watch(params.channel);
 
+      // Persist watch list for restore on reload
+      watchedChannels.add(params.channel);
+      pi.appendEntry("agent-channel-watches", { channels: [...watchedChannels] });
+
       // Auto-announce presence on the channel
       const joinMsg: ChannelMessage = {
         id: makeId(),
@@ -523,6 +562,11 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params) {
       poller?.unwatch(params.channel);
+
+      // Persist watch list for restore on reload
+      watchedChannels.delete(params.channel);
+      pi.appendEntry("agent-channel-watches", { channels: [...watchedChannels] });
+
       await backend.setStatus("watching", "idle", "💤");
 
       return {
