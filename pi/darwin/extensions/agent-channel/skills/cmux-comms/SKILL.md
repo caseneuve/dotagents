@@ -55,8 +55,9 @@ Task channels **must** be scoped to the specific task, not shared across tasks:
 **Do not** reuse generic names like `<project>/review` — concurrent tasks will
 collide. Once a task is done (OUT), the channel is dead. New task = new channel.
 
-Follow-up discussion goes to the **lobby** or a **new** task channel, never back
-to a closed task channel.
+Follow-up work **must** be announced on the lobby first — the other agent is no
+longer watching the old task channel after OUT. Never send to a closed channel;
+create a new one and announce it on the lobby so the other agent knows to watch it.
 
 ## Acting on messages
 
