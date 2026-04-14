@@ -55,8 +55,15 @@ with macOS `osascript` notifications.
 
 | Command | Purpose |
 |---------|---------|
+| `/comms [on\|off]` | Toggle agent comms on/off |
 | `/channel-clear <name>` | Delete all messages from a channel |
 | `/channel-ls` | List channels in the notification bar |
+
+## Keyboard Shortcuts
+
+| Shortcut | Purpose |
+|----------|---------|
+| `Ctrl+Shift+M` | Toggle agent comms on/off |
 
 ## Scenario: Code Review Loop
 

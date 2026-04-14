@@ -411,8 +411,13 @@ export default function (pi: ExtensionAPI) {
 
   // All channel tool names — used by tool_call blocker when comms are muted
   const channelToolNames = [
-    "channel_send", "channel_read", "channel_ack",
-    "channel_watch", "channel_unwatch", "channel_status", "channel_list",
+    "channel_send",
+    "channel_read",
+    "channel_ack",
+    "channel_watch",
+    "channel_unwatch",
+    "channel_status",
+    "channel_list",
   ];
 
   // ── lifecycle ──
@@ -942,22 +947,37 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // ── Shared comms toggle logic ──
+  function toggleComms(explicit?: "on" | "off"): boolean {
+    if (explicit === "on") commsMuted = false;
+    else if (explicit === "off") commsMuted = true;
+    else commsMuted = !commsMuted;
+    return commsMuted;
+  }
+
+  function applyCommsState(ctx: ExtensionContext): void {
+    const state = commsMuted ? "OFF 🔇" : "ON 📡";
+    pi.events.emit("agent-channel:comms", !commsMuted);
+    ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
+    ctx.ui.notify(`Comms ${state}`, "info");
+  }
+
   // ── Command: /comms ──
   pi.registerCommand("comms", {
     description: "Toggle agent comms on/off (usage: /comms [on|off])",
     handler: async (args, ctx) => {
       const arg = args.trim().toLowerCase();
-      if (arg === "on") {
-        commsMuted = false;
-      } else if (arg === "off") {
-        commsMuted = true;
-      } else {
-        commsMuted = !commsMuted;
-      }
-      const state = commsMuted ? "OFF 🔇" : "ON 📡";
-      pi.events.emit("agent-channel:comms", !commsMuted);
-      ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
-      ctx.ui.notify(`Comms ${state}`, "info");
+      toggleComms(arg === "on" ? "on" : arg === "off" ? "off" : undefined);
+      applyCommsState(ctx);
+    },
+  });
+
+  // ── Shortcut: Ctrl+Shift+M toggles comms ──
+  pi.registerShortcut("ctrl+shift+m", {
+    description: "Toggle agent comms on/off",
+    handler: async (ctx) => {
+      toggleComms();
+      applyCommsState(ctx);
     },
   });
 
