@@ -1,4 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
 import { CustomEditor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type, type Static } from "@sinclair/typebox";
@@ -30,7 +33,10 @@ export interface ChannelBackend {
   /** Publish a message to the channel. */
   publish(msg: ChannelMessage): Promise<void>;
   /** Read messages from a channel, optionally filtering. */
-  read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]>;
+  read(
+    channel: string,
+    opts?: { since?: number; unacked?: boolean; type?: string },
+  ): Promise<ChannelMessage[]>;
   /** Mark a message as acked. Supports "last" (most recent unacked) and "*" (all unacked). */
   ack(channel: string, messageId: string): Promise<{ ackedCount: number }>;
   /** Set sidebar status (no-op on backends without sidebar). */
@@ -72,19 +78,31 @@ function writeChannelFile(channel: string, data: ChannelFile): void {
 }
 
 /** Shared ack logic used by all backends. Mutates file in place, returns count. */
-function ackMessages(file: ChannelFile, messageId: string): { ackedCount: number } {
+function ackMessages(
+  file: ChannelFile,
+  messageId: string,
+): { ackedCount: number } {
   let ackedCount = 0;
   if (messageId === "*") {
     for (const m of file.messages) {
-      if (!m.acked) { m.acked = true; ackedCount++; }
+      if (!m.acked) {
+        m.acked = true;
+        ackedCount++;
+      }
     }
   } else if (messageId === "last") {
     const unacked = file.messages.filter((m) => !m.acked);
     const last = unacked[unacked.length - 1];
-    if (last) { last.acked = true; ackedCount = 1; }
+    if (last) {
+      last.acked = true;
+      ackedCount = 1;
+    }
   } else {
     const msg = file.messages.find((m) => m.id === messageId);
-    if (msg) { msg.acked = true; ackedCount = 1; }
+    if (msg) {
+      msg.acked = true;
+      ackedCount = 1;
+    }
   }
   return { ackedCount };
 }
@@ -93,7 +111,10 @@ function ackMessages(file: ChannelFile, messageId: string): { ackedCount: number
 function execArgs(args: string[]): string {
   const { execFileSync } = require("node:child_process");
   try {
-    return execFileSync(args[0], args.slice(1), { encoding: "utf-8", timeout: 5000 }).trim();
+    return execFileSync(args[0], args.slice(1), {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
   } catch {
     return "";
   }
@@ -117,7 +138,10 @@ class CmuxBackend implements ChannelBackend {
     writeChannelFile(msg.channel, file);
   }
 
-  async read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]> {
+  async read(
+    channel: string,
+    opts?: { since?: number; unacked?: boolean; type?: string },
+  ): Promise<ChannelMessage[]> {
     const file = readChannelFile(channel);
     let msgs = file.messages;
     if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
@@ -126,7 +150,10 @@ class CmuxBackend implements ChannelBackend {
     return msgs;
   }
 
-  async ack(channel: string, messageId: string): Promise<{ ackedCount: number }> {
+  async ack(
+    channel: string,
+    messageId: string,
+  ): Promise<{ ackedCount: number }> {
     const file = readChannelFile(channel);
     const result = ackMessages(file, messageId);
     if (result.ackedCount > 0) writeChannelFile(channel, file);
@@ -169,7 +196,10 @@ class FileOnlyBackend implements ChannelBackend {
     file.messages.push(msg);
     writeChannelFile(msg.channel, file);
   }
-  async read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]> {
+  async read(
+    channel: string,
+    opts?: { since?: number; unacked?: boolean; type?: string },
+  ): Promise<ChannelMessage[]> {
     const file = readChannelFile(channel);
     let msgs = file.messages;
     if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
@@ -177,19 +207,34 @@ class FileOnlyBackend implements ChannelBackend {
     if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
     return msgs;
   }
-  async ack(channel: string, messageId: string): Promise<{ ackedCount: number }> {
+  async ack(
+    channel: string,
+    messageId: string,
+  ): Promise<{ ackedCount: number }> {
     const file = readChannelFile(channel);
     const result = ackMessages(file, messageId);
     if (result.ackedCount > 0) writeChannelFile(channel, file);
     return result;
   }
-  async setStatus(_key: string, _value: string): Promise<void> { /* no-op */ }
-  async setProgress(_fraction: number, _label: string): Promise<void> { /* no-op */ }
-  async clearProgress(): Promise<void> { /* no-op */ }
-  async log(_message: string): Promise<void> { /* no-op */ }
+  async setStatus(_key: string, _value: string): Promise<void> {
+    /* no-op */
+  }
+  async setProgress(_fraction: number, _label: string): Promise<void> {
+    /* no-op */
+  }
+  async clearProgress(): Promise<void> {
+    /* no-op */
+  }
+  async log(_message: string): Promise<void> {
+    /* no-op */
+  }
   async notify(title: string, body: string): Promise<void> {
     // Fallback: macOS osascript
-    execArgs(["osascript", "-e", `display notification "${body}" with title "${title}"`]);
+    execArgs([
+      "osascript",
+      "-e",
+      `display notification "${body}" with title "${title}"`,
+    ]);
   }
 }
 
@@ -236,7 +281,11 @@ class ChannelPoller {
   private backend: ChannelBackend;
   private intervalMs: number;
 
-  constructor(backend: ChannelBackend, callback: (msgs: ChannelMessage[]) => void, intervalMs = 3000) {
+  constructor(
+    backend: ChannelBackend,
+    callback: (msgs: ChannelMessage[]) => void,
+    intervalMs = 3000,
+  ) {
     this.backend = backend;
     this.callback = callback;
     this.intervalMs = intervalMs;
@@ -283,7 +332,9 @@ export default function (pi: ExtensionAPI) {
   // ── register bundled skills ──
   pi.on("resources_discover", async () => {
     return {
-      skillPaths: [path.join(path.dirname(new URL(import.meta.url).pathname), "skills")],
+      skillPaths: [
+        path.join(path.dirname(new URL(import.meta.url).pathname), "skills"),
+      ],
     };
   });
 
@@ -322,7 +373,7 @@ export default function (pi: ExtensionAPI) {
             display: true,
             details: { channelMessage: msg },
           },
-          { triggerTurn: true, deliverAs: "steer" }
+          { triggerTurn: true, deliverAs: "steer" },
         );
       } else {
         // Display-only: no turn trigger needed (OUT messages, presence)
@@ -333,7 +384,7 @@ export default function (pi: ExtensionAPI) {
             display: true,
             details: { channelMessage: msg },
           },
-          { triggerTurn: false }
+          { triggerTurn: false },
         );
       }
       // Auto-ack: message was injected into conversation, no need for manual ack
@@ -361,7 +412,10 @@ export default function (pi: ExtensionAPI) {
     agentId = undefined;
     agentLabel = undefined;
     for (const entry of ctx.sessionManager.getEntries()) {
-      if (entry.type === "custom" && entry.customType === "agent-channel-identity") {
+      if (
+        entry.type === "custom" &&
+        entry.customType === "agent-channel-identity"
+      ) {
         const data = (entry as any).data;
         if (data?.id) agentId = data.id;
         if (data?.label) agentLabel = data.label;
@@ -377,22 +431,24 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("agent-name", agentName());
       // Install custom editor that shows agent name in the top border
       const name = agentName();
+      const fullTheme = ctx.ui.theme;
       ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-        const editor = new class extends CustomEditor {
+        const editor = new (class extends CustomEditor {
           render(width: number): string[] {
             const lines = super.render(width);
             if (lines.length > 0) {
               const label = ` ${name} `;
-              const styledLabel = theme.fg("accent", label);
+              const styledLabel = fullTheme.fg("accent", label);
               // Insert label after the first border character
               const firstLine = lines[0]!;
               const borderChar = firstLine.slice(0, 1);
               const rest = firstLine.slice(1);
-              lines[0] = borderChar + styledLabel + rest.slice(visibleWidth(label));
+              lines[0] =
+                borderChar + styledLabel + rest.slice(visibleWidth(label));
             }
             return lines;
           }
-        }(tui, theme, keybindings);
+        })(tui, theme, keybindings);
         return editor;
       });
     }
@@ -400,7 +456,10 @@ export default function (pi: ExtensionAPI) {
     // Restore watches from session state (take last snapshot — each entry is the full set)
     let latestChannels: string[] = [];
     for (const entry of ctx.sessionManager.getEntries()) {
-      if (entry.type === "custom" && entry.customType === "agent-channel-watches") {
+      if (
+        entry.type === "custom" &&
+        entry.customType === "agent-channel-watches"
+      ) {
         latestChannels = (entry as any).data?.channels ?? [];
       }
     }
@@ -409,7 +468,11 @@ export default function (pi: ExtensionAPI) {
       poller!.watch(ch);
     }
     if (latestChannels.length > 0) {
-      await backend.log(`restored watches: ${latestChannels.join(", ")}`, "info", "channel");
+      await backend.log(
+        `restored watches: ${latestChannels.join(", ")}`,
+        "info",
+        "channel",
+      );
     }
 
     // Auto-watch the lobby (CMUX_WORKSPACE_ID) if available
@@ -417,7 +480,11 @@ export default function (pi: ExtensionAPI) {
     if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
       watchedChannels.add(lobbyChannel);
       poller!.watch(lobbyChannel);
-      await backend.log(`auto-watching lobby: ${lobbyChannel}`, "info", "channel");
+      await backend.log(
+        `auto-watching lobby: ${lobbyChannel}`,
+        "info",
+        "channel",
+      );
     }
   });
 
@@ -439,11 +506,27 @@ export default function (pi: ExtensionAPI) {
       "Include enough context in the body for the receiver to act independently.",
     ],
     parameters: Type.Object({
-      channel: Type.String({ description: "Channel identifier, e.g. 'myproject/code-review'" }),
-      type: Type.String({ description: "Message type, e.g. 'code-review', 'task-complete', 'status', 'request'" }),
-      body: Type.String({ description: "Message body (the actual content — review text, status update, etc.)" }),
-      to: Type.Optional(Type.String({ description: "Target agent name (optional, for directed messages)" })),
-      notify: Type.Optional(Type.Boolean({ description: "Send a notification to the human (default: true)" })),
+      channel: Type.String({
+        description: "Channel identifier, e.g. 'myproject/code-review'",
+      }),
+      type: Type.String({
+        description:
+          "Message type, e.g. 'code-review', 'task-complete', 'status', 'request'",
+      }),
+      body: Type.String({
+        description:
+          "Message body (the actual content — review text, status update, etc.)",
+      }),
+      to: Type.Optional(
+        Type.String({
+          description: "Target agent name (optional, for directed messages)",
+        }),
+      ),
+      notify: Type.Optional(
+        Type.Boolean({
+          description: "Send a notification to the human (default: true)",
+        }),
+      ),
     }),
     async execute(_toolCallId, params) {
       const msg: ChannelMessage = {
@@ -458,14 +541,26 @@ export default function (pi: ExtensionAPI) {
 
       ownMessageIds.add(msg.id);
       await backend.publish(msg);
-      await backend.log(`sent [${msg.type}] to ${msg.channel}`, "info", "channel");
+      await backend.log(
+        `sent [${msg.type}] to ${msg.channel}`,
+        "info",
+        "channel",
+      );
 
       if (params.notify !== false) {
-        await backend.notify(`Agent ${msg.from}`, `${msg.type} on ${msg.channel}`);
+        await backend.notify(
+          `Agent ${msg.from}`,
+          `${msg.type} on ${msg.channel}`,
+        );
       }
 
       return {
-        content: [{ type: "text", text: `Message sent to channel '${msg.channel}' (id: ${msg.id})` }],
+        content: [
+          {
+            type: "text",
+            text: `Message sent to channel '${msg.channel}' (id: ${msg.id})`,
+          },
+        ],
         details: { message: msg },
       };
     },
@@ -481,26 +576,48 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Read messages from an inter-agent communication channel",
     parameters: Type.Object({
       channel: Type.String({ description: "Channel identifier to read from" }),
-      unacked_only: Type.Optional(Type.Boolean({ description: "Only return unacknowledged messages (default: true)" })),
-      type: Type.Optional(Type.String({ description: "Filter by message type" })),
+      unacked_only: Type.Optional(
+        Type.Boolean({
+          description: "Only return unacknowledged messages (default: true)",
+        }),
+      ),
+      type: Type.Optional(
+        Type.String({ description: "Filter by message type" }),
+      ),
     }),
     async execute(_toolCallId, params) {
       const unacked = params.unacked_only !== false;
-      const msgs = await backend.read(params.channel, { unacked, type: params.type });
+      const msgs = await backend.read(params.channel, {
+        unacked,
+        type: params.type,
+      });
 
       if (msgs.length === 0) {
         return {
-          content: [{ type: "text", text: `No ${unacked ? "unacked " : ""}messages on '${params.channel}'` }],
+          content: [
+            {
+              type: "text",
+              text: `No ${unacked ? "unacked " : ""}messages on '${params.channel}'`,
+            },
+          ],
           details: { messages: [] },
         };
       }
 
       const summary = msgs
-        .map((m) => `[id: ${m.id}] [${new Date(m.timestamp).toISOString()}] ${m.from} (${m.type}):\n${m.body}`)
+        .map(
+          (m) =>
+            `[id: ${m.id}] [${new Date(m.timestamp).toISOString()}] ${m.from} (${m.type}):\n${m.body}`,
+        )
         .join("\n\n---\n\n");
 
       return {
-        content: [{ type: "text", text: `${msgs.length} message(s) on '${params.channel}':\n\n${summary}` }],
+        content: [
+          {
+            type: "text",
+            text: `${msgs.length} message(s) on '${params.channel}':\n\n${summary}`,
+          },
+        ],
         details: { messages: msgs },
       };
     },
@@ -512,26 +629,42 @@ export default function (pi: ExtensionAPI) {
     label: "Channel Ack",
     description:
       "Acknowledge a message (mark as received/processed). Acked messages won't appear in unacked reads. " +
-      "Use message_id=\"last\" to ack the most recent unacked message, or \"*\" to ack all unacked messages.",
+      'Use message_id="last" to ack the most recent unacked message, or "*" to ack all unacked messages.',
     promptSnippet: "Acknowledge a channel message as received/processed",
     parameters: Type.Object({
       channel: Type.String({ description: "Channel identifier" }),
-      message_id: Type.String({ description: "ID of the message to acknowledge. Use \"last\" for most recent unacked, or \"*\" for all unacked." }),
+      message_id: Type.String({
+        description:
+          'ID of the message to acknowledge. Use "last" for most recent unacked, or "*" for all unacked.',
+      }),
     }),
     async execute(_toolCallId, params) {
-      const { ackedCount } = await backend.ack(params.channel, params.message_id);
-      await backend.log(`acked ${params.message_id} (${ackedCount} messages)`, "info", "channel");
+      const { ackedCount } = await backend.ack(
+        params.channel,
+        params.message_id,
+      );
+      await backend.log(
+        `acked ${params.message_id} (${ackedCount} messages)`,
+        "info",
+        "channel",
+      );
 
       if (ackedCount === 0) {
         return {
-          content: [{ type: "text", text: `No matching unacked message found for '${params.message_id}' on '${params.channel}'` }],
+          content: [
+            {
+              type: "text",
+              text: `No matching unacked message found for '${params.message_id}' on '${params.channel}'`,
+            },
+          ],
           details: { ackedCount: 0 },
         };
       }
 
-      const label = params.message_id === "*"
-        ? `Acknowledged all ${ackedCount} unacked message(s) on '${params.channel}'`
-        : `Acknowledged message ${params.message_id} on '${params.channel}'`;
+      const label =
+        params.message_id === "*"
+          ? `Acknowledged all ${ackedCount} unacked message(s) on '${params.channel}'`
+          : `Acknowledged message ${params.message_id} on '${params.channel}'`;
 
       return {
         content: [{ type: "text", text: label }],
@@ -549,7 +682,8 @@ export default function (pi: ExtensionAPI) {
       "When messages arrive, they'll be injected into the conversation automatically. " +
       "Use this to set up non-blocking waiting for results from other agents. " +
       "Set catch_up=true to replay missed messages before polling starts.",
-    promptSnippet: "Start background polling on a channel for incoming messages",
+    promptSnippet:
+      "Start background polling on a channel for incoming messages",
     promptGuidelines: [
       "Use channel_watch to set up non-blocking monitoring. You can continue working while watching.",
       "Incoming messages will appear as injected context — you don't need to poll manually.",
@@ -557,8 +691,17 @@ export default function (pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       channel: Type.String({ description: "Channel identifier to watch" }),
-      interval_seconds: Type.Optional(Type.Number({ description: "Polling interval in seconds (default: 3)" })),
-      catch_up: Type.Optional(Type.Boolean({ description: "Replay and ack unread messages before starting the poll (default: false)" })),
+      interval_seconds: Type.Optional(
+        Type.Number({
+          description: "Polling interval in seconds (default: 3)",
+        }),
+      ),
+      catch_up: Type.Optional(
+        Type.Boolean({
+          description:
+            "Replay and ack unread messages before starting the poll (default: false)",
+        }),
+      ),
     }),
     async execute(_toolCallId, params) {
       const interval = (params.interval_seconds || 3) * 1000;
@@ -572,9 +715,11 @@ export default function (pi: ExtensionAPI) {
       let caughtUp = 0;
       if (params.catch_up) {
         const unacked = await backend.read(params.channel, { unacked: true });
-        const external = unacked.filter((m) => !ownMessageIds.has(m.id) && m.from !== agentName());
+        const external = unacked.filter(
+          (m) => !ownMessageIds.has(m.id) && m.from !== agentName(),
+        );
         if (external.length > 0) {
-          onIncoming(external);  // injects + auto-acks each message
+          onIncoming(external); // injects + auto-acks each message
           caughtUp = external.length;
         }
         // Ack any remaining (own messages that were unacked)
@@ -587,7 +732,9 @@ export default function (pi: ExtensionAPI) {
 
       // Persist watch list for restore on reload
       watchedChannels.add(params.channel);
-      pi.appendEntry("agent-channel-watches", { channels: [...watchedChannels] });
+      pi.appendEntry("agent-channel-watches", {
+        channels: [...watchedChannels],
+      });
 
       // Auto-announce presence on the channel
       const joinMsg: ChannelMessage = {
@@ -604,9 +751,15 @@ export default function (pi: ExtensionAPI) {
       await backend.setStatus("watching", `📡 ${params.channel}`, "📡");
       await backend.log(`watching ${params.channel}`, "info", "channel");
 
-      const catchUpNote = caughtUp > 0 ? ` Caught up on ${caughtUp} missed message(s).` : "";
+      const catchUpNote =
+        caughtUp > 0 ? ` Caught up on ${caughtUp} missed message(s).` : "";
       return {
-        content: [{ type: "text", text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.${catchUpNote}` }],
+        content: [
+          {
+            type: "text",
+            text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.${catchUpNote}`,
+          },
+        ],
         details: { caughtUp },
       };
     },
@@ -619,19 +772,25 @@ export default function (pi: ExtensionAPI) {
     description: "Stop polling a channel.",
     promptSnippet: "Stop background polling on a channel",
     parameters: Type.Object({
-      channel: Type.String({ description: "Channel identifier to stop watching" }),
+      channel: Type.String({
+        description: "Channel identifier to stop watching",
+      }),
     }),
     async execute(_toolCallId, params) {
       poller?.unwatch(params.channel);
 
       // Persist watch list for restore on reload
       watchedChannels.delete(params.channel);
-      pi.appendEntry("agent-channel-watches", { channels: [...watchedChannels] });
+      pi.appendEntry("agent-channel-watches", {
+        channels: [...watchedChannels],
+      });
 
       await backend.setStatus("watching", "idle", "💤");
 
       return {
-        content: [{ type: "text", text: `Stopped watching '${params.channel}'` }],
+        content: [
+          { type: "text", text: `Stopped watching '${params.channel}'` },
+        ],
         details: {},
       };
     },
@@ -645,14 +804,37 @@ export default function (pi: ExtensionAPI) {
       "Update the sidebar status and progress visible to the human. " +
       "Use this to communicate your current state (working, waiting, done, error) " +
       "so the human can monitor multiple agents at a glance.",
-    promptSnippet: "Update sidebar status/progress visible to the human operator",
+    promptSnippet:
+      "Update sidebar status/progress visible to the human operator",
     parameters: Type.Object({
-      status: Type.Optional(Type.String({ description: "Status text, e.g. 'reviewing code', 'waiting for agent-b'" })),
-      icon: Type.Optional(Type.String({ description: "Status icon emoji, e.g. '⚙️', '✅', '⏳'" })),
-      progress: Type.Optional(Type.Number({ description: "Progress fraction 0.0–1.0 (omit to leave unchanged, -1 to clear)" })),
-      progress_label: Type.Optional(Type.String({ description: "Progress bar label" })),
-      log_message: Type.Optional(Type.String({ description: "Append a log line to the sidebar" })),
-      log_level: Type.Optional(Type.String({ description: "Log level: info, success, warning, error" })),
+      status: Type.Optional(
+        Type.String({
+          description:
+            "Status text, e.g. 'reviewing code', 'waiting for agent-b'",
+        }),
+      ),
+      icon: Type.Optional(
+        Type.String({
+          description: "Status icon emoji, e.g. '⚙️', '✅', '⏳'",
+        }),
+      ),
+      progress: Type.Optional(
+        Type.Number({
+          description:
+            "Progress fraction 0.0–1.0 (omit to leave unchanged, -1 to clear)",
+        }),
+      ),
+      progress_label: Type.Optional(
+        Type.String({ description: "Progress bar label" }),
+      ),
+      log_message: Type.Optional(
+        Type.String({ description: "Append a log line to the sidebar" }),
+      ),
+      log_level: Type.Optional(
+        Type.String({
+          description: "Log level: info, success, warning, error",
+        }),
+      ),
     }),
     async execute(_toolCallId, params) {
       const parts: string[] = [];
@@ -666,7 +848,10 @@ export default function (pi: ExtensionAPI) {
           await backend.clearProgress();
           parts.push("progress: cleared");
         } else {
-          await backend.setProgress(params.progress, params.progress_label || "");
+          await backend.setProgress(
+            params.progress,
+            params.progress_label || "",
+          );
           parts.push(`progress: ${Math.round(params.progress * 100)}%`);
         }
       }
@@ -676,7 +861,12 @@ export default function (pi: ExtensionAPI) {
       }
 
       return {
-        content: [{ type: "text", text: `Sidebar updated: ${parts.join(", ") || "no changes"}` }],
+        content: [
+          {
+            type: "text",
+            text: `Sidebar updated: ${parts.join(", ") || "no changes"}`,
+          },
+        ],
         details: {},
       };
     },
@@ -691,9 +881,14 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     async execute() {
       if (!fs.existsSync(CHANNEL_DIR)) {
-        return { content: [{ type: "text", text: "No channels found." }], details: { channels: [] } };
+        return {
+          content: [{ type: "text", text: "No channels found." }],
+          details: { channels: [] },
+        };
       }
-      const files = fs.readdirSync(CHANNEL_DIR).filter((f) => f.endsWith(".json"));
+      const files = fs
+        .readdirSync(CHANNEL_DIR)
+        .filter((f) => f.endsWith(".json"));
       const channels = files.map((f) => {
         const ch = f.replace(/\.json$/, "");
         const data = readChannelFile(ch);
@@ -701,9 +896,16 @@ export default function (pi: ExtensionAPI) {
         return { name: ch, total: data.messages.length, unacked };
       });
 
-      const summary = channels.map((c) => `${c.name}: ${c.total} msgs (${c.unacked} unacked)`).join("\n");
+      const summary = channels
+        .map((c) => `${c.name}: ${c.total} msgs (${c.unacked} unacked)`)
+        .join("\n");
       return {
-        content: [{ type: "text", text: channels.length ? summary : "No channels found." }],
+        content: [
+          {
+            type: "text",
+            text: channels.length ? summary : "No channels found.",
+          },
+        ],
         details: { channels },
       };
     },
@@ -738,7 +940,10 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       agentLabel = name;
-      pi.appendEntry("agent-channel-identity", { id: agentId, label: agentLabel });
+      pi.appendEntry("agent-channel-identity", {
+        id: agentId,
+        label: agentLabel,
+      });
       pi.events.emit("agent-channel:name", agentName());
       ctx.ui.setStatus("agent-name", agentName());
       ctx.ui.notify(`Agent name set to: ${agentName()}`, "info");
@@ -747,7 +952,8 @@ export default function (pi: ExtensionAPI) {
 
   // ── Command: /channel-clear ──
   pi.registerCommand("channel-clear", {
-    description: "Clear all messages from a channel (usage: /channel-clear <channel>)",
+    description:
+      "Clear all messages from a channel (usage: /channel-clear <channel>)",
     handler: async (args, ctx) => {
       const channel = args.trim();
       if (!channel) {
@@ -767,7 +973,9 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("No channels found.", "info");
         return;
       }
-      const files = fs.readdirSync(CHANNEL_DIR).filter((f) => f.endsWith(".json"));
+      const files = fs
+        .readdirSync(CHANNEL_DIR)
+        .filter((f) => f.endsWith(".json"));
       if (files.length === 0) {
         ctx.ui.notify("No channels found.", "info");
         return;
@@ -776,7 +984,10 @@ export default function (pi: ExtensionAPI) {
         const ch = f.replace(/\.json$/, "");
         const data = readChannelFile(ch);
         const unacked = data.messages.filter((m) => !m.acked).length;
-        ctx.ui.notify(`${ch}: ${data.messages.length} msgs (${unacked} unacked)`, "info");
+        ctx.ui.notify(
+          `${ch}: ${data.messages.length} msgs (${unacked} unacked)`,
+          "info",
+        );
       }
     },
   });
