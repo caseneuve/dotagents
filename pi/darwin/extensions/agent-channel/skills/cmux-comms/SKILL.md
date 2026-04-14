@@ -18,6 +18,9 @@ channel_watch(channel: <CMUX_WORKSPACE_ID>)
 
 Every agent in the workspace does this. The lobby is always open.
 
+When you call `channel_watch`, a **presence announcement** is automatically
+sent on the channel so other agents know you're listening.
+
 ## Lobby vs task channels
 
 The **lobby** (`CMUX_WORKSPACE_ID`) is for coordination:
@@ -32,12 +35,28 @@ with a descriptive name and announce it on the lobby:
 channel_send(
   channel: <CMUX_WORKSPACE_ID>,
   type: "status",
-  body: "Starting code review for agentic-stuff. Sending results on channel: agentic-stuff/review"
+  body: "Starting code review for ticket 0042. Sending results on channel: agentic-stuff/review-0042"
 )
-channel_watch(channel: "agentic-stuff/review")
+channel_watch(channel: "agentic-stuff/review-0042")
 ```
 
 The other agent sees this on the lobby, starts watching the task channel.
+
+### Channel naming convention
+
+Task channels **must** be scoped to the specific task, not shared across tasks:
+
+```
+<project>/review-<ticket>      ← code review for a ticket
+<project>/deploy-<ticket>      ← deployment coordination
+<project>/retro-<date>         ← retrospective discussion
+```
+
+**Do not** reuse generic names like `<project>/review` — concurrent tasks will
+collide. Once a task is done (OUT), the channel is dead. New task = new channel.
+
+Follow-up discussion goes to the **lobby** or a **new** task channel, never back
+to a closed task channel.
 
 ## Acting on messages
 
@@ -52,25 +71,30 @@ Examples:
 - `task-complete` arrives → verify the work, respond with result or approval
 - `request` arrives → do what's asked, send the result
 
-Always:
-1. `channel_ack` the message (or `channel_ack(message_id: "*")` to ack all pending)
-2. Do the work
-3. `channel_send` the result back on the same channel
+Messages received via `channel_watch` are **auto-acknowledged** when injected
+into your conversation. You do not need to call `channel_ack` manually for
+watched channels.
+
+For messages read via `channel_read` (manual polling), ack them after processing:
+
+```
+channel_ack(channel: "...", message_id: "...")
+```
 
 ## Code review workflow example
 
 **Reviewer agent:**
-1. Watches lobby → sees "review my changes on `myproject/review`"
-2. Watches `myproject/review`
+1. Watches lobby → sees "review my changes on `myproject/review-0042`"
+2. Watches `myproject/review-0042`
 3. Receives `review-request` with diff summary
 4. Runs review, writes review file
 5. Sends `review-response` with review file path and summary of findings
 6. Waits for fixes
 
 **Dev agent:**
-1. Announces on lobby: "Sending review request on `myproject/review`"
-2. Sends `review-request` on `myproject/review`
-3. Watches `myproject/review` for response
+1. Announces on lobby: "Sending review request on `myproject/review-0042`"
+2. Sends `review-request` on `myproject/review-0042`
+3. Watches `myproject/review-0042` for response
 4. Receives `review-response` — reads the review file, applies fixes
 5. Sends `task-complete` with summary of what was fixed
 6. Reviewer verifies, sends `approved` or another `review-response`
@@ -81,6 +105,7 @@ Always:
 |------|---------|-------------------|
 | `ping` | Are you there? | Reply with `pong` |
 | `pong` | I'm here | Acknowledge |
+| `presence` | Agent joined channel | Note it (auto-sent by `channel_watch`) |
 | `status` | Progress update / announcement | Note it, act if relevant |
 | `request` | Do this task | Do it, send result |
 | `task-complete` | Work is done | Verify, acknowledge or follow up |
@@ -116,11 +141,10 @@ channel_send(
 
 ## Receiving
 
-Messages from watched channels are injected into your conversation automatically.
-When one arrives:
-1. Acknowledge it: `channel_ack(channel: "...", message_id: "...")`
-2. Act on it — do the work described
-3. Respond on the same channel with results
+Messages from watched channels are injected into your conversation automatically
+and **auto-acknowledged**. When one arrives:
+1. Act on it — do the work described
+2. Respond on the same channel with results
 
 **Note:** `channel_watch` only picks up messages sent *after* the watch starts.
 To catch up on messages you might have missed, read first:
@@ -145,7 +169,8 @@ before you joined.
 
 ## Acknowledging messages
 
-`channel_ack` supports three modes:
+Messages received via `channel_watch` are auto-acked. For `channel_read`, use
+`channel_ack` with three modes:
 
 | `message_id` | effect |
 |--------------|--------|

@@ -307,6 +307,8 @@ export default function (pi: ExtensionAPI) {
         },
         { triggerTurn: trigger }
       );
+      // Auto-ack: message was injected into conversation, no need for manual ack
+      backend.ack(msg.channel, msg.id).catch(() => {});
       if (ctx?.hasUI) {
         ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
       }
@@ -467,6 +469,18 @@ export default function (pi: ExtensionAPI) {
         poller = new ChannelPoller(backend, onIncoming, interval);
       }
       poller.watch(params.channel);
+
+      // Auto-announce presence on the channel
+      const joinMsg: ChannelMessage = {
+        id: makeId(),
+        channel: params.channel,
+        from: agentName(),
+        type: "presence",
+        body: `${agentName()} is now watching this channel.`,
+        timestamp: Date.now(),
+      };
+      ownMessageIds.add(joinMsg.id);
+      await backend.publish(joinMsg);
 
       await backend.setStatus("watching", `📡 ${params.channel}`, "📡");
       await backend.log(`watching ${params.channel}`, "info", "channel");
