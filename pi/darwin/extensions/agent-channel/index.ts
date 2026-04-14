@@ -338,6 +338,13 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  // ── Block channel tools when comms are muted ──
+  pi.on("tool_call", async (event) => {
+    if (commsMuted && channelToolNames.includes(event.toolName)) {
+      return { block: true, reason: "Comms are off. Use /comms on to enable." };
+    }
+  });
+
   // ── Radio protocol: message endings control turn-taking ──
   // Body ending with OUT  → no reply expected (triggerTurn: false)
   // Body ending with OVER → your turn, act on it (triggerTurn: true)
@@ -491,9 +498,6 @@ export default function (pi: ExtensionAPI) {
         "channel",
       );
     }
-
-    // Apply default comms state (off by default — remove channel tools)
-    applyCommsState();
   });
 
   pi.on("session_shutdown", async () => {
@@ -924,21 +928,6 @@ export default function (pi: ExtensionAPI) {
     "channel_watch", "channel_unwatch", "channel_status", "channel_list",
   ];
 
-  function applyCommsState() {
-    const activeTools = pi.getActiveTools().map((t) => t.name);
-    if (commsMuted) {
-      // Remove channel tools
-      const filtered = activeTools.filter((n) => !channelToolNames.includes(n));
-      pi.setActiveTools(filtered);
-    } else {
-      // Restore channel tools if missing
-      const missing = channelToolNames.filter((n) => !activeTools.includes(n));
-      if (missing.length > 0) {
-        pi.setActiveTools([...activeTools, ...missing]);
-      }
-    }
-  }
-
   // ── Command: /comms ──
   pi.registerCommand("comms", {
     description: "Toggle agent comms on/off (usage: /comms [on|off])",
@@ -951,7 +940,6 @@ export default function (pi: ExtensionAPI) {
       } else {
         commsMuted = !commsMuted;
       }
-      applyCommsState();
       const state = commsMuted ? "OFF 🔇" : "ON 📡";
       pi.events.emit("agent-channel:comms", !commsMuted);
       ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
