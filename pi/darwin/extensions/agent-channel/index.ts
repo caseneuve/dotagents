@@ -303,8 +303,13 @@ export default function (pi: ExtensionAPI) {
       const content = `${label}\n\n${msg.body}`;
 
       if (trigger) {
-        // Use sendUserMessage to reliably wake idle agents
-        pi.sendUserMessage(content);
+        // Use sendUserMessage to reliably wake idle agents.
+        // When already streaming, queue as a steering message.
+        if (ctx?.isIdle()) {
+          pi.sendUserMessage(content);
+        } else {
+          pi.sendUserMessage(content, { deliverAs: "steer" });
+        }
       } else {
         // Display-only: no turn trigger needed (OUT messages, presence)
         pi.sendMessage(
