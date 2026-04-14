@@ -436,15 +436,20 @@ export default function (pi: ExtensionAPI) {
         const editor = new (class extends CustomEditor {
           render(width: number): string[] {
             const lines = super.render(width);
-            if (lines.length > 0) {
+            if (lines.length > 0 && width > 0) {
               const label = ` ${name} `;
-              const styledLabel = fullTheme.fg("accent", label);
-              // Insert label after the first border character
-              const firstLine = lines[0]!;
-              const borderChar = firstLine.slice(0, 1);
-              const rest = firstLine.slice(1);
-              lines[0] =
-                borderChar + styledLabel + rest.slice(visibleWidth(label));
+              const labelWidth = visibleWidth(label);
+              if (labelWidth + 2 <= width) {
+                const styledLabel = fullTheme.fg("accent", label);
+                // Rebuild the border line from scratch — the super.render() line
+                // contains ANSI escapes, so raw string slicing breaks widths.
+                const b = "─";
+                const afterLabel = width - 1 - labelWidth;
+                lines[0] =
+                  this.borderColor(b) +
+                  styledLabel +
+                  this.borderColor(b.repeat(afterLabel));
+              }
             }
             return lines;
           }
