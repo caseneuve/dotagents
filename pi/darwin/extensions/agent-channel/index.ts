@@ -451,15 +451,18 @@ export default function (pi: ExtensionAPI) {
     description:
       "Start polling a channel for new messages in the background. " +
       "When messages arrive, they'll be injected into the conversation automatically. " +
-      "Use this to set up non-blocking waiting for results from other agents.",
+      "Use this to set up non-blocking waiting for results from other agents. " +
+      "Set catch_up=true to replay missed messages before polling starts.",
     promptSnippet: "Start background polling on a channel for incoming messages",
     promptGuidelines: [
       "Use channel_watch to set up non-blocking monitoring. You can continue working while watching.",
       "Incoming messages will appear as injected context — you don't need to poll manually.",
+      "Use catch_up=true when joining a channel late to replay messages you missed.",
     ],
     parameters: Type.Object({
       channel: Type.String({ description: "Channel identifier to watch" }),
       interval_seconds: Type.Optional(Type.Number({ description: "Polling interval in seconds (default: 3)" })),
+      catch_up: Type.Optional(Type.Boolean({ description: "Replay and ack unread messages before starting the poll (default: false)" })),
     }),
     async execute(_toolCallId, params) {
       const interval = (params.interval_seconds || 3) * 1000;
@@ -468,6 +471,22 @@ export default function (pi: ExtensionAPI) {
       } else {
         poller = new ChannelPoller(backend, onIncoming, interval);
       }
+
+      // Catch-up: replay unacked messages before starting the poll
+      let caughtUp = 0;
+      if (params.catch_up) {
+        const unacked = await backend.read(params.channel, { unacked: true });
+        const external = unacked.filter((m) => !ownMessageIds.has(m.id) && m.from !== agentName());
+        if (external.length > 0) {
+          onIncoming(external);  // injects + auto-acks each message
+          caughtUp = external.length;
+        }
+        // Ack any remaining (own messages that were unacked)
+        if (unacked.length > external.length) {
+          await backend.ack(params.channel, "*");
+        }
+      }
+
       poller.watch(params.channel);
 
       // Auto-announce presence on the channel
@@ -485,9 +504,10 @@ export default function (pi: ExtensionAPI) {
       await backend.setStatus("watching", `📡 ${params.channel}`, "📡");
       await backend.log(`watching ${params.channel}`, "info", "channel");
 
+      const catchUpNote = caughtUp > 0 ? ` Caught up on ${caughtUp} missed message(s).` : "";
       return {
-        content: [{ type: "text", text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.` }],
-        details: {},
+        content: [{ type: "text", text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.${catchUpNote}` }],
+        details: { caughtUp },
       };
     },
   });

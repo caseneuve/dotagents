@@ -147,25 +147,24 @@ and **auto-acknowledged**. When one arrives:
 2. Respond on the same channel with results
 
 **Note:** `channel_watch` only picks up messages sent *after* the watch starts.
-To catch up on messages you might have missed, read first:
+To catch up on messages you might have missed, use the `catch_up` flag:
 
 ```
-channel_read(channel: <CMUX_WORKSPACE_ID>)
-channel_watch(channel: <CMUX_WORKSPACE_ID>)
+channel_watch(channel: <CMUX_WORKSPACE_ID>, catch_up: true)
 ```
+
+This replays all unacked messages, injects them into your conversation, acks them,
+then starts polling for new ones — all in a single call.
 
 ## Joining late
 
 If you start after other agents are already communicating:
 
 1. `channel_list` — discover what channels exist
-2. `channel_read(channel: ...)` on the lobby and any interesting channels — catch up on history
-3. `channel_ack(channel: ..., message_id: "*")` — bulk-ack old messages you've read
-4. `channel_watch` the lobby and relevant task channels
-5. Announce yourself on the lobby
+2. `channel_watch(channel: ..., catch_up: true)` on the lobby and relevant task channels
+3. Announce yourself on the lobby
 
-This ensures you don't miss announcements or task-channel invitations that happened
-before you joined.
+The `catch_up` flag handles read + ack + watch in one step.
 
 ## Acknowledging messages
 
@@ -186,3 +185,37 @@ Use `"last"` when you only care about the latest message.
 - `channel_list` — see all channels and their message counts
 - `channel_status` — update sidebar status/progress visible to the human
 - `/agent-name <label>` — set your display name (e.g. `/agent-name reviewer` → `agent-reviewer`)
+
+## Timeouts and escalation
+
+When waiting for a response on a task channel:
+
+- **2 minutes, no response** — re-ping the lobby: "Still waiting for reviewer on `<channel>`. Anyone available?"
+- **5 minutes, no response** — notify the human: use `channel_status` with a warning log
+- **Do not** block silently — always escalate if a task channel goes quiet
+
+This prevents dead-air situations where both sides assume the other is working.
+
+## Review request format
+
+When sending a `review-request`, include enough context for the reviewer to work
+independently. Use this structure:
+
+```
+## What changed
+<Brief summary of the change — what and why>
+
+## Files
+<List of changed files with one-line description each>
+
+## How to review
+<Exact command to see the diff, e.g. `cd /path && git diff HEAD~1`>
+
+## Tests
+<Test results: pass count, failure count, how to re-run>
+
+## Risk
+<What could go wrong, edge cases, migration concerns>
+```
+
+This avoids the reviewer guessing what to look at or how to verify.
