@@ -305,10 +305,25 @@ export default function (pi: ExtensionAPI) {
       if (trigger) {
         // Use sendUserMessage to reliably wake idle agents.
         // When already streaming, queue as a steering message.
-        if (ctx?.isIdle()) {
-          pi.sendUserMessage(content);
-        } else {
-          pi.sendUserMessage(content, { deliverAs: "steer" });
+        // Wrap in try/catch — agent may be in a transitional state.
+        try {
+          if (ctx?.isIdle()) {
+            pi.sendUserMessage(content);
+          } else {
+            pi.sendUserMessage(content, { deliverAs: "steer" });
+          }
+        } catch {
+          // Fallback: inject as custom message (won't wake idle agent,
+          // but at least the message is visible in conversation)
+          pi.sendMessage(
+            {
+              customType: "agent-channel",
+              content,
+              display: true,
+              details: { channelMessage: msg },
+            },
+            { triggerTurn: false }
+          );
         }
       } else {
         // Display-only: no turn trigger needed (OUT messages, presence)
