@@ -110,6 +110,7 @@ function renderLeft(
   theme: ExtensionContext["ui"]["theme"],
   gitBranch: string | null,
   sessionNotesStatus: string | undefined,
+  commsActive: boolean,
 ): string {
   const parts: string[] = [formatCwd()];
 
@@ -122,6 +123,10 @@ function renderLeft(
   }
 
   const left = theme.fg("dim", parts.join(" · "));
+
+  if (commsActive) {
+    return `${left} ${theme.fg("accent", "📡")}`;
+  }
 
   return left;
 }
@@ -159,6 +164,12 @@ function renderFooterLine(width: number, left: string, right: string): string {
 }
 
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
+  let commsActive = false;
+
+  pi.events.on("agent-channel:comms", (active: boolean) => {
+    commsActive = active;
+  });
+
   const installFooter = (ctx: ExtensionContext) => {
     if (!ctx.hasUI) return;
 
@@ -170,10 +181,15 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         tui.requestRender(),
       );
 
+      const disposeComms = pi.events.on("agent-channel:comms", () =>
+        tui.requestRender(),
+      );
+
       return {
         dispose() {
           disposeBranch();
           disposeBranchStatus();
+          disposeComms();
         },
         invalidate() {},
         render(width: number): string[] {
@@ -182,6 +198,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             theme,
             footerData.getGitBranch(),
             statuses.get("session-notes"),
+            commsActive,
           );
           const right = renderRight(pi, ctx, theme);
           const lines = [renderFooterLine(width, left, right)];
