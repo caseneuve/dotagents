@@ -238,7 +238,7 @@ class ChannelPoller {
     this.lastSeen.set(channel, Date.now());
     const timer = setInterval(async () => {
       const since = this.lastSeen.get(channel) || 0;
-      const msgs = await this.backend.read(channel, { since, unacked: true });
+      const msgs = await this.backend.read(channel, { since });
       // Filter out messages published by this agent instance
       const external = msgs.filter((m) => !ownMessageIds.has(m.id));
       if (external.length > 0) {
