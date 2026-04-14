@@ -97,7 +97,10 @@ function normalizeNotes(notes: SessionNote[]): SessionNote[] {
   return notes
     .map(normalizeNote)
     .sort(
-      (a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title),
+      (a, b) =>
+        (a.status === "DONE" ? 1 : 0) - (b.status === "DONE" ? 1 : 0) ||
+        b.updatedAt - a.updatedAt ||
+        a.title.localeCompare(b.title),
     );
 }
 
@@ -406,7 +409,10 @@ class SessionNotesComponent {
     const notes = this.notes
       .filter((note) => this.markedIds.has(note.id))
       .sort(
-        (a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title),
+        (a, b) =>
+          (a.status === "DONE" ? 1 : 0) - (b.status === "DONE" ? 1 : 0) ||
+          b.updatedAt - a.updatedAt ||
+          a.title.localeCompare(b.title),
       );
 
     if (notes.length === 0) return undefined;
