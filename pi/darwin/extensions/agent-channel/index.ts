@@ -491,6 +491,9 @@ export default function (pi: ExtensionAPI) {
         "channel",
       );
     }
+
+    // Apply default comms state (off by default — remove channel tools)
+    applyCommsState();
   });
 
   pi.on("session_shutdown", async () => {
@@ -916,6 +919,26 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  const channelToolNames = [
+    "channel_send", "channel_read", "channel_ack",
+    "channel_watch", "channel_unwatch", "channel_status", "channel_list",
+  ];
+
+  function applyCommsState() {
+    const activeTools = pi.getActiveTools().map((t) => t.name);
+    if (commsMuted) {
+      // Remove channel tools
+      const filtered = activeTools.filter((n) => !channelToolNames.includes(n));
+      pi.setActiveTools(filtered);
+    } else {
+      // Restore channel tools if missing
+      const missing = channelToolNames.filter((n) => !activeTools.includes(n));
+      if (missing.length > 0) {
+        pi.setActiveTools([...activeTools, ...missing]);
+      }
+    }
+  }
+
   // ── Command: /comms ──
   pi.registerCommand("comms", {
     description: "Toggle agent comms on/off (usage: /comms [on|off])",
@@ -928,6 +951,7 @@ export default function (pi: ExtensionAPI) {
       } else {
         commsMuted = !commsMuted;
       }
+      applyCommsState();
       const state = commsMuted ? "OFF 🔇" : "ON 📡";
       pi.events.emit("agent-channel:comms", !commsMuted);
       ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
