@@ -337,18 +337,19 @@ export default function (pi: ExtensionAPI) {
     }
     await backend.setStatus("agent", "ready", "🟢");
 
-    // Restore watches from session state
+    // Restore watches from session state (take last snapshot — each entry is the full set)
+    let latestChannels: string[] = [];
     for (const entry of ctx.sessionManager.getEntries()) {
       if (entry.type === "custom" && entry.customType === "agent-channel-watches") {
-        const channels: string[] = (entry as any).data?.channels ?? [];
-        for (const ch of channels) {
-          watchedChannels.add(ch);
-          poller!.watch(ch);
-        }
-        if (channels.length > 0) {
-          await backend.log(`restored watches: ${channels.join(", ")}`, "info", "channel");
-        }
+        latestChannels = (entry as any).data?.channels ?? [];
       }
+    }
+    for (const ch of latestChannels) {
+      watchedChannels.add(ch);
+      poller!.watch(ch);
+    }
+    if (latestChannels.length > 0) {
+      await backend.log(`restored watches: ${latestChannels.join(", ")}`, "info", "channel");
     }
 
     // Auto-watch the lobby (CMUX_WORKSPACE_ID) if available
