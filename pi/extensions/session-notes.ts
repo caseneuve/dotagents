@@ -197,7 +197,8 @@ function formatMarkedNotesEditorText(notes: SessionNote[]): string {
 
 function buildStatusText(notes: SessionNote[]): string | undefined {
   if (notes.length === 0) return undefined;
-  return `📝 ${notes.length}`;
+  const doneCount = notes.filter((n) => n.status === "DONE").length;
+  return `📝 [${doneCount}/${notes.length}]`;
 }
 
 function applyStatus(ctx: ExtensionContext, notes: SessionNote[]): void {
