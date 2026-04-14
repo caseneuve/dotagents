@@ -186,6 +186,21 @@ Use `"last"` when you only care about the latest message.
 - `channel_status` — update sidebar status/progress visible to the human
 - `/agent-name <label>` — set your display name (e.g. `/agent-name reviewer` → `agent-reviewer`)
 
+## Multi-step work
+
+When you have multiple sequential tasks for the same collaborator:
+
+1. **Announce the plan on the lobby** at the start: "Working on N batches.
+   Will send review requests sequentially on `<project>/review-<ticket>` channels."
+2. **Between steps**, send a heads-up on the lobby before closing the current
+   task channel: "Batch 1 done. Batch 2 coming next. Standby. OVER"
+3. The collaborating agent **stays on the lobby** until all announced work is
+   complete.
+
+This prevents the other agent from going idle between steps. `OUT` on a task
+channel means that channel is done — not that all work is done. The lobby is
+where continuity lives.
+
 ## Timeouts and escalation
 
 When waiting for a response on a task channel:
