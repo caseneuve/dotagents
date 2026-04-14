@@ -17,10 +17,13 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+type NoteStatus = "TODO" | "DONE";
+
 type SessionNote = {
   id: string;
   title: string;
   body: string;
+  status: NoteStatus;
   createdAt: number;
   updatedAt: number;
 };
@@ -68,8 +71,14 @@ const LIST_MIN_WIDTH = 24;
 const LIST_MAX_WIDTH = 52;
 const PREVIEW_MIN_WIDTH = 24;
 const DIVIDER_WIDTH = 3;
+const VERTICAL_LIST_HEIGHT_RATIO = 0.45;
+const VERTICAL_LIST_MIN_HEIGHT = 6;
+const VERTICAL_PREVIEW_MIN_HEIGHT = 6;
+const HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH =
+  LIST_MIN_WIDTH + DIVIDER_WIDTH + PREVIEW_MIN_WIDTH;
 
 type FocusPane = "list" | "preview";
+type SplitMode = "horizontal" | "vertical";
 
 function normalizeText(value: string): string {
   return value.replace(/\r\n/g, "\n").trim();
@@ -80,6 +89,7 @@ function normalizeNote(note: SessionNote): SessionNote {
     ...note,
     title: normalizeText(note.title) || "Untitled",
     body: normalizeText(note.body),
+    status: note.status === "DONE" ? "DONE" : "TODO",
   };
 }
 
@@ -102,6 +112,7 @@ function parseLegacySingleNote(
       id: "legacy-single-note",
       title: "Legacy note",
       body: text,
+      status: "TODO" as NoteStatus,
       createdAt: data?.updatedAt ?? Date.now(),
       updatedAt: data?.updatedAt ?? Date.now(),
     },
@@ -130,10 +141,13 @@ function parseStoredNotes(data: SessionNotesState | undefined): SessionNote[] {
         ? note.updatedAt
         : createdAt;
 
+    const status: NoteStatus = note.status === "DONE" ? "DONE" : "TODO";
+
     parsed.push({
       id: note.id,
       title: note.title,
       body: note.body,
+      status,
       createdAt,
       updatedAt,
     });
@@ -168,7 +182,7 @@ function formatTimestamp(timestamp: number): string {
 
 function formatMarkedNotesEditorText(notes: SessionNote[]): string {
   const blocks = notes.map((note) => {
-    const heading = `## ${note.title}`;
+    const heading = `## [${note.status}] ${note.title}`;
     const body = note.body || "(empty)";
     const updated = formatTimestamp(note.updatedAt);
     const meta = updated ? `_updated: ${updated}_\n` : "";
@@ -267,6 +281,7 @@ class SessionNotesComponent {
   private listScroll = 0;
   private previewScroll = 0;
   private focusPane: FocusPane = "list";
+  private splitMode: SplitMode = "horizontal";
   private markedIds = new Set<string>();
 
   constructor(
@@ -276,8 +291,16 @@ class SessionNotesComponent {
     private onClose: (payload?: MarkedNotesPayload) => void,
     private onCreate: () => Promise<void>,
     private onEdit: (note: SessionNote) => Promise<void>,
-    private onDelete: (note: SessionNote) => Promise<void>,
+    private onDeleteMarked: (notes: SessionNote[]) => Promise<void>,
+    private onToggleStatus: (note: SessionNote) => void,
   ) {
+    const termWidth = process.stdout.columns ?? 0;
+    if (
+      termWidth > 0 &&
+      this.getContentWidth(termWidth) < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      this.splitMode = "vertical";
+    }
     this.setNotes(initialNotes);
   }
 
@@ -305,7 +328,9 @@ class SessionNotesComponent {
       if (!byId.has(id)) this.markedIds.delete(id);
     }
 
-    this.clampListSelectionIntoView(this.getBodyHeight());
+    this.clampListSelectionIntoView(
+      this.getListPaneHeight(this.getBodyHeight()),
+    );
   }
 
   private getSelectedIndex(): number {
@@ -326,7 +351,9 @@ class SessionNotesComponent {
     );
     this.selectedId = this.notes[nextIndex]?.id;
     this.previewScroll = 0;
-    this.clampListSelectionIntoView(this.getBodyHeight());
+    this.clampListSelectionIntoView(
+      this.getListPaneHeight(this.getBodyHeight()),
+    );
   }
 
   private getBodyHeight(): number {
@@ -390,6 +417,39 @@ class SessionNotesComponent {
     };
   }
 
+  private toggleSplitMode(): void {
+    this.splitMode =
+      this.splitMode === "horizontal" ? "vertical" : "horizontal";
+    this.clampListSelectionIntoView(
+      this.getListPaneHeight(this.getBodyHeight()),
+    );
+  }
+
+  private getEffectiveSplitMode(width: number): SplitMode {
+    const contentWidth = this.getContentWidth(width);
+    if (
+      this.splitMode === "horizontal" &&
+      contentWidth < HORIZONTAL_SPLIT_MIN_CONTENT_WIDTH
+    ) {
+      return "vertical";
+    }
+    return this.splitMode;
+  }
+
+  private getListPaneHeight(
+    bodyHeight: number,
+    splitMode: SplitMode = this.splitMode,
+  ): number {
+    if (this.focusPane === "preview") return bodyHeight;
+    if (splitMode === "horizontal") return bodyHeight;
+    const candidate = Math.floor(bodyHeight * VERTICAL_LIST_HEIGHT_RATIO);
+    const minListHeight = Math.min(
+      VERTICAL_LIST_MIN_HEIGHT,
+      Math.max(1, bodyHeight - VERTICAL_PREVIEW_MIN_HEIGHT - 1),
+    );
+    return Math.max(minListHeight, candidate);
+  }
+
   private getListPaneWidth(contentWidth: number): number {
     return Math.max(
       LIST_MIN_WIDTH,
@@ -410,9 +470,13 @@ class SessionNotesComponent {
     }
 
     const lines: string[] = [];
+    const statusTag =
+      selected.status === "DONE"
+        ? this.theme.fg("success", "DONE")
+        : this.theme.fg("error", "TODO");
     lines.push(
       ...wrapBlock(
-        this.theme.fg("accent", this.theme.bold(selected.title)),
+        `${statusTag} ${this.theme.fg("accent", this.theme.bold(selected.title))}`,
         width,
       ),
     );
@@ -449,7 +513,11 @@ class SessionNotesComponent {
       const mark = isMarked
         ? this.theme.fg("success", "☑")
         : this.theme.fg("muted", "☐");
-      let text = `${mark} ${note.title} ${this.theme.fg("dim", `(${formatTimestamp(note.updatedAt)})`)}`;
+      const statusTag =
+        note.status === "DONE"
+          ? this.theme.fg("success", "DONE")
+          : this.theme.fg("error", "TODO");
+      let text = `${mark} ${statusTag} ${note.title} ${this.theme.fg("dim", `(${formatTimestamp(note.updatedAt)})`)}`;
       if (isMarked) text = this.theme.bold(text);
       const padded = padVisible(text, width);
       return isSelected ? this.theme.bg("selectedBg", padded) : padded;
@@ -500,8 +568,23 @@ class SessionNotesComponent {
       return;
     }
 
-    if (data === "X") {
-      if (selected) void this.onDelete(selected);
+    if (data === "x") {
+      const markedNotes = this.notes.filter((n) => this.markedIds.has(n.id));
+      if (markedNotes.length > 0) void this.onDeleteMarked(markedNotes);
+      return;
+    }
+
+    if (data === "s") {
+      if (selected) {
+        this.onToggleStatus(selected);
+        this.requestRender();
+      }
+      return;
+    }
+
+    if (data === "t") {
+      this.toggleSplitMode();
+      this.requestRender();
       return;
     }
 
@@ -548,12 +631,27 @@ class SessionNotesComponent {
     const contentWidth = this.getContentWidth(width);
     const bodyHeight = this.getBodyHeight();
 
-    const listWidth =
-      this.focusPane === "preview" ? 0 : this.getListPaneWidth(contentWidth);
-    const previewWidth =
-      this.focusPane === "preview"
+    const effectiveSplitMode = this.getEffectiveSplitMode(width);
+    const isPreviewFocused = this.focusPane === "preview";
+    const isVerticalSplit =
+      !isPreviewFocused && effectiveSplitMode === "vertical";
+
+    const listWidth = isPreviewFocused
+      ? 0
+      : isVerticalSplit
+        ? contentWidth
+        : this.getListPaneWidth(contentWidth);
+    const previewWidth = isPreviewFocused
+      ? contentWidth
+      : isVerticalSplit
         ? contentWidth
         : Math.max(PREVIEW_MIN_WIDTH, contentWidth - listWidth - DIVIDER_WIDTH);
+    const listHeight = this.getListPaneHeight(bodyHeight, effectiveSplitMode);
+    const previewHeight = isPreviewFocused
+      ? bodyHeight
+      : isVerticalSplit
+        ? bodyHeight - listHeight - 1
+        : bodyHeight;
 
     const borderFg = (text: string) => this.theme.fg(FRAME_COLOR, text);
     const frameLine = (content: string) =>
@@ -578,8 +676,13 @@ class SessionNotesComponent {
       `${borderFg("┣")}${borderFg("━".repeat(contentWidth))}${borderFg("┫")}`;
 
     const selected = this.getSelectedNote();
+    const selectedStatusTag = selected
+      ? selected.status === "DONE"
+        ? this.theme.fg("success", "DONE")
+        : this.theme.fg("error", "TODO")
+      : "";
     const selectedLine = selected
-      ? `${this.theme.fg(this.markedIds.has(selected.id) ? "success" : "muted", this.markedIds.has(selected.id) ? "☑" : "☐")} ${this.theme.fg("muted", selected.title)}`
+      ? `${this.theme.fg(this.markedIds.has(selected.id) ? "success" : "muted", this.markedIds.has(selected.id) ? "☑" : "☐")} ${selectedStatusTag} ${this.theme.fg("muted", selected.title)}`
       : this.theme.fg("muted", "☐ none");
 
     const header = [
@@ -587,7 +690,7 @@ class SessionNotesComponent {
       frameLine(
         this.theme.fg(
           "dim",
-          `${this.notes.length} note(s) • marked: ${this.markedIds.size} • focus:${this.focusPane}`,
+          `${this.notes.length} note(s) • marked: ${this.markedIds.size} • focus:${this.focusPane} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
         ),
       ),
       frameLine(
@@ -602,10 +705,25 @@ class SessionNotesComponent {
 
     const body: string[] = [];
 
-    if (this.focusPane === "preview") {
+    if (isPreviewFocused) {
       const preview = this.renderPreviewPane(previewWidth, bodyHeight);
       for (let i = 0; i < bodyHeight; i += 1) {
         body.push(frameLine(preview[i] ?? ""));
+      }
+    } else if (isVerticalSplit) {
+      const left = this.renderListPane(contentWidth, listHeight);
+      const right = this.renderPreviewPane(
+        contentWidth,
+        Math.max(0, previewHeight),
+      );
+      for (let i = 0; i < listHeight; i += 1) {
+        body.push(frameLine(padVisible(left[i] ?? "", contentWidth)));
+      }
+      body.push(
+        frameLine(this.theme.fg("borderMuted", "─".repeat(contentWidth))),
+      );
+      for (let i = 0; i < previewHeight; i += 1) {
+        body.push(frameLine(padVisible(right[i] ?? "", contentWidth)));
       }
     } else {
       const left = this.renderListPane(listWidth, bodyHeight);
@@ -621,7 +739,7 @@ class SessionNotesComponent {
       frameLine(
         this.theme.fg(
           "dim",
-          "a add • e edit • X delete • m mark • enter/tab preview • j/k scroll • q/esc close",
+          "a add • e edit • m mark • x del marked • s status • t layout • enter/tab preview • j/k scroll • q/esc close",
         ),
       ),
       makeBorderLine("┗", "━", "┛"),
@@ -668,6 +786,7 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
           id: randomUUID(),
           title,
           body: inlineText,
+          status: "TODO",
           createdAt: now,
           updatedAt: now,
         };
@@ -739,6 +858,7 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
                   id: randomUUID(),
                   title: draft.title,
                   body: draft.body,
+                  status: "TODO",
                   createdAt: now,
                   updatedAt: now,
                 };
@@ -768,11 +888,25 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
                 ctx.ui.notify("Saved session note", "success");
               });
             },
-            async (note) => {
-              persist(notes.filter((n) => n.id !== note.id));
+            async (markedNotes) => {
+              const idsToDelete = new Set(markedNotes.map((n) => n.id));
+              persist(notes.filter((n) => !idsToDelete.has(n.id)));
               component.setNotes(notes);
-              ctx.ui.notify("Deleted session note", "info");
+              ctx.ui.notify(
+                `Deleted ${markedNotes.length} session note${markedNotes.length === 1 ? "" : "s"}`,
+                "info",
+              );
               tui.requestRender(true);
+            },
+            (note) => {
+              const nextStatus: NoteStatus =
+                note.status === "DONE" ? "TODO" : "DONE";
+              persist(
+                notes.map((n) =>
+                  n.id === note.id ? { ...n, status: nextStatus } : n,
+                ),
+              );
+              component.setNotes(notes);
             },
           );
 
