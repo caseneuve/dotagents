@@ -397,7 +397,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── Track watched channels for persistence across reloads ──
   const watchedChannels = new Set<string>();
-  let commsMuted = false;
+  let commsMuted = true;
 
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
