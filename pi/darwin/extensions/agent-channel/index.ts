@@ -360,6 +360,9 @@ export default function (pi: ExtensionAPI) {
 
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
+    // When muted, messages are intentionally skipped (not queued).
+    // The poller still advances lastSeen, so these messages won't be re-delivered.
+    // They remain unacked and can be retrieved via channel_read if needed.
     if (commsMuted) return;
     const myName = agentName();
     for (const msg of msgs) {
@@ -406,6 +409,12 @@ export default function (pi: ExtensionAPI) {
   const watchedChannels = new Set<string>();
   let commsMuted = true;
 
+  // All channel tool names — used by tool_call blocker when comms are muted
+  const channelToolNames = [
+    "channel_send", "channel_read", "channel_ack",
+    "channel_watch", "channel_unwatch", "channel_status", "channel_list",
+  ];
+
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
@@ -436,15 +445,15 @@ export default function (pi: ExtensionAPI) {
     pi.events.emit("agent-channel:name", agentName());
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-name", agentName());
-      // Install custom editor that shows agent name in the top border
-      const name = agentName();
+      // Install custom editor that shows agent name in the top border.
+      // Uses agentName() dynamically so /agent-name changes are reflected without reload.
       const fullTheme = ctx.ui.theme;
       ctx.ui.setEditorComponent((tui, theme, keybindings) => {
         const editor = new (class extends CustomEditor {
           render(width: number): string[] {
             const lines = super.render(width);
             if (lines.length > 0 && width > 0) {
-              const label = ` ${name} `;
+              const label = ` ${agentName()} `;
               const labelWidth = visibleWidth(label);
               if (labelWidth + 2 <= width) {
                 const styledLabel = fullTheme.fg("accent", label);
@@ -932,11 +941,6 @@ export default function (pi: ExtensionAPI) {
       };
     },
   });
-
-  const channelToolNames = [
-    "channel_send", "channel_read", "channel_ack",
-    "channel_watch", "channel_unwatch", "channel_status", "channel_list",
-  ];
 
   // ── Command: /comms ──
   pi.registerCommand("comms", {
