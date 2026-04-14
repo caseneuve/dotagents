@@ -1,0 +1,582 @@
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Type, type Static } from "@sinclair/typebox";
+import { StringEnum } from "@mariozechner/pi-ai";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+
+// ─── Types ──────────────────────────────────────────────────────────────
+export interface ChannelMessage {
+  id: string;
+  channel: string;
+  from: string;
+  to?: string;
+  type: string;
+  body: string;
+  timestamp: number;
+  acked?: boolean;
+}
+
+interface ChannelFile {
+  messages: ChannelMessage[];
+}
+
+// ─── Backend interface (pluggable) ─────────────────────────────────────
+export interface ChannelBackend {
+  /** Unique backend name, e.g. "cmux", "tmux", "file" */
+  name: string;
+  /** Publish a message to the channel. */
+  publish(msg: ChannelMessage): Promise<void>;
+  /** Read messages from a channel, optionally filtering. */
+  read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]>;
+  /** Mark a message as acked. */
+  ack(channel: string, messageId: string): Promise<void>;
+  /** Set sidebar status (no-op on backends without sidebar). */
+  setStatus(key: string, value: string, icon?: string): Promise<void>;
+  /** Set sidebar progress (no-op on backends without sidebar). */
+  setProgress(fraction: number, label: string): Promise<void>;
+  /** Clear sidebar progress. */
+  clearProgress(): Promise<void>;
+  /** Append a sidebar log line. */
+  log(message: string, level?: string, source?: string): Promise<void>;
+  /** Send a notification. */
+  notify(title: string, body: string): Promise<void>;
+}
+
+// ─── File-based channel store (shared between backends) ────────────────
+// All backends use the same filesystem directory for messages.
+// This keeps it simple and lets any process read/write regardless of backend.
+
+const CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
+
+function channelPath(channel: string): string {
+  const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return path.join(CHANNEL_DIR, `${safe}.json`);
+}
+
+function readChannelFile(channel: string): ChannelFile {
+  const p = channelPath(channel);
+  if (!fs.existsSync(p)) return { messages: [] };
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf-8"));
+  } catch {
+    return { messages: [] };
+  }
+}
+
+function writeChannelFile(channel: string, data: ChannelFile): void {
+  fs.mkdirSync(CHANNEL_DIR, { recursive: true });
+  fs.writeFileSync(channelPath(channel), JSON.stringify(data, null, 2));
+}
+
+// ─── CmuxBackend ──────────────────────────────────────────────────────
+function execArgs(args: string[]): string {
+  const { execFileSync } = require("node:child_process");
+  try {
+    return execFileSync(args[0], args.slice(1), { encoding: "utf-8", timeout: 5000 }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function hasCmux(): boolean {
+  try {
+    execArgs(["cmux", "ping"]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+class CmuxBackend implements ChannelBackend {
+  name = "cmux";
+
+  async publish(msg: ChannelMessage): Promise<void> {
+    const file = readChannelFile(msg.channel);
+    file.messages.push(msg);
+    writeChannelFile(msg.channel, file);
+  }
+
+  async read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]> {
+    const file = readChannelFile(channel);
+    let msgs = file.messages;
+    if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
+    if (opts?.unacked) msgs = msgs.filter((m) => !m.acked);
+    if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
+    return msgs;
+  }
+
+  async ack(channel: string, messageId: string): Promise<void> {
+    const file = readChannelFile(channel);
+    const msg = file.messages.find((m) => m.id === messageId);
+    if (msg) {
+      msg.acked = true;
+      writeChannelFile(channel, file);
+    }
+  }
+
+  async setStatus(key: string, value: string, icon?: string): Promise<void> {
+    const args = ["cmux", "set-status", key, value];
+    if (icon) args.push("--icon", icon);
+    execArgs(args);
+  }
+
+  async setProgress(fraction: number, label: string): Promise<void> {
+    execArgs(["cmux", "set-progress", String(fraction), "--label", label]);
+  }
+
+  async clearProgress(): Promise<void> {
+    execArgs(["cmux", "clear-progress"]);
+  }
+
+  async log(message: string, level?: string, source?: string): Promise<void> {
+    const args = ["cmux", "log"];
+    if (level) args.push("--level", level);
+    if (source) args.push("--source", source);
+    args.push("--", message);
+    execArgs(args);
+  }
+
+  async notify(title: string, body: string): Promise<void> {
+    execArgs(["cmux", "notify", "--title", title, "--body", body]);
+  }
+}
+
+// ─── FileOnlyBackend (fallback, no sidebar) ───────────────────────────
+class FileOnlyBackend implements ChannelBackend {
+  name = "file";
+
+  async publish(msg: ChannelMessage): Promise<void> {
+    const file = readChannelFile(msg.channel);
+    file.messages.push(msg);
+    writeChannelFile(msg.channel, file);
+  }
+  async read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]> {
+    const file = readChannelFile(channel);
+    let msgs = file.messages;
+    if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
+    if (opts?.unacked) msgs = msgs.filter((m) => !m.acked);
+    if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
+    return msgs;
+  }
+  async ack(channel: string, messageId: string): Promise<void> {
+    const file = readChannelFile(channel);
+    const msg = file.messages.find((m) => m.id === messageId);
+    if (msg) { msg.acked = true; writeChannelFile(channel, file); }
+  }
+  async setStatus(_key: string, _value: string): Promise<void> { /* no-op */ }
+  async setProgress(_fraction: number, _label: string): Promise<void> { /* no-op */ }
+  async clearProgress(): Promise<void> { /* no-op */ }
+  async log(_message: string): Promise<void> { /* no-op */ }
+  async notify(title: string, body: string): Promise<void> {
+    // Fallback: macOS osascript
+    execArgs(["osascript", "-e", `display notification "${body}" with title "${title}"`]);
+  }
+}
+
+// ─── Backend factory ──────────────────────────────────────────────────
+function createBackend(): ChannelBackend {
+  if (process.env.CMUX_SOCKET_PATH || hasCmux()) {
+    return new CmuxBackend();
+  }
+  return new FileOnlyBackend();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+function makeId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Auto-generated agent name: stable per session, distinguishable across instances
+const autoId = Math.random().toString(36).slice(2, 6);
+let agentLabel: string | undefined;
+
+function agentName(): string {
+  // Prefer explicit env, then user-set label, then auto-generated
+  if (process.env.CMUX_AGENT_NAME) return process.env.CMUX_AGENT_NAME;
+  if (agentLabel) return `agent-${agentLabel}`;
+  return `agent-${autoId}`;
+}
+
+// ─── Poller: background check for incoming messages ───────────────────
+class ChannelPoller {
+  private timers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private lastSeen: Map<string, number> = new Map();
+  private callback: (msgs: ChannelMessage[]) => void;
+  private backend: ChannelBackend;
+  private intervalMs: number;
+
+  constructor(backend: ChannelBackend, callback: (msgs: ChannelMessage[]) => void, intervalMs = 3000) {
+    this.backend = backend;
+    this.callback = callback;
+    this.intervalMs = intervalMs;
+  }
+
+  watch(channel: string): void {
+    if (this.timers.has(channel)) return;
+    this.lastSeen.set(channel, Date.now());
+    const timer = setInterval(async () => {
+      const since = this.lastSeen.get(channel) || 0;
+      const msgs = await this.backend.read(channel, { since, unacked: true });
+      if (msgs.length > 0) {
+        this.lastSeen.set(channel, Math.max(...msgs.map((m) => m.timestamp)));
+        this.callback(msgs);
+      }
+    }, this.intervalMs);
+    this.timers.set(channel, timer);
+  }
+
+  unwatch(channel: string): void {
+    const timer = this.timers.get(channel);
+    if (timer) {
+      clearInterval(timer);
+      this.timers.delete(channel);
+    }
+  }
+
+  stopAll(): void {
+    for (const [ch] of this.timers) this.unwatch(ch);
+  }
+}
+
+// ─── Extension entry ──────────────────────────────────────────────────
+export default function (pi: ExtensionAPI) {
+  const backend = createBackend();
+  let ctx: ExtensionContext | undefined;
+  let poller: ChannelPoller | undefined;
+
+  // ── register bundled skills ──
+  pi.on("resources_discover", async () => {
+    return {
+      skillPaths: [path.join(path.dirname(new URL(import.meta.url).pathname), "skills")],
+    };
+  });
+
+  // ── Radio protocol: message endings control turn-taking ──
+  // Body ending with OUT  → no reply expected (triggerTurn: false)
+  // Body ending with OVER → your turn, act on it (triggerTurn: true)
+  // No suffix              → your turn, act on it (triggerTurn: true)
+  function shouldTriggerTurn(body: string): boolean {
+    const trimmed = body.trimEnd();
+    // OUT at end of message = conversation done, don't trigger
+    if (/\bOUT$/i.test(trimmed)) return false;
+    return true;
+  }
+
+  // ── on incoming messages, inject them into the conversation ──
+  function onIncoming(msgs: ChannelMessage[]) {
+    const myName = agentName();
+    for (const msg of msgs) {
+      // Skip own messages
+      if (msg.from === myName) continue;
+
+      const trigger = shouldTriggerTurn(msg.body);
+      const label = `📨 [${msg.channel}] from ${msg.from}: ${msg.type}`;
+      pi.sendMessage(
+        {
+          customType: "agent-channel",
+          content: `${label}\n\n${msg.body}`,
+          display: true,
+          details: { channelMessage: msg },
+        },
+        { triggerTurn: trigger }
+      );
+      if (ctx?.hasUI) {
+        ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
+      }
+    }
+  }
+
+  // ── lifecycle ──
+  pi.on("session_start", async (_event, c) => {
+    ctx = c;
+    poller = new ChannelPoller(backend, onIncoming);
+    if (ctx.hasUI) {
+      ctx.ui.setStatus("agent-ch", `channel: ${backend.name}`);
+    }
+    await backend.setStatus("agent", "ready", "🟢");
+  });
+
+  pi.on("session_shutdown", async () => {
+    poller?.stopAll();
+  });
+
+  // ── Tool: channel_send ──
+  pi.registerTool({
+    name: "channel_send",
+    label: "Channel Send",
+    description:
+      "Send a message to an inter-agent channel. Other agents polling this channel will receive it. " +
+      "Use for non-blocking communication: code reviews, task results, status updates, etc.",
+    promptSnippet: "Send a message to an inter-agent communication channel",
+    promptGuidelines: [
+      "Use channel_send to deliver results, reviews, or status updates to other agents without blocking.",
+      "Channel names should be descriptive, e.g. 'myproject/code-review' or 'myproject/task-status'.",
+      "Include enough context in the body for the receiver to act independently.",
+    ],
+    parameters: Type.Object({
+      channel: Type.String({ description: "Channel identifier, e.g. 'myproject/code-review'" }),
+      type: Type.String({ description: "Message type, e.g. 'code-review', 'task-complete', 'status', 'request'" }),
+      body: Type.String({ description: "Message body (the actual content — review text, status update, etc.)" }),
+      to: Type.Optional(Type.String({ description: "Target agent name (optional, for directed messages)" })),
+      notify: Type.Optional(Type.Boolean({ description: "Send a notification to the human (default: true)" })),
+    }),
+    async execute(_toolCallId, params) {
+      const msg: ChannelMessage = {
+        id: makeId(),
+        channel: params.channel,
+        from: agentName(),
+        to: params.to,
+        type: params.type,
+        body: params.body,
+        timestamp: Date.now(),
+      };
+
+      await backend.publish(msg);
+      await backend.log(`sent [${msg.type}] to ${msg.channel}`, "info", "channel");
+
+      if (params.notify !== false) {
+        await backend.notify(`Agent ${msg.from}`, `${msg.type} on ${msg.channel}`);
+      }
+
+      return {
+        content: [{ type: "text", text: `Message sent to channel '${msg.channel}' (id: ${msg.id})` }],
+        details: { message: msg },
+      };
+    },
+  });
+
+  // ── Tool: channel_read ──
+  pi.registerTool({
+    name: "channel_read",
+    label: "Channel Read",
+    description:
+      "Read messages from an inter-agent channel. Returns unacknowledged messages by default. " +
+      "Use this to poll for incoming work, reviews, or status updates from other agents.",
+    promptSnippet: "Read messages from an inter-agent communication channel",
+    parameters: Type.Object({
+      channel: Type.String({ description: "Channel identifier to read from" }),
+      unacked_only: Type.Optional(Type.Boolean({ description: "Only return unacknowledged messages (default: true)" })),
+      type: Type.Optional(Type.String({ description: "Filter by message type" })),
+    }),
+    async execute(_toolCallId, params) {
+      const unacked = params.unacked_only !== false;
+      const msgs = await backend.read(params.channel, { unacked, type: params.type });
+
+      if (msgs.length === 0) {
+        return {
+          content: [{ type: "text", text: `No ${unacked ? "unacked " : ""}messages on '${params.channel}'` }],
+          details: { messages: [] },
+        };
+      }
+
+      const summary = msgs
+        .map((m) => `[id: ${m.id}] [${new Date(m.timestamp).toISOString()}] ${m.from} (${m.type}):\n${m.body}`)
+        .join("\n\n---\n\n");
+
+      return {
+        content: [{ type: "text", text: `${msgs.length} message(s) on '${params.channel}':\n\n${summary}` }],
+        details: { messages: msgs },
+      };
+    },
+  });
+
+  // ── Tool: channel_ack ──
+  pi.registerTool({
+    name: "channel_ack",
+    label: "Channel Ack",
+    description: "Acknowledge a message (mark as received/processed). Acked messages won't appear in unacked reads.",
+    promptSnippet: "Acknowledge a channel message as received/processed",
+    parameters: Type.Object({
+      channel: Type.String({ description: "Channel identifier" }),
+      message_id: Type.String({ description: "ID of the message to acknowledge" }),
+    }),
+    async execute(_toolCallId, params) {
+      await backend.ack(params.channel, params.message_id);
+      await backend.log(`acked ${params.message_id}`, "info", "channel");
+
+      return {
+        content: [{ type: "text", text: `Acknowledged message ${params.message_id} on '${params.channel}'` }],
+        details: {},
+      };
+    },
+  });
+
+  // ── Tool: channel_watch ──
+  pi.registerTool({
+    name: "channel_watch",
+    label: "Channel Watch",
+    description:
+      "Start polling a channel for new messages in the background. " +
+      "When messages arrive, they'll be injected into the conversation automatically. " +
+      "Use this to set up non-blocking waiting for results from other agents.",
+    promptSnippet: "Start background polling on a channel for incoming messages",
+    promptGuidelines: [
+      "Use channel_watch to set up non-blocking monitoring. You can continue working while watching.",
+      "Incoming messages will appear as injected context — you don't need to poll manually.",
+    ],
+    parameters: Type.Object({
+      channel: Type.String({ description: "Channel identifier to watch" }),
+      interval_seconds: Type.Optional(Type.Number({ description: "Polling interval in seconds (default: 3)" })),
+    }),
+    async execute(_toolCallId, params) {
+      const interval = (params.interval_seconds || 3) * 1000;
+      if (poller) {
+        poller.unwatch(params.channel); // reset if already watching
+      } else {
+        poller = new ChannelPoller(backend, onIncoming, interval);
+      }
+      poller.watch(params.channel);
+
+      await backend.setStatus("watching", `📡 ${params.channel}`, "📡");
+      await backend.log(`watching ${params.channel}`, "info", "channel");
+
+      return {
+        content: [{ type: "text", text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.` }],
+        details: {},
+      };
+    },
+  });
+
+  // ── Tool: channel_unwatch ──
+  pi.registerTool({
+    name: "channel_unwatch",
+    label: "Channel Unwatch",
+    description: "Stop polling a channel.",
+    promptSnippet: "Stop background polling on a channel",
+    parameters: Type.Object({
+      channel: Type.String({ description: "Channel identifier to stop watching" }),
+    }),
+    async execute(_toolCallId, params) {
+      poller?.unwatch(params.channel);
+      await backend.setStatus("watching", "idle", "💤");
+
+      return {
+        content: [{ type: "text", text: `Stopped watching '${params.channel}'` }],
+        details: {},
+      };
+    },
+  });
+
+  // ── Tool: channel_status ──
+  pi.registerTool({
+    name: "channel_status",
+    label: "Channel Status",
+    description:
+      "Update the sidebar status and progress visible to the human. " +
+      "Use this to communicate your current state (working, waiting, done, error) " +
+      "so the human can monitor multiple agents at a glance.",
+    promptSnippet: "Update sidebar status/progress visible to the human operator",
+    parameters: Type.Object({
+      status: Type.Optional(Type.String({ description: "Status text, e.g. 'reviewing code', 'waiting for agent-b'" })),
+      icon: Type.Optional(Type.String({ description: "Status icon emoji, e.g. '⚙️', '✅', '⏳'" })),
+      progress: Type.Optional(Type.Number({ description: "Progress fraction 0.0–1.0 (omit to leave unchanged, -1 to clear)" })),
+      progress_label: Type.Optional(Type.String({ description: "Progress bar label" })),
+      log_message: Type.Optional(Type.String({ description: "Append a log line to the sidebar" })),
+      log_level: Type.Optional(Type.String({ description: "Log level: info, success, warning, error" })),
+    }),
+    async execute(_toolCallId, params) {
+      const parts: string[] = [];
+
+      if (params.status) {
+        await backend.setStatus("agent", params.status, params.icon || "⚙️");
+        parts.push(`status: ${params.status}`);
+      }
+      if (params.progress !== undefined) {
+        if (params.progress < 0) {
+          await backend.clearProgress();
+          parts.push("progress: cleared");
+        } else {
+          await backend.setProgress(params.progress, params.progress_label || "");
+          parts.push(`progress: ${Math.round(params.progress * 100)}%`);
+        }
+      }
+      if (params.log_message) {
+        await backend.log(params.log_message, params.log_level, "agent");
+        parts.push(`logged: ${params.log_message}`);
+      }
+
+      return {
+        content: [{ type: "text", text: `Sidebar updated: ${parts.join(", ") || "no changes"}` }],
+        details: {},
+      };
+    },
+  });
+
+  // ── Tool: channel_list ──
+  pi.registerTool({
+    name: "channel_list",
+    label: "Channel List",
+    description: "List all known channels (that have message files).",
+    promptSnippet: "List all inter-agent channels",
+    parameters: Type.Object({}),
+    async execute() {
+      if (!fs.existsSync(CHANNEL_DIR)) {
+        return { content: [{ type: "text", text: "No channels found." }], details: { channels: [] } };
+      }
+      const files = fs.readdirSync(CHANNEL_DIR).filter((f) => f.endsWith(".json"));
+      const channels = files.map((f) => {
+        const ch = f.replace(/\.json$/, "");
+        const data = readChannelFile(ch);
+        const unacked = data.messages.filter((m) => !m.acked).length;
+        return { name: ch, total: data.messages.length, unacked };
+      });
+
+      const summary = channels.map((c) => `${c.name}: ${c.total} msgs (${c.unacked} unacked)`).join("\n");
+      return {
+        content: [{ type: "text", text: channels.length ? summary : "No channels found." }],
+        details: { channels },
+      };
+    },
+  });
+
+  // ── Command: /agent-name ──
+  pi.registerCommand("agent-name", {
+    description: "Set this agent's name (usage: /agent-name reviewer)",
+    handler: async (args, ctx) => {
+      const name = args.trim();
+      if (!name) {
+        ctx.ui.notify(`Current name: ${agentName()}`, "info");
+        return;
+      }
+      agentLabel = name;
+      ctx.ui.notify(`Agent name set to: ${agentName()}`, "info");
+    },
+  });
+
+  // ── Command: /channel-clear ──
+  pi.registerCommand("channel-clear", {
+    description: "Clear all messages from a channel (usage: /channel-clear <channel>)",
+    handler: async (args, ctx) => {
+      const channel = args.trim();
+      if (!channel) {
+        ctx.ui.notify("Usage: /channel-clear <channel-name>", "warning");
+        return;
+      }
+      writeChannelFile(channel, { messages: [] });
+      ctx.ui.notify(`Cleared channel '${channel}'`, "info");
+    },
+  });
+
+  // ── Command: /channel-ls ──
+  pi.registerCommand("channel-ls", {
+    description: "List all channels and their message counts",
+    handler: async (_args, ctx) => {
+      if (!fs.existsSync(CHANNEL_DIR)) {
+        ctx.ui.notify("No channels found.", "info");
+        return;
+      }
+      const files = fs.readdirSync(CHANNEL_DIR).filter((f) => f.endsWith(".json"));
+      if (files.length === 0) {
+        ctx.ui.notify("No channels found.", "info");
+        return;
+      }
+      for (const f of files) {
+        const ch = f.replace(/\.json$/, "");
+        const data = readChannelFile(ch);
+        const unacked = data.messages.filter((m) => !m.acked).length;
+        ctx.ui.notify(`${ch}: ${data.messages.length} msgs (${unacked} unacked)`, "info");
+      }
+    },
+  });
+}
