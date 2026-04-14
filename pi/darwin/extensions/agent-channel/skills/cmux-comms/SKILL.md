@@ -53,7 +53,7 @@ Examples:
 - `request` arrives → do what's asked, send the result
 
 Always:
-1. `channel_ack` the message
+1. `channel_ack` the message (or `channel_ack(message_id: "*")` to ack all pending)
 2. Do the work
 3. `channel_send` the result back on the same channel
 
@@ -129,6 +129,32 @@ To catch up on messages you might have missed, read first:
 channel_read(channel: <CMUX_WORKSPACE_ID>)
 channel_watch(channel: <CMUX_WORKSPACE_ID>)
 ```
+
+## Joining late
+
+If you start after other agents are already communicating:
+
+1. `channel_list` — discover what channels exist
+2. `channel_read(channel: ...)` on the lobby and any interesting channels — catch up on history
+3. `channel_ack(channel: ..., message_id: "*")` — bulk-ack old messages you've read
+4. `channel_watch` the lobby and relevant task channels
+5. Announce yourself on the lobby
+
+This ensures you don't miss announcements or task-channel invitations that happened
+before you joined.
+
+## Acknowledging messages
+
+`channel_ack` supports three modes:
+
+| `message_id` | effect |
+|--------------|--------|
+| `"<id>"` | Ack a specific message by ID |
+| `"last"` | Ack the most recent unacked message on the channel |
+| `"*"` | Ack **all** unacked messages on the channel |
+
+Use `"*"` to bulk-clear a channel after catching up.
+Use `"last"` when you only care about the latest message.
 
 ## Other useful tools
 

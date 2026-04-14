@@ -29,8 +29,8 @@ export interface ChannelBackend {
   publish(msg: ChannelMessage): Promise<void>;
   /** Read messages from a channel, optionally filtering. */
   read(channel: string, opts?: { since?: number; unacked?: boolean; type?: string }): Promise<ChannelMessage[]>;
-  /** Mark a message as acked. */
-  ack(channel: string, messageId: string): Promise<void>;
+  /** Mark a message as acked. Supports "last" (most recent unacked) and "*" (all unacked). */
+  ack(channel: string, messageId: string): Promise<{ ackedCount: number }>;
   /** Set sidebar status (no-op on backends without sidebar). */
   setStatus(key: string, value: string, icon?: string): Promise<void>;
   /** Set sidebar progress (no-op on backends without sidebar). */
@@ -67,6 +67,24 @@ function readChannelFile(channel: string): ChannelFile {
 function writeChannelFile(channel: string, data: ChannelFile): void {
   fs.mkdirSync(CHANNEL_DIR, { recursive: true });
   fs.writeFileSync(channelPath(channel), JSON.stringify(data, null, 2));
+}
+
+/** Shared ack logic used by all backends. Mutates file in place, returns count. */
+function ackMessages(file: ChannelFile, messageId: string): { ackedCount: number } {
+  let ackedCount = 0;
+  if (messageId === "*") {
+    for (const m of file.messages) {
+      if (!m.acked) { m.acked = true; ackedCount++; }
+    }
+  } else if (messageId === "last") {
+    const unacked = file.messages.filter((m) => !m.acked);
+    const last = unacked[unacked.length - 1];
+    if (last) { last.acked = true; ackedCount = 1; }
+  } else {
+    const msg = file.messages.find((m) => m.id === messageId);
+    if (msg) { msg.acked = true; ackedCount = 1; }
+  }
+  return { ackedCount };
 }
 
 // ─── CmuxBackend ──────────────────────────────────────────────────────
@@ -106,13 +124,11 @@ class CmuxBackend implements ChannelBackend {
     return msgs;
   }
 
-  async ack(channel: string, messageId: string): Promise<void> {
+  async ack(channel: string, messageId: string): Promise<{ ackedCount: number }> {
     const file = readChannelFile(channel);
-    const msg = file.messages.find((m) => m.id === messageId);
-    if (msg) {
-      msg.acked = true;
-      writeChannelFile(channel, file);
-    }
+    const result = ackMessages(file, messageId);
+    if (result.ackedCount > 0) writeChannelFile(channel, file);
+    return result;
   }
 
   async setStatus(key: string, value: string, icon?: string): Promise<void> {
@@ -159,10 +175,11 @@ class FileOnlyBackend implements ChannelBackend {
     if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
     return msgs;
   }
-  async ack(channel: string, messageId: string): Promise<void> {
+  async ack(channel: string, messageId: string): Promise<{ ackedCount: number }> {
     const file = readChannelFile(channel);
-    const msg = file.messages.find((m) => m.id === messageId);
-    if (msg) { msg.acked = true; writeChannelFile(channel, file); }
+    const result = ackMessages(file, messageId);
+    if (result.ackedCount > 0) writeChannelFile(channel, file);
+    return result;
   }
   async setStatus(_key: string, _value: string): Promise<void> { /* no-op */ }
   async setProgress(_fraction: number, _label: string): Promise<void> { /* no-op */ }
@@ -186,6 +203,10 @@ function createBackend(): ChannelBackend {
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+// Track message IDs published by this agent instance so the poller can skip them.
+// This is more reliable than name comparison (which can fail if name changes mid-session).
+const ownMessageIds = new Set<string>();
 
 // Auto-generated agent name: stable per session, distinguishable across instances
 const autoId = Math.random().toString(36).slice(2, 6);
@@ -218,9 +239,14 @@ class ChannelPoller {
     const timer = setInterval(async () => {
       const since = this.lastSeen.get(channel) || 0;
       const msgs = await this.backend.read(channel, { since, unacked: true });
-      if (msgs.length > 0) {
+      // Filter out messages published by this agent instance
+      const external = msgs.filter((m) => !ownMessageIds.has(m.id));
+      if (external.length > 0) {
         this.lastSeen.set(channel, Math.max(...msgs.map((m) => m.timestamp)));
-        this.callback(msgs);
+        this.callback(external);
+      } else if (msgs.length > 0) {
+        // Still advance lastSeen past own messages to avoid re-reading them
+        this.lastSeen.set(channel, Math.max(...msgs.map((m) => m.timestamp)));
       }
     }, this.intervalMs);
     this.timers.set(channel, timer);
@@ -332,6 +358,7 @@ export default function (pi: ExtensionAPI) {
         timestamp: Date.now(),
       };
 
+      ownMessageIds.add(msg.id);
       await backend.publish(msg);
       await backend.log(`sent [${msg.type}] to ${msg.channel}`, "info", "channel");
 
@@ -385,19 +412,32 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "channel_ack",
     label: "Channel Ack",
-    description: "Acknowledge a message (mark as received/processed). Acked messages won't appear in unacked reads.",
+    description:
+      "Acknowledge a message (mark as received/processed). Acked messages won't appear in unacked reads. " +
+      "Use message_id=\"last\" to ack the most recent unacked message, or \"*\" to ack all unacked messages.",
     promptSnippet: "Acknowledge a channel message as received/processed",
     parameters: Type.Object({
       channel: Type.String({ description: "Channel identifier" }),
-      message_id: Type.String({ description: "ID of the message to acknowledge" }),
+      message_id: Type.String({ description: "ID of the message to acknowledge. Use \"last\" for most recent unacked, or \"*\" for all unacked." }),
     }),
     async execute(_toolCallId, params) {
-      await backend.ack(params.channel, params.message_id);
-      await backend.log(`acked ${params.message_id}`, "info", "channel");
+      const { ackedCount } = await backend.ack(params.channel, params.message_id);
+      await backend.log(`acked ${params.message_id} (${ackedCount} messages)`, "info", "channel");
+
+      if (ackedCount === 0) {
+        return {
+          content: [{ type: "text", text: `No matching unacked message found for '${params.message_id}' on '${params.channel}'` }],
+          details: { ackedCount: 0 },
+        };
+      }
+
+      const label = params.message_id === "*"
+        ? `Acknowledged all ${ackedCount} unacked message(s) on '${params.channel}'`
+        : `Acknowledged message ${params.message_id} on '${params.channel}'`;
 
       return {
-        content: [{ type: "text", text: `Acknowledged message ${params.message_id} on '${params.channel}'` }],
-        details: {},
+        content: [{ type: "text", text: label }],
+        details: { ackedCount },
       };
     },
   });
