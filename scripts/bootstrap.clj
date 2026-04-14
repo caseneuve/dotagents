@@ -174,13 +174,21 @@
                :dst (str (fs/path (:agents-dst p) "skills"))
                :markdown-mode :link})))
 
+(defn darwin? []
+  (str/starts-with? (System/getProperty "os.name") "Mac"))
+
 (defn plan-pi [p]
-  [{:op :section :title "Pi"}
-   {:op :merge-pi-settings
-    :target-dir (:pi-dst p)
-    :extensions [(str (fs/path (:pi-src p) "extensions"))]
-    :themes [(str (fs/path (:pi-src p) "themes"))]
-    :theme "modus-operandi"}])
+  (let [base-extensions [(str (fs/path (:pi-src p) "extensions"))]
+        darwin-ext-dir  (str (fs/path (:pi-src p) "darwin" "extensions"))
+        extensions      (if (and (darwin?) (fs/directory? darwin-ext-dir))
+                          (conj base-extensions darwin-ext-dir)
+                          base-extensions)]
+    [{:op :section :title "Pi"}
+     {:op :merge-pi-settings
+      :target-dir (:pi-dst p)
+      :extensions extensions
+      :themes [(str (fs/path (:pi-src p) "themes"))]
+      :theme "modus-operandi"}]))
 
 (defn plan [p {:keys [mode]}]
   (case mode
@@ -207,9 +215,28 @@
     (seq? x) (doall (map #(replace-home % home) x))
     :else x))
 
+(defn- case-insensitive-fs? []
+  ;; macOS (HFS+/APFS default) is case-insensitive; detect via os.name
+  (str/includes? (str/lower-case (System/getProperty "os.name" "")) "mac"))
+
+(defn- distinct-paths
+  "Like distinct but uses case-insensitive comparison on macOS to avoid
+   duplicates caused by /Users/x/Git vs /Users/x/git on HFS+/APFS."
+  [paths]
+  (if (case-insensitive-fs?)
+    (let [seen (volatile! #{})]
+      (reduce (fn [acc p]
+                (let [low (str/lower-case (str p))]
+                  (if (@seen low)
+                    acc
+                    (do (vswap! seen conj low)
+                        (conj acc p)))))
+              [] paths))
+    (vec (distinct paths))))
+
 (defn merge-distinct-vec [existing incoming]
-  (vec (distinct (concat (vec (or existing []))
-                         (vec (or incoming []))))))
+  (distinct-paths (concat (vec (or existing []))
+                          (vec (or incoming [])))))
 
 (defn merge-permission-allows [existing incoming]
   (merge-distinct-vec existing incoming))
