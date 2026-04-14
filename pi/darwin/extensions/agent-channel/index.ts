@@ -1,4 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { CustomEditor } from "@mariozechner/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type, type Static } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import * as fs from "node:fs";
@@ -373,6 +375,26 @@ export default function (pi: ExtensionAPI) {
     pi.events.emit("agent-channel:name", agentName());
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-name", agentName());
+      // Install custom editor that shows agent name in the top border
+      const name = agentName();
+      ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+        const editor = new class extends CustomEditor {
+          render(width: number): string[] {
+            const lines = super.render(width);
+            if (lines.length > 0) {
+              const label = ` ${name} `;
+              const styledLabel = theme.fg("accent", label);
+              // Insert label after the first border character
+              const firstLine = lines[0]!;
+              const borderChar = firstLine.slice(0, 1);
+              const rest = firstLine.slice(1);
+              lines[0] = borderChar + styledLabel + rest.slice(visibleWidth(label));
+            }
+            return lines;
+          }
+        }(tui, theme, keybindings);
+        return editor;
+      });
     }
 
     // Restore watches from session state (take last snapshot — each entry is the full set)
