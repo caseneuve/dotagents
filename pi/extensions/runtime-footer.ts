@@ -125,7 +125,7 @@ function renderLeft(
   const left = theme.fg("dim", parts.join(" · "));
 
   if (agentName) {
-    return `${left}  ${theme.fg("accent", agentName)}`;
+    return `${theme.fg("accent", agentName)}  ${left}`;
   }
 
   return left;

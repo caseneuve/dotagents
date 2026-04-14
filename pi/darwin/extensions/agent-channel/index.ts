@@ -220,10 +220,10 @@ function generateId(): string {
 function agentName(): string {
   // Prefer explicit env, then user-set label, then session-stable id
   if (process.env.CMUX_AGENT_NAME) return process.env.CMUX_AGENT_NAME;
-  if (agentLabel) return `agent-${agentLabel}`;
-  if (agentId) return `agent-${agentId}`;
+  if (agentLabel) return agentLabel;
+  if (agentId) return agentId;
   // Fallback before session_start (shouldn't happen in practice)
-  return `agent-${generateId()}`;
+  return generateId();
 }
 
 // ─── Poller: background check for incoming messages ───────────────────
@@ -300,6 +300,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
+    if (commsMuted) return;
     const myName = agentName();
     for (const msg of msgs) {
       // Skip own messages
@@ -343,6 +344,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── Track watched channels for persistence across reloads ──
   const watchedChannels = new Set<string>();
+  let commsMuted = false;
 
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
@@ -682,6 +684,25 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: channels.length ? summary : "No channels found." }],
         details: { channels },
       };
+    },
+  });
+
+  // ── Command: /comms ──
+  pi.registerCommand("comms", {
+    description: "Toggle agent comms on/off (usage: /comms [on|off])",
+    handler: async (args, ctx) => {
+      const arg = args.trim().toLowerCase();
+      if (arg === "on") {
+        commsMuted = false;
+      } else if (arg === "off") {
+        commsMuted = true;
+      } else {
+        commsMuted = !commsMuted;
+      }
+      const state = commsMuted ? "OFF 🔇" : "ON 📡";
+      pi.events.emit("agent-channel:comms", !commsMuted);
+      ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
+      ctx.ui.notify(`Comms ${state}`, "info");
     },
   });
 
