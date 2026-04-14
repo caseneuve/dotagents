@@ -504,6 +504,16 @@ export default function (pi: ExtensionAPI) {
     poller?.stopAll();
   });
 
+  // ── Inject agent identity into system prompt ──
+  pi.on("before_agent_start", async (event) => {
+    const name = agentName();
+    const commsState = commsMuted ? "off" : "on";
+    const identity = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
+    return {
+      systemPrompt: event.systemPrompt + identity,
+    };
+  });
+
   // ── Tool: channel_send ──
   pi.registerTool({
     name: "channel_send",
