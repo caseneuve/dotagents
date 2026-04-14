@@ -208,15 +208,22 @@ function makeId(): string {
 // This is more reliable than name comparison (which can fail if name changes mid-session).
 const ownMessageIds = new Set<string>();
 
-// Auto-generated agent name: stable per session, distinguishable across instances
-const autoId = Math.random().toString(36).slice(2, 6);
+// Agent identity: stable per session, persisted across reloads.
+// Generated once on first session_start, restored from session state thereafter.
+let agentId: string | undefined;
 let agentLabel: string | undefined;
 
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 6);
+}
+
 function agentName(): string {
-  // Prefer explicit env, then user-set label, then auto-generated
+  // Prefer explicit env, then user-set label, then session-stable id
   if (process.env.CMUX_AGENT_NAME) return process.env.CMUX_AGENT_NAME;
   if (agentLabel) return `agent-${agentLabel}`;
-  return `agent-${autoId}`;
+  if (agentId) return `agent-${agentId}`;
+  // Fallback before session_start (shouldn't happen in practice)
+  return `agent-${generateId()}`;
 }
 
 // ─── Poller: background check for incoming messages ───────────────────
@@ -345,6 +352,26 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("agent-ch", `channel: ${backend.name}`);
     }
     await backend.setStatus("agent", "ready", "🟢");
+
+    // Restore or generate agent identity
+    agentId = undefined;
+    agentLabel = undefined;
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type === "custom" && entry.customType === "agent-channel-identity") {
+        const data = (entry as any).data;
+        if (data?.id) agentId = data.id;
+        if (data?.label) agentLabel = data.label;
+      }
+    }
+    if (!agentId && !process.env.CMUX_AGENT_NAME) {
+      agentId = generateId();
+      pi.appendEntry("agent-channel-identity", { id: agentId });
+    }
+    // Broadcast name to other extensions (e.g. runtime-footer)
+    pi.events.emit("agent-channel:name", agentName());
+    if (ctx.hasUI) {
+      ctx.ui.setStatus("agent-name", agentName());
+    }
 
     // Restore watches from session state (take last snapshot — each entry is the full set)
     let latestChannels: string[] = [];
@@ -668,6 +695,9 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       agentLabel = name;
+      pi.appendEntry("agent-channel-identity", { id: agentId, label: agentLabel });
+      pi.events.emit("agent-channel:name", agentName());
+      ctx.ui.setStatus("agent-name", agentName());
       ctx.ui.notify(`Agent name set to: ${agentName()}`, "info");
     },
   });

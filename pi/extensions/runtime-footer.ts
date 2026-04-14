@@ -110,6 +110,7 @@ function renderLeft(
   theme: ExtensionContext["ui"]["theme"],
   gitBranch: string | null,
   sessionNotesStatus: string | undefined,
+  agentName: string | undefined,
 ): string {
   const parts: string[] = [formatCwd()];
 
@@ -121,7 +122,13 @@ function renderLeft(
     parts.push(sessionNotesStatus);
   }
 
-  return theme.fg("dim", parts.join(" · "));
+  const left = theme.fg("dim", parts.join(" · "));
+
+  if (agentName) {
+    return `${left}  ${theme.fg("accent", agentName)}`;
+  }
+
+  return left;
 }
 
 function renderRight(
@@ -157,6 +164,13 @@ function renderFooterLine(width: number, left: string, right: string): string {
 }
 
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
+  let currentAgentName: string | undefined;
+
+  // Listen for agent name from agent-channel extension
+  pi.events.on("agent-channel:name", (name: string) => {
+    currentAgentName = name;
+  });
+
   const installFooter = (ctx: ExtensionContext) => {
     if (!ctx.hasUI) return;
 
@@ -180,6 +194,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             theme,
             footerData.getGitBranch(),
             statuses.get("session-notes"),
+            currentAgentName,
           );
           const right = renderRight(pi, ctx, theme);
           const lines = [renderFooterLine(width, left, right)];
