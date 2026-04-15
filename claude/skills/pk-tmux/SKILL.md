@@ -10,24 +10,24 @@ triggers:
   - terminal session
 allowedPrompts:
   - tool: Bash
-    prompt: tmux-agent
+    prompt: ag-tmux
 ---
 
 # pk-tmux — Session Management Skill
 
-## tmux-agent run — Preferred for all commands needing output
+## ag-tmux run — Preferred for all commands needing output
 
 One call handles session/window creation, execution, polling, and clean output extraction. Exits with the command's exit code.
 
 ```bash
-tmux-agent run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
+ag-tmux run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
 ```
 
 ```bash
-tmux-agent run test 'npm test'
-tmux-agent run build 'make all' --timeout 600
-tmux-agent run lint 'ruff check .' --cd ~/myproject
-tmux-agent run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
+ag-tmux run test 'npm test'
+ag-tmux run build 'make all' --timeout 600
+ag-tmux run lint 'ruff check .' --cd ~/myproject
+ag-tmux run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
 ```
 
 Default timeout: 300s. Default socket: `/tmp/mux.sock`. Use `run_in_background: true` for long commands.
@@ -39,9 +39,9 @@ Use **unique window names** (`build`, `test`, `server`, `lint`). Filter verbose 
 ## Other Subcommands
 
 ```bash
-tmux-agent status [PROJECT] [CWD]        # session state, windows, processes
-tmux-agent create [PROJECT] [CWD]        # ensure session exists
-tmux-agent wait [PROJECT] [WINDOW] [N]   # poll until shell returns
+ag-tmux status [PROJECT] [CWD]        # session state, windows, processes
+ag-tmux create [PROJECT] [CWD]        # ensure session exists
+ag-tmux wait [PROJECT] [WINDOW] [N]   # poll until shell returns
 ```
 
 ## Manual tmux Commands

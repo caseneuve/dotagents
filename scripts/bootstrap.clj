@@ -150,16 +150,16 @@
   (let [bin-dir (str (fs/path home ".local" "bin"))]
     [{:op :link
       :source (str (fs/path shared-src "skills" "sandbox" "src" "sandbox" "cli.clj"))
-      :target (str (fs/path bin-dir "sandbox"))
-      :label "~/.local/bin/sandbox"}
+      :target (str (fs/path bin-dir "ag-sandbox"))
+      :label "~/.local/bin/ag-sandbox"}
      {:op :link
       :source (str (fs/path shared-src "skills" "add-todo" "src" "todo" "cli.clj"))
-      :target (str (fs/path bin-dir "todo"))
-      :label "~/.local/bin/todo"}
+      :target (str (fs/path bin-dir "ag-todo"))
+      :label "~/.local/bin/ag-todo"}
      {:op :link
       :source (str (fs/path shared-src "skills" "pk-tmux" "src" "tmux_agent" "cli.clj"))
-      :target (str (fs/path bin-dir "tmux-agent"))
-      :label "~/.local/bin/tmux-agent"}]))
+      :target (str (fs/path bin-dir "ag-tmux"))
+      :label "~/.local/bin/ag-tmux"}]))
 
 (defn plan-claude [p]
   (concat

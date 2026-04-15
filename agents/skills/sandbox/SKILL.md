@@ -14,7 +14,7 @@ Core rule: never develop directly in the main repo when the project uses sandbox
 Run:
 
 ```bash
-sandbox create <ticket-num>
+ag-sandbox create <ticket-num>
 ```
 
 Ticket numbers are flexible: `16`, `#16`, and `00016` all resolve to the same ticket. The tool strips `#` prefixes and matches with optional zero-padding automatically.
@@ -57,7 +57,7 @@ Typical flow:
 
 1. Show the pending diff:
    ```bash
-   sandbox finish <ticket-num> --diff-only
+   ag-sandbox finish <ticket-num> --diff-only
    ```
 2. Check for an existing review:
    ```bash
@@ -69,7 +69,7 @@ Typical flow:
 6. After explicit approval, finish from the main repo:
    ```bash
    cd <main-repo-path>
-   sandbox finish <ticket-num>
+   ag-sandbox finish <ticket-num>
    ```
 
 ## Safety rules

@@ -56,9 +56,9 @@ When the user wants to resume work rather than create a fresh item:
    bb ~/.agents/skills/org-journal/new-entry.bb
    ```
    If the returned map includes `:last-entry`, read it for the prior session's state and next steps.
-2. List open items with `todo list --status open`.
+2. List open items with `ag-todo list --status open`.
 3. Pick the highest-priority unblocked item.
-4. Move it to `in_progress` with `todo status`.
+4. Move it to `in_progress` with `ag-todo status`.
 5. If the project uses isolated worktrees, start the `sandbox` workflow for that item.
 
 ## Workflow
@@ -66,7 +66,7 @@ When the user wants to resume work rather than create a fresh item:
 0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: "todo-only" vs "create todo, then implement").
 1. Assess size first. Split work that spans multiple days, many unrelated files, or vague acceptance criteria.
 2. Gather the title, type, priority, optional labels (for example `MVP`, `NEXT_VER`), and optional parent item. If labels are not provided, default to none.
-3. Create the item with `todo new` (include `--labels` when provided).
+3. Create the item with `ag-todo new` (include `--labels` when provided).
 4. Edit the generated file to fill in context, acceptance criteria, affected files, and the E2E spec when required.
 5. Show the draft to the user before treating it as finalized.
 

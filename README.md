@@ -2,6 +2,11 @@
 
 ![vibe: slopped](.github/badges/vibe-slopped.svg)
 
+*Disclaimer* WIP. Ideas and guidelines are mine, implementations by the clankers.  Text
+below is LLM-generated.
+
+---
+
 Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, shared helper implementations under `shared/`, and Pi extensions/themes under `pi/`.
 
 ## Contents

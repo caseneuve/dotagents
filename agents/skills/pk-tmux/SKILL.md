@@ -9,19 +9,19 @@ Use this skill when commands should keep running in a persistent tmux session or
 
 ## Preferred entrypoint
 
-Use `tmux-agent run` for most cases. It handles session creation, window creation, execution, waiting, and clean output capture in one call.
+Use `ag-tmux run` for most cases. It handles session creation, window creation, execution, waiting, and clean output capture in one call.
 
 ```bash
-tmux-agent run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
+ag-tmux run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
 ```
 
 Examples:
 
 ```bash
-tmux-agent run test 'npm test'
-tmux-agent run build 'make all' --timeout 600
-tmux-agent run lint 'ruff check .' --cd ~/myproject
-tmux-agent run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
+ag-tmux run test 'npm test'
+ag-tmux run build 'make all' --timeout 600
+ag-tmux run lint 'ruff check .' --cd ~/myproject
+ag-tmux run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
 ```
 
 Guidance:
@@ -34,19 +34,19 @@ Guidance:
 
 ## Other subcommands
 
-Use these when you need lower-level control than `tmux-agent run`:
+Use these when you need lower-level control than `ag-tmux run`:
 
 ```bash
-tmux-agent status [PROJECT] [CWD]
-tmux-agent create [PROJECT] [CWD]
-tmux-agent wait [PROJECT] [WINDOW] [CAPTURE-LINES]
+ag-tmux status [PROJECT] [CWD]
+ag-tmux create [PROJECT] [CWD]
+ag-tmux wait [PROJECT] [WINDOW] [CAPTURE-LINES]
 ```
 
 Typical uses:
 
-- `tmux-agent status`: inspect session state, windows, and current processes
-- `tmux-agent create`: ensure the project session exists before manual tmux commands
-- `tmux-agent wait`: poll until a shell is idle again after `send-keys` flows
+- `ag-tmux status`: inspect session state, windows, and current processes
+- `ag-tmux create`: ensure the project session exists before manual tmux commands
+- `ag-tmux wait`: poll until a shell is idle again after `send-keys` flows
 
 ## Manual tmux commands
 

@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tmux-agent:*)",
-      "Bash(sandbox:*)",
-      "Bash(todo:*)"
+      "Bash(ag-tmux:*)",
+      "Bash(ag-sandbox:*)",
+      "Bash(ag-todo:*)"
     ]
   }
 }

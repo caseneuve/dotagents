@@ -7,9 +7,9 @@ triggers:
   - start ticket
 allowedPrompts:
   - tool: Bash
-    prompt: sandbox create
+    prompt: ag-sandbox create
   - tool: Bash
-    prompt: sandbox finish
+    prompt: ag-sandbox finish
 ---
 # `sandbox` — Isolated Worktree for Ticket Development
 
@@ -19,7 +19,7 @@ allowedPrompts:
 
 Ticket number is flexible: `16`, `#16`, `00016` all resolve to the same ticket. The tool strips `#` prefixes and matches with optional zero-padding automatically.
 
-1. Run `sandbox create <ticket-num>` — output: MainRepo, Worktree path, Branch, BaseBranch, Status (created|exists), Submodules, Ticket file path. When running inside cmux, also opens a new workspace for the worktree.
+1. Run `ag-sandbox create <ticket-num>` — output: MainRepo, Worktree path, Branch, BaseBranch, Status (created|exists), Submodules, Ticket file path. When running inside cmux, also opens a new workspace for the worktree.
 2. Tell user which branch the worktree was created from (`BaseBranch`). If unexpected, confirm before proceeding.
 3. If `Submodules: yes` — confirm: *"This project has submodules. Three-stage commit flow required. Proceed?"*
 4. `cd` into worktree, run `/add-dir <worktree-path>`, set ticket status to `in_progress`
@@ -47,12 +47,12 @@ git add path/to/submodule && git commit -m "[#N.M stage] update submodule pointe
 
 **ALWAYS get explicit user approval before merging.**
 
-1. Show diff: `sandbox finish <ticket-num> --diff-only`
+1. Show diff: `ag-sandbox finish <ticket-num> --diff-only`
 2. Check for code review: `~/.claude/skills/code-review/review-file.sh latest`
    - No review found → run `/code-review` or ask user to request one from a separate agent
    - Review found → verify all Critical and Important findings are resolved
 3. Before finish, ensure ticket tracking artifacts are committed when applicable (for example `todos/<ticket>.md` in todo-driven projects).
-4. On user approval: `cd <main-repo-path> && sandbox finish <ticket-num>`
+4. On user approval: `cd <main-repo-path> && ag-sandbox finish <ticket-num>`
 
 ## Safety Rules
 

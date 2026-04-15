@@ -9,7 +9,7 @@ triggers:
   - new task
 allowedPrompts:
   - tool: Bash
-    prompt: todo
+    prompt: ag-todo
 ---
 
 # `add-todo` — Create and Track Work Items
@@ -22,10 +22,10 @@ Items stored in `./todos/`. All commands print `key=value` on stdout.
 
 | Command | Usage |
 |---------|-------|
-| `todo next-id [--dir DIR] [PARENT]` | `todo next-id` → `0005`, `todo next-id 0001` → `0001.4` |
-| `todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]` | Scaffold from template |
-| `todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]` | List/filter todos |
-| `todo status ID STATUS [--dir DIR]` | Update status (`open`, `in_progress`, `closed`, `blocked`) |
+| `ag-todo next-id [--dir DIR] [PARENT]` | `ag-todo next-id` → `0005`, `ag-todo next-id 0001` → `0001.4` |
+| `ag-todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]` | Scaffold from template |
+| `ag-todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]` | List/filter todos |
+| `ag-todo status ID STATUS [--dir DIR]` | Update status (`open`, `in_progress`, `closed`, `blocked`) |
 
 ## Item Types
 
@@ -49,15 +49,15 @@ When splitting: create a parent story (high-level + full E2E spec) and sub-tasks
 ## Picking Next Work
 
 1. Check last journal entry via `/org-journal` helper: `bb ~/.claude/skills/org-journal/new-entry.bb` — read `:last-entry` for prior session's Next Steps
-2. `todo list --status open` — list available items
+2. `ag-todo list --status open` — list available items
 3. Pick highest priority unblocked item (`blocked-by` empty or all resolved)
-4. `todo status ID in_progress` → start `/sandbox ID` if project uses worktrees
+4. `ag-todo status ID in_progress` → start `/sandbox ID` if project uses worktrees
 
 ## Process
 
 1. **Assess complexity** — suggest splitting if too large; explain the split before creating anything
 2. **Gather:** Title, Type, Priority (`high/medium/low`), optional Labels (for example `MVP,NEXT_VER`), Parent ID (if sub-task)
-3. **Create:** `todo new --type feature --slug my-feature --priority high [--labels MVP,NEXT_VER] [--parent 0001]`
+3. **Create:** `ag-todo new --type feature --slug my-feature --priority high [--labels MVP,NEXT_VER] [--parent 0001]`
 4. **Edit** generated file — fill in Context, Acceptance Criteria, Affected Files, E2E Spec
 5. **Show to user** for review before finalizing
 
