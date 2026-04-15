@@ -2,6 +2,8 @@
 
 (ns unit.bootstrap-pure-test
   (:require [bootstrap :as sut]
+            [babashka.fs]
+            [clojure.string]
             [clojure.test :as t :refer [deftest is testing]]))
 
 (deftest replace-home-test
@@ -69,6 +71,62 @@
               "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-run.sh:*)"
               "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-status.sh:*)"]
              (get-in merged [:permissions :allow]))))))
+
+(deftest plan-agents-includes-darwin-skills-on-mac
+  (testing "plan-agents includes shared/darwin/skills when darwin? is true and dir exists"
+    (let [p {:agents-src "/repo/agents"
+             :agents-dst "/home/.agents"
+             :codex-dst "/home/.codex"
+             :shared-src "/repo/shared"}
+          ops (with-redefs [sut/darwin? (constantly true)
+                            babashka.fs/directory? (fn [path]
+                                                    (= (str path) "/repo/shared/darwin/skills"))
+                            sut/skill-ops (fn [{:keys [src]}]
+                                           (when (= src "/repo/shared/darwin/skills")
+                                             [{:op :link :source (str src "/cmux-comms/SKILL.md")
+                                               :target "/home/.agents/skills/cmux-comms/SKILL.md"
+                                               :label "cmux-comms/SKILL.md"}]))]
+                (sut/plan-agents p))
+          darwin-ops (filter #(and (= (:op %) :link)
+                                  (some-> (:label %) (clojure.string/includes? "cmux-comms")))
+                             ops)]
+      (is (= 1 (count darwin-ops))
+          "should include one darwin skill op")
+      (is (= "cmux-comms/SKILL.md" (:label (first darwin-ops))))))
+
+  (testing "plan-agents omits darwin skills when not on darwin"
+    (let [p {:agents-src "/repo/agents"
+             :agents-dst "/home/.agents"
+             :codex-dst "/home/.codex"
+             :shared-src "/repo/shared"}
+          ops (with-redefs [sut/darwin? (constantly false)
+                            sut/skill-ops (fn [_] [])]
+                (sut/plan-agents p))
+          darwin-ops (filter #(and (= (:op %) :link)
+                                  (some-> (:label %) (clojure.string/includes? "cmux-comms")))
+                             ops)]
+      (is (zero? (count darwin-ops))
+          "should not include darwin skills on non-darwin"))))
+
+(deftest plan-pi-includes-darwin-extensions-on-mac
+  (testing "plan-pi includes darwin/extensions dir when darwin? is true and dir exists"
+    (let [p {:pi-src "/repo/pi"
+             :pi-dst "/home/.pi/agent"}
+          ops (with-redefs [sut/darwin? (constantly true)
+                            babashka.fs/directory? (constantly true)]
+                (sut/plan-pi p))
+          settings-op (first (filter #(= (:op %) :merge-pi-settings) ops))]
+      (is (= ["/repo/pi/extensions" "/repo/pi/darwin/extensions"]
+             (:extensions settings-op)))))
+
+  (testing "plan-pi omits darwin/extensions when not on darwin"
+    (let [p {:pi-src "/repo/pi"
+             :pi-dst "/home/.pi/agent"}
+          ops (with-redefs [sut/darwin? (constantly false)]
+                (sut/plan-pi p))
+          settings-op (first (filter #(= (:op %) :merge-pi-settings) ops))]
+      (is (= ["/repo/pi/extensions"]
+             (:extensions settings-op))))))
 
 (defn -main [& _]
   (let [{:keys [fail error]} (t/run-tests 'unit.bootstrap-pure-test)]
