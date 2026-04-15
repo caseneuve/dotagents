@@ -155,11 +155,7 @@
      {:op :link
       :source (str (fs/path shared-src "skills" "add-todo" "src" "todo" "cli.clj"))
       :target (str (fs/path bin-dir "todo"))
-      :label "~/.local/bin/todo"}
-     {:op :link
-      :source (str (fs/path shared-src "skills" "pk-tmux" "src" "tmux_agent" "cli.clj"))
-      :target (str (fs/path bin-dir "tmux-agent"))
-      :label "~/.local/bin/tmux-agent"}]))
+      :label "~/.local/bin/todo"}]))
 
 (defn plan-claude [p]
   (concat

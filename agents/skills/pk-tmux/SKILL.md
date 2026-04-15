@@ -9,19 +9,19 @@ Use this skill when commands should keep running in a persistent tmux session or
 
 ## Preferred entrypoint
 
-Use `tmux-agent run` for most cases. It handles session creation, window creation, execution, waiting, and clean output capture in one call.
+Use `tmux-run.sh` for most cases. It handles session creation, window creation, execution, waiting, and clean output capture in one call.
 
 ```bash
-tmux-agent run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
+~/.agents/skills/pk-tmux/tmux-run.sh <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
 ```
 
 Examples:
 
 ```bash
-tmux-agent run test 'npm test'
-tmux-agent run build 'make all' --timeout 600
-tmux-agent run lint 'ruff check .' --cd ~/myproject
-tmux-agent run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
+~/.agents/skills/pk-tmux/tmux-run.sh test 'npm test'
+~/.agents/skills/pk-tmux/tmux-run.sh build 'make all' --timeout 600
+~/.agents/skills/pk-tmux/tmux-run.sh lint 'ruff check .' --cd ~/myproject
+~/.agents/skills/pk-tmux/tmux-run.sh deploy 'kubectl apply -f .' --sock /tmp/claude-app.sock --session app
 ```
 
 Guidance:
@@ -31,34 +31,34 @@ Guidance:
 - For long-running commands, leave them in tmux and poll instead of blocking the main interaction loop.
 - On first creation, the helper may print an attach command. Share it with the user if they may want to observe the session.
 
-## Other subcommands
+## Helper scripts
 
-Use these when you need lower-level control than `tmux-agent run`:
+Use these when you need lower-level control than `tmux-run.sh`:
 
 ```bash
-tmux-agent status [PROJECT] [CWD]
-tmux-agent create [PROJECT] [CWD]
-tmux-agent wait [PROJECT] [WINDOW] [CAPTURE-LINES]
+~/.agents/skills/pk-tmux/tmux-status.sh [project] [cwd]
+~/.agents/skills/pk-tmux/tmux-create.sh [project] [cwd]
+~/.agents/skills/pk-tmux/tmux-wait.sh <project> <window>
 ```
 
 Typical uses:
 
-- `tmux-agent status`: inspect session state, windows, and current processes
-- `tmux-agent create`: ensure the project session exists before manual tmux commands
-- `tmux-agent wait`: poll until a shell is idle again after `send-keys` flows
+- `tmux-status.sh`: inspect session state, windows, and current processes
+- `tmux-create.sh`: ensure the project session exists before manual tmux commands
+- `tmux-wait.sh`: poll until a shell is idle again after `send-keys` flows
 
 ## Manual tmux commands
 
-If the subcommands are insufficient, operate directly against the project socket.
-Default socket is `/tmp/mux.sock`:
+If the helper scripts are insufficient, operate directly against the project socket.
+The shared helpers still use the legacy socket naming convention under `/tmp/claude-<project>.sock`, so keep manual commands aligned with that:
 
 ```bash
-tmux -S /tmp/mux.sock send-keys -t <session>:<window> '<command>' Enter
-tmux -S /tmp/mux.sock capture-pane -t <session>:<window> -p -S -20
-tmux -S /tmp/mux.sock display-message -t <session>:<window> -p "#{pane_current_command}"
-tmux -S /tmp/mux.sock list-windows -t <session> -F "#{window_index}: #{window_name}"
-tmux -S /tmp/mux.sock kill-window -t <session>:<window>
-tmux -S /tmp/mux.sock kill-session -t <session>
+tmux -S /tmp/claude-<project>.sock send-keys -t <project>:<window> '<command>' Enter
+tmux -S /tmp/claude-<project>.sock capture-pane -t <project>:<window> -p -S -20
+tmux -S /tmp/claude-<project>.sock display-message -t <project>:<window> -p "#{pane_current_command}"
+tmux -S /tmp/claude-<project>.sock list-windows -t <project> -F "#{window_index}: #{window_name}"
+tmux -S /tmp/claude-<project>.sock kill-window -t <project>:<window>
+tmux -S /tmp/claude-<project>.sock kill-session -t <project>
 ```
 
-Prefer subcommands first. Drop to raw tmux only when you need behavior the wrappers do not expose.
+Prefer helpers first. Drop to raw tmux only when you need behavior the wrappers do not expose.
