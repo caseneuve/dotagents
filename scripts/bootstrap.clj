@@ -143,6 +143,15 @@
 (defn section [title]
   {:op :section :title title})
 
+(defn bin-ops
+  "Symlink ops for ~/.local/bin/ CLI entry points."
+  [shared-src home]
+  (let [bin-dir (str (fs/path home ".local" "bin"))]
+    [{:op :link
+      :source (str (fs/path shared-src "skills" "sandbox" "src" "sandbox" "cli.clj"))
+      :target (str (fs/path bin-dir "sandbox"))
+      :label "~/.local/bin/sandbox"}]))
+
 (defn plan-claude [p]
   (concat
    [(section "Claude")]
@@ -154,7 +163,9 @@
    [{:op :merge-claude-settings
      :target-dir (:claude-dst p)
      :hooks-json (:hooks-json p)
-     :perms-json (:perms-json p)}]))
+     :perms-json (:perms-json p)}]
+   [(section "CLI binaries")]
+   (bin-ops (:shared-src p) (:home p))))
 
 (defn darwin? []
   (str/starts-with? (System/getProperty "os.name") "Mac"))
@@ -183,7 +194,9 @@
      (when (and (darwin?) (fs/directory? darwin-skills-dir))
        (skill-ops {:src darwin-skills-dir
                    :dst (str (fs/path (:agents-dst p) "skills"))
-                   :markdown-mode :link})))))
+                   :markdown-mode :link}))
+     [(section "CLI binaries")]
+     (bin-ops (:shared-src p) (:home p)))))
 
 (defn plan-pi [p]
   (let [base-extensions [(str (fs/path (:pi-src p) "extensions"))]
