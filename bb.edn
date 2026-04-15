@@ -6,6 +6,10 @@
          "shared/skills/sandbox/src"
          "shared/skills/sandbox/test"]
 
+ :deps {io.github.caseneuve/mux-bb
+        {:git/url "https://github.com/caseneuve/mux-bb.git"
+         :git/sha "327d5745cbd0032d5553bbfc8532cacd54bbac59"}}
+
  :tasks
  {:init
   (do
