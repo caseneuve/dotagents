@@ -280,7 +280,8 @@
                           :branch-exists?  true ;; already checked above
                           :worktree-clean? (if (fs/directory? wt-path)
                                              (git-worktree-clean? wt-path)
-                                             true)})]
+                                             true)
+                          :main-repo-clean? (git-worktree-clean? cwd-top)})]
           (binding [*out* *err*]
             (println err)
             (when (and (fs/directory? wt-path)

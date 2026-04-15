@@ -194,13 +194,15 @@
     (is (nil? (sut/validate-finish {:cwd-toplevel "/repo"
                                     :worktree-path "/wt"
                                     :branch-exists? true
-                                    :worktree-clean? true}))))
+                                    :worktree-clean? true
+                                    :main-repo-clean? true}))))
 
   (testing "fails when inside worktree"
     (let [err (sut/validate-finish {:cwd-toplevel "/wt"
                                     :worktree-path "/wt"
                                     :branch-exists? true
-                                    :worktree-clean? true})]
+                                    :worktree-clean? true
+                                    :main-repo-clean? true})]
       (is (some? err))
       (is (re-find #"main repo" err))))
 
@@ -208,7 +210,8 @@
     (let [err (sut/validate-finish {:cwd-toplevel "/repo"
                                     :worktree-path "/wt"
                                     :branch-exists? false
-                                    :worktree-clean? true})]
+                                    :worktree-clean? true
+                                    :main-repo-clean? true})]
       (is (some? err))
       (is (re-find #"[Bb]ranch" err))))
 
@@ -216,8 +219,19 @@
     (let [err (sut/validate-finish {:cwd-toplevel "/repo"
                                     :worktree-path "/wt"
                                     :branch-exists? true
-                                    :worktree-clean? false})]
+                                    :worktree-clean? false
+                                    :main-repo-clean? true})]
       (is (some? err))
+      (is (re-find #"uncommitted" err))))
+
+  (testing "fails when main repo dirty"
+    (let [err (sut/validate-finish {:cwd-toplevel "/repo"
+                                    :worktree-path "/wt"
+                                    :branch-exists? true
+                                    :worktree-clean? true
+                                    :main-repo-clean? false})]
+      (is (some? err))
+      (is (re-find #"[Mm]ain repo" err))
       (is (re-find #"uncommitted" err)))))
 
 ;; ---------------------------------------------------------------------------

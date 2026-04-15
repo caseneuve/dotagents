@@ -140,7 +140,8 @@
 (defn validate-finish
   "Validate preconditions for sandbox finish.
    Returns nil if valid, or an error message string."
-  [{:keys [cwd-toplevel worktree-path branch-exists? worktree-clean?]}]
+  [{:keys [cwd-toplevel worktree-path branch-exists? worktree-clean?
+           main-repo-clean?]}]
   (cond
     (= cwd-toplevel worktree-path)
     "ERROR: Run this from the main repo, not from inside the worktree"
@@ -150,6 +151,9 @@
 
     (not worktree-clean?)
     "ERROR: Worktree has uncommitted or untracked changes; refusing to finish"
+
+    (not main-repo-clean?)
+    "ERROR: Main repo has uncommitted changes; commit or stash before finishing"
 
     :else nil))
 
