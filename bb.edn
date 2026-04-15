@@ -2,7 +2,9 @@
          "shared/skills/add-todo/src"
          "shared/skills/add-todo/test"
          "shared/skills/pk-tmux/src"
-         "shared/skills/pk-tmux/test"]
+         "shared/skills/pk-tmux/test"
+         "shared/skills/sandbox/src"
+         "shared/skills/sandbox/test"]
 
  :tasks
  {:init
@@ -21,7 +23,7 @@
     (def test-image "localhost/dotagents-test")
     (def podman-base (str podman-args base-image))
     (def podman-test (str podman-args test-image))
-    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test test/unit/runner.clj")
+    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
 
   build:test-image
