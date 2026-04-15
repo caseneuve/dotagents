@@ -128,6 +128,43 @@
       (is (= ["/repo/pi/extensions"]
              (:extensions settings-op))))))
 
+(deftest bin-ops-test
+  (testing "produces sandbox symlink op"
+    (let [ops (sut/bin-ops "/repo/shared" "/home/user")]
+      (is (= 1 (count ops)))
+      (is (= :link (:op (first ops))))
+      (is (clojure.string/ends-with? (:target (first ops)) ".local/bin/sandbox"))
+      (is (clojure.string/ends-with? (:source (first ops)) "sandbox/src/sandbox/cli.clj")))))
+
+(deftest plan-agents-includes-bin-ops
+  (testing "plan-agents includes ~/.local/bin/sandbox link"
+    (let [p {:agents-src "/repo/agents"
+             :agents-dst "/home/.agents"
+             :codex-dst "/home/.codex"
+             :shared-src "/repo/shared"
+             :home "/home"}
+          ops (with-redefs [sut/darwin? (constantly false)
+                            sut/skill-ops (fn [_] [])]
+                (sut/plan-agents p))
+          bin-links (filter #(and (= (:op %) :link)
+                                 (some-> (:label %) (clojure.string/includes? "local/bin")))
+                            ops)]
+      (is (= 1 (count bin-links)))
+      (is (= "~/.local/bin/sandbox" (:label (first bin-links)))))))
+
+(deftest plan-pi-excludes-bin-ops
+  (testing "plan-pi does not include ~/.local/bin/ links"
+    (let [p {:pi-src "/repo/pi"
+             :pi-dst "/home/.pi/agent"
+             :home "/home"}
+          ops (with-redefs [sut/darwin? (constantly false)]
+                (sut/plan-pi p))
+          bin-links (filter #(and (= (:op %) :link)
+                                 (some-> (:label %) (clojure.string/includes? "local/bin")))
+                            ops)]
+      (is (zero? (count bin-links))
+          "pi bootstrap should not install CLI binaries"))))
+
 (defn -main [& _]
   (let [{:keys [fail error]} (t/run-tests 'unit.bootstrap-pure-test)]
     (System/exit (if (zero? (+ fail error)) 0 1))))

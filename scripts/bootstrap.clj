@@ -144,7 +144,8 @@
   {:op :section :title title})
 
 (defn bin-ops
-  "Symlink ops for ~/.local/bin/ CLI entry points."
+  "Symlink ops for ~/.local/bin/ CLI entry points.
+   Installed by claude and agents modes, not pi (pi is extensions/themes only)."
   [shared-src home]
   (let [bin-dir (str (fs/path home ".local" "bin"))]
     [{:op :link
