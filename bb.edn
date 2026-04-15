@@ -2,13 +2,12 @@
          "shared/skills/add-todo/src"
          "shared/skills/add-todo/test"
          "shared/skills/pk-tmux/src"
-         "shared/skills/pk-tmux/test"
          "shared/skills/sandbox/src"
          "shared/skills/sandbox/test"]
 
  :deps {io.github.caseneuve/mux-bb
         {:git/url "https://github.com/caseneuve/mux-bb.git"
-         :git/sha "327d5745cbd0032d5553bbfc8532cacd54bbac59"}}
+         :git/sha "117af6d76850346ef95ff696e18920338df37b54"}}
 
  :tasks
  {:init
@@ -27,7 +26,7 @@
     (def test-image "localhost/dotagents-test")
     (def podman-base (str podman-args base-image))
     (def podman-test (str podman-args test-image))
-    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/pk-tmux/test:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
+    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj")))
 
   build:test-image

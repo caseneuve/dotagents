@@ -7,11 +7,9 @@
   (println "• Running pure unit tests...")
   (require 'unit.bootstrap-pure-test)
   (require 'todo.core-test)
-  (require 'tmux-agent.core-test)
   (require 'sandbox.core-test)
   (let [{:keys [test fail error]} (t/run-tests 'unit.bootstrap-pure-test
                                                'todo.core-test
-                                               'tmux-agent.core-test
                                                'sandbox.core-test)]
     (if (zero? test)
       (do

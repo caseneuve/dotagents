@@ -2,7 +2,7 @@
 
 (ns tmux-agent.cli
   "CLI entry point for tmux agent session management.
-   Dispatches subcommands: create, run, status, wait.
+   Thin wrapper around mux.runner and mux.runner.preflight.
 
    Usage:
      tmux-agent create [PROJECT] [CWD]
@@ -12,35 +12,20 @@
   (:require [babashka.cli :as cli]
             [babashka.process :as p]
             [clojure.string :as str]
-            [tmux-agent.core :as core]))
+            [mux.protocol :as mp]
+            [mux.tmux :as mt]
+            [mux.runner :as runner]
+            [mux.runner.preflight :as preflight]))
 
 ;; ---------------------------------------------------------------------------
 ;; I/O helpers
 ;; ---------------------------------------------------------------------------
 
-(defn- sh
-  "Run command, return trimmed stdout. Throws on non-zero exit."
-  [& args]
-  (let [result (apply p/sh args)]
-    (when-not (zero? (:exit result))
-      (throw (ex-info (str "Command failed: " (str/join " " args))
-                      {:exit (:exit result) :err (:err result)})))
-    (str/trim (:out result))))
-
 (defn- sh?
   "Run command, return trimmed stdout or nil on failure."
   [& args]
-  (try (apply sh args) (catch Exception _ nil)))
-
-(defn- tmux!
-  "Run tmux command on given socket."
-  [sock & args]
-  (apply sh "tmux" "-S" sock args))
-
-(defn- tmux?
-  "Run tmux command, nil on failure."
-  [sock & args]
-  (try (apply tmux! sock args) (catch Exception _ nil)))
+  (try (str/trim (:out (apply p/sh args)))
+       (catch Exception _ nil)))
 
 (defn- git-project []
   (some-> (sh? "git" "rev-parse" "--show-toplevel")
@@ -49,203 +34,148 @@
 (defn- git-branch []
   (or (sh? "git" "rev-parse" "--abbrev-ref" "HEAD") "default"))
 
-(defn- resolve-prefix []
-  (core/detect-prefix {:env-prefix (System/getenv "TMUX_SOCKET_PREFIX")
-                        :script-path (or (System/getProperty "babashka.file") "")}))
+(defn- resolve-backend
+  "Create a tmux backend from explicit opts or auto-derived session info."
+  [{:keys [sock session]}]
+  (if (and sock session)
+    (mp/make-backend :tmux {:sock sock :session session})
+    (let [project (or (git-project) "agent")
+          branch  (git-branch)
+          info    (mt/derive-session-info project branch)]
+      (mp/make-backend :tmux info))))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcommand: create
 ;; ---------------------------------------------------------------------------
 
 (defn cmd-create [{:keys [opts]}]
-  (let [project (or (:project opts) (git-project) (System/getProperty "user.dir"))
+  (let [project (or (:project opts) (git-project) "agent")
         cwd     (or (:cwd opts) (System/getProperty "user.dir"))
-        info    (core/derive-simple-session-info {:project project
-                                                  :prefix (resolve-prefix)})
-        sock    (:sock info)
-        session (:session info)]
-    (if (tmux? sock "has-session" "-t" session)
-      (println (core/format-create-output
-                 (assoc info :status :exists :cwd cwd)))
-      (do
-        (tmux! sock "new-session" "-d" "-s" session "-c" cwd)
-        (println (core/format-create-output
-                   (assoc info :status :created :cwd cwd)))))))
+        info    (mt/derive-session-info project "default")
+        backend (mp/make-backend :tmux info)
+        result  (preflight/ensure-session! backend {:start-dir cwd})]
+    (println (if (= :exists (:status result))
+               "Session already exists"
+               "Session created"))
+    (println (str "Socket:  " (:sock info)))
+    (println (str "Session: " (:session info)))
+    (when (= :created (:status result))
+      (println (str "CWD:     " cwd)))
+    (println (str "Attach:  tmux -S " (:sock info) " attach -t " (:session info)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcommand: run
 ;; ---------------------------------------------------------------------------
 
 (defn cmd-run [{:keys [opts]}]
-  (let [{:keys [window command timeout cd sock session]}
-        (core/parse-run-args (:raw-args opts))]
+  (let [parsed  (runner/parse-args (:raw-args opts))
+        {:keys [window command timeout cd sock session]} parsed]
     (when (or (nil? window) (nil? command))
       (binding [*out* *err*]
         (println "Usage: tmux-agent run <window> <command> [--timeout N] [--cd DIR] [--sock PATH] [--session NAME]"))
       (System/exit 1))
 
-    ;; Resolve session — from opts or auto-derive
-    (let [{:keys [sock session]}
-          (if (and sock session)
-            (do (when-not (try (sh "tmux" "-S" sock "has-session" "-t" session)
-                               true (catch Exception _ false))
-                  (binding [*out* *err*]
-                    (println (str "ERROR: Session '" session "' not found on socket '" sock "'")))
-                  (System/exit 1))
-                {:sock sock :session session})
-            (let [project (or (git-project) "agent")
-                  branch  (git-branch)
-                  info    (core/derive-session-info {:project project
-                                                     :branch branch
-                                                     :prefix (resolve-prefix)})]
-              ;; Ensure session exists
-              (when-not (tmux? (:sock info) "has-session" "-t" (:session info))
-                (tmux! (:sock info) "new-session" "-d" "-s" (:session info)
-                       "-c" (System/getProperty "user.dir"))
-                (binding [*out* *err*]
-                  (println (str "Session created: " (:session info)))))
-              (select-keys info [:sock :session])))
+    (let [backend (resolve-backend {:sock sock :session session})]
+      ;; Ensure session and window exist
+      (preflight/ensure-session! backend {:start-dir (System/getProperty "user.dir")})
+      (preflight/ensure-window! backend window)
 
-          target (str session ":" window)]
+      ;; Print attach info
+      (let [ctx (:ctx backend)]
+        (binding [*out* *err*]
+          (println (str "Socket: " (:sock ctx)))
+          (println (str "Session: " (:session ctx)))
+          (println (str "Attach: tmux -S " (:sock ctx) " attach -t " (:session ctx)))))
 
-      (binding [*out* *err*]
-        (println (str "Socket: " sock))
-        (println (str "Session: " session))
-        (println (str "Attach: tmux -S " sock " attach -t " session)))
-
-      ;; Ensure window exists
-      (let [windows (some-> (tmux? sock "list-windows" "-t" session "-F" "#W")
-                            str/split-lines set)]
-        (when-not (contains? windows window)
-          (tmux! sock "new-window" "-t" session "-n" window
-                 "-c" (System/getProperty "user.dir"))))
-
-      ;; cd if requested
-      (when cd
-        (tmux! sock "send-keys" "-t" target (str "cd '" cd "'") "Enter")
-        (Thread/sleep 300))
-
-      ;; Send command with markers
-      (let [marker (core/make-marker (System/currentTimeMillis)
-                                     (rand-int 100000)
-                                     (rand-int 100000))
-            start  (str marker "_START")
-            end    (str marker "_END")]
-        (tmux! sock "send-keys" "-t" target
-               (str "echo " start "; " command "; echo " end ":$?") "Enter")
-
-        ;; Poll for completion
-        (loop [elapsed 0]
-          (let [pane (tmux! sock "capture-pane" "-t" target "-p" "-S" "-1000")]
-            (if (some #(str/starts-with? % (str end ":")) (str/split-lines pane))
-              :done
-              (if (>= elapsed timeout)
-                (do (binding [*out* *err*]
-                      (println (str "TIMEOUT: command did not complete within " timeout "s")))
-                    (System/exit 124))
-                (do (Thread/sleep 2000)
-                    (recur (+ elapsed 2)))))))
-
-        (Thread/sleep 200)
-
-        ;; Extract output
-        (let [raw    (tmux! sock "capture-pane" "-t" target "-p" "-S" "-1000")
-              result (core/extract-output raw start end)]
-          (when-not result
-            (binding [*out* *err*]
-              (println "ERROR: Could not find output markers in pane")
-              (println raw))
-            (System/exit 1))
-
-          (when (seq (:output result))
-            (println (:output result)))
-          (System/exit (:exit-code result)))))))
+      ;; Run command
+      (let [{:keys [output exit-code]}
+            (runner/run-cmd! backend {:window  window
+                                      :command command
+                                      :timeout (or timeout 300)
+                                      :cd      cd})]
+        (when (seq output)
+          (println output))
+        (System/exit exit-code)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcommand: status
 ;; ---------------------------------------------------------------------------
 
 (defn cmd-status [{:keys [opts]}]
-  (let [project (or (:project opts) (git-project) (System/getProperty "user.dir"))
+  (let [project (or (:project opts) (git-project) "agent")
         cwd     (or (:cwd opts) (System/getProperty "user.dir"))
-        info    (core/derive-simple-session-info {:project project
-                                                  :prefix (resolve-prefix)})
-        sock    (:sock info)]
-
+        info    (mt/derive-session-info project "default")
+        sock    (:sock info)
+        session (:session info)]
+    (println "=== TMUX SESSION STATUS ===")
+    (println (str "Project: " project))
+    (println (str "Socket:  " sock))
+    (println (str "CWD:     " cwd))
+    (println)
     (cond
-      ;; No socket file at all
-      (not (try (.exists (java.io.File. sock)) (catch Exception _ false)))
-      (println (core/format-status {:project project :sock sock :cwd cwd
-                                    :state :no-session}))
+      (not (.exists (java.io.File. sock)))
+      (do (println "Status: NO SESSION")
+          (println)
+          (println (str "To create: tmux-agent create " project " " cwd)))
 
-      ;; Socket exists but no session
-      (not (tmux? sock "has-session" "-t" project))
-      (println (core/format-status {:project project :sock sock :cwd cwd
-                                    :state :socket-no-session}))
+      (not (mt/tmux? sock "has-session" "-t" session))
+      (do (println "Status: SOCKET EXISTS, NO SESSION")
+          (println)
+          (println (str "To create: tmux-agent create " project " " cwd)))
 
-      ;; Active session — gather window info
       :else
-      (let [win-indices (-> (tmux! sock "list-windows" "-t" project "-F" "#{window_index}")
-                            str/split-lines)
-            windows (mapv (fn [idx]
-                            (let [name (tmux! sock "display-message" "-t" (str project ":" idx)
-                                              "-p" "#{window_name}")
-                                  cmd  (tmux! sock "display-message" "-t" (str project ":" idx)
-                                              "-p" "#{pane_current_command}")
-                                  wcwd (tmux! sock "display-message" "-t" (str project ":" idx)
-                                              "-p" "#{pane_current_path}")]
-                              {:index idx :name name :cmd cmd :cwd wcwd
-                               :busy? (core/busy? cmd)}))
-                          win-indices)]
-        (println (core/format-status {:project project :sock sock :cwd cwd
-                                      :state :active :windows windows}))))))
+      (let [win-indices (-> (mt/tmux! sock "list-windows" "-t" session
+                                      "-F" "#{window_index}")
+                            str/split-lines)]
+        (println "Status: ACTIVE")
+        (println)
+        (println (str "Attach: tmux -S " sock " attach -t " session))
+        (println)
+        (println "=== WINDOWS ===")
+        (doseq [idx win-indices]
+          (let [name (mt/tmux! sock "display-message" "-t" (str session ":" idx)
+                               "-p" "#{window_name}")
+                cmd  (mt/tmux! sock "display-message" "-t" (str session ":" idx)
+                               "-p" "#{pane_current_command}")
+                wcwd (mt/tmux! sock "display-message" "-t" (str session ":" idx)
+                               "-p" "#{pane_current_path}")]
+            (println (str "  " idx ": " name
+                          (when-not (#{"bash" "zsh" "fish" "sh"} cmd) " [RUNNING]")))
+            (println (str "     cmd: " cmd))
+            (println (str "     cwd: " wcwd))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcommand: wait
 ;; ---------------------------------------------------------------------------
 
 (defn cmd-wait [{:keys [opts]}]
-  (let [project       (or (:project opts) (git-project) (System/getProperty "user.dir"))
+  (let [project       (or (:project opts) (git-project) "agent")
         window        (or (:window opts) "0")
         capture-lines (or (some-> (:capture-lines opts) parse-long) 0)
-        info          (core/derive-simple-session-info {:project project
-                                                        :prefix (resolve-prefix)})
-        sock          (:sock info)]
-
-    ;; Verify session
-    (when-not (tmux? sock "has-session" "-t" project)
+        info          (mt/derive-session-info project "default")
+        sock          (:sock info)
+        session       (:session info)]
+    (when-not (mt/tmux? sock "has-session" "-t" session)
       (binding [*out* *err*]
-        (println (str "Error: Session '" project "' not found at " sock)))
+        (println (str "Error: Session '" session "' not found at " sock)))
       (System/exit 1))
 
-    ;; Verify window
-    (let [win-names (some-> (tmux? sock "list-windows" "-t" project "-F" "#{window_name}")
-                            str/split-lines set)
-          win-indices (some-> (tmux? sock "list-windows" "-t" project "-F" "#{window_index}")
-                              str/split-lines set)]
-      (when-not (or (contains? win-names window) (contains? win-indices window))
-        (binding [*out* *err*]
-          (println (str "Error: Window '" window "' not found in session '" project "'")))
-        (System/exit 1)))
+    (println (str "Waiting for command to complete in " session ":" window "..."))
 
-    (println (str "Waiting for command to complete in " project ":" window "..."))
-
-    ;; Poll until shell prompt returns
     (loop []
-      (let [cmd (tmux! sock "display-message" "-t" (str project ":" window)
-                       "-p" "#{pane_current_command}")]
-        (if (not (core/busy? cmd))
+      (let [cmd (mt/tmux! sock "display-message" "-t" (str session ":" window)
+                          "-p" "#{pane_current_command}")]
+        (if (#{"bash" "zsh" "fish" "sh"} cmd)
           :done
           (do (Thread/sleep 1000) (recur)))))
 
-    (println (str "Command finished in " project ":" window))
+    (println (str "Command finished in " session ":" window))
 
-    ;; Capture output if requested
     (when (pos? capture-lines)
       (println)
       (println (str "=== OUTPUT (last " capture-lines " lines) ==="))
-      (println (tmux! sock "capture-pane" "-t" (str project ":" window)
-                      "-p" "-S" (str "-" capture-lines))))))
+      (println (mt/tmux! sock "capture-pane" "-t" (str session ":" window)
+                         "-p" "-S" (str "-" capture-lines))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Help
@@ -284,14 +214,10 @@
     :args->opts [:project :window :capture-lines]}
    {:cmds [] :fn cmd-help}])
 
-;; The run subcommand uses manual arg parsing (core/parse-run-args) because
-;; its positional args (window, command) precede named opts. We pass the
-;; raw args through.
 (defn -main [& args]
   (let [cmds (take-while #(not (str/starts-with? % "-")) args)
         first-cmd (first cmds)]
     (if (= "run" first-cmd)
-      ;; Pass everything after "run" to cmd-run via :raw-args
       (cmd-run {:opts {:raw-args (vec (rest args))}})
       (cli/dispatch dispatch-table args))))
 
