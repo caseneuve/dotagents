@@ -135,6 +135,8 @@ Use descriptive, scoped names:
 | `CMUX_AGENT_NAME` | Agent identity for message `from` field |
 | `PI_SESSION_NAME` | Fallback identity |
 | `CMUX_SOCKET_PATH` | Auto-detected; triggers cmux backend |
+| `TMUX` | Auto-detected; triggers tmux backend when cmux is not available |
+| `AGENT_NOTIFY_MODE` | Notification strategy for tmux backend: `auto`, `tmux`, or `notify-send` |
 
 ## Architecture: pluggable backends
 
@@ -155,10 +157,20 @@ interface ChannelBackend {
 ```
 
 Current backends:
-- **CmuxBackend** — file-based messages + `cmux` CLI for sidebar/notifications
-- **FileOnlyBackend** — file-based messages + `osascript` notifications (no sidebar)
+- **CmuxBackend** — file-based messages + `cmux` CLI for sidebar/notifications (macOS)
+- **TmuxBackend** — file-based messages + tmux pane titles, user options, and `display-message` for status/notifications (Linux / cross-platform). Supports `notify-send` with dunst stack tags for in-place progress updates.
+- **FileOnlyBackend** — file-based messages + platform-native notifications (`osascript` on macOS, `notify-send` on Linux). No status bar integration.
+
+Backend selection is automatic:
+1. cmux detected (`CMUX_SOCKET_PATH` or `cmux` on PATH) → CmuxBackend
+2. tmux session detected (`$TMUX` set) → TmuxBackend
+3. Otherwise → FileOnlyBackend
+
+Set `AGENT_NOTIFY_MODE` to override TmuxBackend notification strategy:
+- `tmux` — always use `tmux display-message` (default when `notify-send` not found)
+- `notify-send` — always use `notify-send` (best with dunst for progress bars)
+- `auto` — detect `notify-send` availability at startup (default)
 
 Future backends could add:
-- **TmuxBackend** — tmux `display-message` / `set-option` for status
 - **RemoteBackend** — HTTP/WebSocket for cross-machine agents
 - **RedisBackend** — for high-throughput multi-agent systems

@@ -1,19 +1,24 @@
 ---
-name: cmux-comms
-description: Communicate with other agents in the same cmux workspace using a shared channel derived from CMUX_WORKSPACE_ID.
+name: agent-comms
+description: Communicate with other agents using shared channels, with backend-aware status and notifications (cmux, tmux, or file-only).
 ---
 
-# cmux-comms
+# agent-comms
 
-Agents in the same cmux workspace (tab) communicate through channels.
+Agents communicate through named channels backed by shared JSON files.
+The protocol is the same regardless of backend (cmux, tmux, or file-only).
+Status, progress, and notifications adapt to whatever is available.
 
 ## Setup — do this immediately
 
-Read `CMUX_WORKSPACE_ID` from the environment. This is the **lobby channel**.
+The lobby channel is **injected into your system prompt** by the extension.
+Look for `Comms protocol (lobby: <channel>):` near the end of your prompt.
+Use that channel directly — do not re-derive it from environment variables.
+
 Start watching it right away:
 
 ```
-channel_watch(channel: <CMUX_WORKSPACE_ID>)
+channel_watch(channel: <lobby>)
 ```
 
 Every agent in the workspace does this. The lobby is always open.
@@ -23,7 +28,7 @@ sent on the channel so other agents know you're listening.
 
 ## Lobby vs task channels
 
-The **lobby** (`CMUX_WORKSPACE_ID`) is for coordination:
+The **lobby** (`CMUX_WORKSPACE_ID` or `tmux/<session>`) is for coordination:
 - Announcing what you're working on
 - Telling others where to find your results
 - Short status updates
@@ -151,7 +156,7 @@ and **auto-acknowledged**. When one arrives:
 To catch up on messages you might have missed, use the `catch_up` flag:
 
 ```
-channel_watch(channel: <CMUX_WORKSPACE_ID>, catch_up: true)
+channel_watch(channel: <lobby>, catch_up: true)
 ```
 
 This replays all unacked messages, injects them into your conversation, acks them,
@@ -235,3 +240,36 @@ independently. Use this structure:
 ```
 
 This avoids the reviewer guessing what to look at or how to verify.
+
+## Backend-specific notes
+
+### cmux (macOS)
+
+Full sidebar support: status pills, progress bar, log lines, notification badges.
+Detected automatically when `CMUX_SOCKET_PATH` is set or `cmux` is on PATH.
+
+### tmux (Linux / cross-platform)
+
+Status is shown via tmux pane titles and pane user options.
+Notifications use `tmux display-message` by default.
+
+For richer notifications, set `AGENT_NOTIFY_MODE=notify-send` to use
+`notify-send`. With dunst, progress bars update in-place via stack tags.
+
+To show agent status in the tmux status bar, add to `tmux.conf`:
+
+```tmux
+set -g pane-border-format "#{pane_title}"
+set -g pane-border-status top
+```
+
+For a status-right integration, use the bundled helper:
+
+```tmux
+set -g status-right '#(~/.agent-channels/tmux-status.sh #{pane_id})'
+```
+
+### file-only (fallback)
+
+Messages work (file-based). Status and progress are no-ops.
+Notifications fall back to `osascript` on macOS or `notify-send` on Linux.

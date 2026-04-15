@@ -161,64 +161,61 @@
       :target (str (fs/path bin-dir "ag-tmux"))
       :label "~/.local/bin/ag-tmux"}]))
 
+(defn script-ops
+  "Symlink ops for shared helper scripts (~/.agent-channels/)."
+  [shared-src home]
+  (let [channels-dir (str (fs/path home ".agent-channels"))]
+    [{:op :link
+      :source (str (fs/path shared-src "scripts" "tmux-status.sh"))
+      :target (str (fs/path channels-dir "tmux-status.sh"))
+      :label "~/.agent-channels/tmux-status.sh"}]))
+
 (defn plan-claude [p]
   (concat
    [(section "Claude")]
    (tree-ops {:src (:claude-src p) :dst (:claude-dst p) :mode :link})
-   ;; Exclude darwin/ — platform-specific skills are handled per-runtime,
-   ;; not via the shared tree bulk-link.
-   (tree-ops {:src (:shared-src p) :dst (:claude-dst p) :mode :link
-              :include? (fn [rel] (not (str/starts-with? rel "darwin/")))})
+   (tree-ops {:src (:shared-src p) :dst (:claude-dst p) :mode :link})
    [{:op :merge-claude-settings
      :target-dir (:claude-dst p)
      :hooks-json (:hooks-json p)
      :perms-json (:perms-json p)}]
    [(section "CLI binaries")]
-   (bin-ops (:shared-src p) (:home p))))
-
-(defn darwin? []
-  (str/starts-with? (System/getProperty "os.name") "Mac"))
+   (bin-ops (:shared-src p) (:home p))
+   [(section "Helper scripts")]
+   (script-ops (:shared-src p) (:home p))))
 
 (defn plan-agents [p]
-  (let [darwin-skills-dir (str (fs/path (:shared-src p) "darwin" "skills"))]
-    (concat
-     [(section "Agents")]
-     [{:op :link
-       :source (str (fs/path (:agents-src p) "AGENTS.md"))
-       :target (str (fs/path (:agents-dst p) "AGENTS.md"))
-       :label "~/.agents/AGENTS.md"}
-      {:op :link
-       :source (str (fs/path (:agents-src p) "AGENTS.md"))
-       :target (str (fs/path (:codex-dst p) "AGENTS.md"))
-       :label "~/.codex/AGENTS.md"}]
-     (tree-ops {:src (str (fs/path (:agents-src p) "hooks"))
-                :dst (str (fs/path (:agents-dst p) "hooks"))
-                :mode :link})
-     (skill-ops {:src (str (fs/path (:agents-src p) "skills"))
-                 :dst (str (fs/path (:agents-dst p) "skills"))
-                 :markdown-mode :copy})
-     (skill-ops {:src (str (fs/path (:shared-src p) "skills"))
-                 :dst (str (fs/path (:agents-dst p) "skills"))
-                 :markdown-mode :link})
-     (when (and (darwin?) (fs/directory? darwin-skills-dir))
-       (skill-ops {:src darwin-skills-dir
-                   :dst (str (fs/path (:agents-dst p) "skills"))
-                   :markdown-mode :link}))
-     [(section "CLI binaries")]
-     (bin-ops (:shared-src p) (:home p)))))
+  (concat
+   [(section "Agents")]
+   [{:op :link
+     :source (str (fs/path (:agents-src p) "AGENTS.md"))
+     :target (str (fs/path (:agents-dst p) "AGENTS.md"))
+     :label "~/.agents/AGENTS.md"}
+    {:op :link
+     :source (str (fs/path (:agents-src p) "AGENTS.md"))
+     :target (str (fs/path (:codex-dst p) "AGENTS.md"))
+     :label "~/.codex/AGENTS.md"}]
+   (tree-ops {:src (str (fs/path (:agents-src p) "hooks"))
+              :dst (str (fs/path (:agents-dst p) "hooks"))
+              :mode :link})
+   (skill-ops {:src (str (fs/path (:agents-src p) "skills"))
+               :dst (str (fs/path (:agents-dst p) "skills"))
+               :markdown-mode :copy})
+   (skill-ops {:src (str (fs/path (:shared-src p) "skills"))
+               :dst (str (fs/path (:agents-dst p) "skills"))
+               :markdown-mode :link})
+   [(section "CLI binaries")]
+   (bin-ops (:shared-src p) (:home p))
+   [(section "Helper scripts")]
+   (script-ops (:shared-src p) (:home p))))
 
 (defn plan-pi [p]
-  (let [base-extensions [(str (fs/path (:pi-src p) "extensions"))]
-        darwin-ext-dir  (str (fs/path (:pi-src p) "darwin" "extensions"))
-        extensions      (if (and (darwin?) (fs/directory? darwin-ext-dir))
-                          (conj base-extensions darwin-ext-dir)
-                          base-extensions)]
-    [{:op :section :title "Pi"}
-     {:op :merge-pi-settings
-      :target-dir (:pi-dst p)
-      :extensions extensions
-      :themes [(str (fs/path (:pi-src p) "themes"))]
-      :theme "modus-operandi"}]))
+  [{:op :section :title "Pi"}
+   {:op :merge-pi-settings
+    :target-dir (:pi-dst p)
+    :extensions [(str (fs/path (:pi-src p) "extensions"))]
+    :themes [(str (fs/path (:pi-src p) "themes"))]
+    :theme "modus-operandi"}])
 
 (defn plan [p {:keys [mode]}]
   (case mode
@@ -452,39 +449,31 @@
         (println line))
 
       :agents
-      (let [darwin-skills-dir (str (fs/path (:shared-src p) "darwin" "skills"))
-            darwin-line (when (and (darwin?) (fs/directory? darwin-skills-dir))
-                          [(str "  - " darwin-skills-dir " (darwin)")])]
-        (doseq [line (concat ["Bootstrapping agent dotfiles..."
+      (doseq [line (concat ["Bootstrapping agent dotfiles..."
                             "Sources:"
                             (str "  - " (:agents-src p))
-                            (str "  - " (:shared-src p))]
-                           darwin-line
-                           ["Targets:"
+                            (str "  - " (:shared-src p))
+                            "Targets:"
                             (str "  - " (:agents-dst p))
                             (str "  - " (fs/path (:codex-dst p) "AGENTS.md"))
                             ""]
                            force-line
                            dry-run-line
                            [""])]
-        (println line)))
+        (println line))
 
       :pi
-      (let [darwin-ext-dir (str (fs/path (:pi-src p) "darwin" "extensions"))
-            darwin-line (when (and (darwin?) (fs/directory? darwin-ext-dir))
-                          [(str "  - " darwin-ext-dir " (darwin)")])]
-        (doseq [line (concat ["Bootstrapping Pi resources..."
+      (doseq [line (concat ["Bootstrapping Pi resources..."
                             "Sources:"
-                            (str "  - " (fs/path (:pi-src p) "extensions"))]
-                           darwin-line
-                           [(str "  - " (fs/path (:pi-src p) "themes"))
+                            (str "  - " (fs/path (:pi-src p) "extensions"))
+                            (str "  - " (fs/path (:pi-src p) "themes"))
                             "Target:"
                             (str "  - " (:pi-dst p))
                             ""]
                            force-line
                            dry-run-line
                            [""])]
-          (println line)))
+        (println line))
 
       :all
       (doseq [line (concat ["Bootstrapping all targets..." ""]

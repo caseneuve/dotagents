@@ -354,3 +354,33 @@ The guiding idea is to prefer:
 - minimal custom state
 
 over large do-everything workflow extensions.
+
+### `extensions/agent-channel/`
+
+Adds inter-agent communication tools (`channel_send`, `channel_read`, `channel_watch`, etc.)
+with pluggable backends for status and notifications.
+
+What it does:
+
+- registers channel_* tools for file-based inter-agent messaging via `~/.agent-channels/`
+- auto-detects the best available backend: cmux (macOS sidebar), tmux (pane titles + status-right), or file-only fallback
+- injects incoming messages into the conversation with turn-control (OVER/OUT protocol)
+- persists agent identity and watch list across session reloads
+- bundles the `agent-comms` skill doc for teaching agents the protocol
+
+Backend behaviour:
+
+| Backend | Status display | Notifications | Progress |
+|---------|---------------|---------------|----------|
+| cmux | Sidebar pills | cmux notify + badge | Sidebar bar |
+| tmux | Pane title + `@agent-*` options | `tmux display-message` or `notify-send` | Status-right + optional dunst |
+| file | no-op | `osascript` (macOS) / `notify-send` (Linux) | no-op |
+
+Environment variables:
+
+- `CMUX_SOCKET_PATH` / `cmux` on PATH → cmux backend
+- `$TMUX` set → tmux backend
+- `AGENT_NOTIFY_MODE` → override tmux notification strategy (`auto`, `tmux`, `notify-send`)
+- `CMUX_AGENT_NAME` → agent identity
+
+See `pi/extensions/agent-channel/README.md` for full docs.

@@ -1,1 +1,0 @@
-../../../../../../shared/darwin/skills/cmux-comms/SKILL.md

@@ -13,12 +13,12 @@ blocks: []
 ## Context
 
 During the mux-bb code review session, both agents (dev + reviewer) identified
-friction points in the cmux-comms and code-review skill workflows. These are
+friction points in the agent-comms and code-review skill workflows. These are
 real observations from a working multi-agent review cycle, not theoretical.
 
 ## Acceptance Criteria
 
-### cmux-comms SKILL.md
+### agent-comms SKILL.md
 
 - [ ] Add guidance on combining lobby announcement with first task-channel message
       (send both simultaneously to reduce the 3-message ceremony to 2)
@@ -48,7 +48,7 @@ real observations from a working multi-agent review cycle, not theoretical.
 
 ## Affected Files
 
-- `pi/darwin/extensions/agent-channel/skills/cmux-comms/SKILL.md`
+- `pi/extensions/agent-channel/skills/agent-comms/SKILL.md`
 - `agents/skills/code-review/SKILL.md`
 - `claude/skills/code-review/SKILL.md`
 

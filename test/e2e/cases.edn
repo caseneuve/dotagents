@@ -35,7 +35,7 @@
            [:stdout-contains "== Agents =="]
            [:fs-layout {:symlinks [["{home}/.agents/AGENTS.md" "{work}/agents/AGENTS.md"]
                                    ["{home}/.codex/AGENTS.md" "{work}/agents/AGENTS.md"]
-                                   ["{home}/.agents/skills/add-todo/todo-new.sh" "{work}/shared/skills/add-todo/todo-new.sh"]]
+                                   ["{home}/.agents/skills/add-todo/src/todo/cli.clj" "{work}/shared/skills/add-todo/src/todo/cli.clj"]]
                         :regular-files ["{home}/.agents/skills/add-todo/SKILL.md"]}]]}
 
    {:scenario :claude-merges-settings
@@ -60,7 +60,7 @@
                                          "Bash(/tmp/existing:*)"]
                                         ["{home}/.claude/settings.json"
                                          [:permissions :allow]
-                                         "Bash({home}/.claude/skills/pk-tmux/tmux-status.sh:*)"]]}]]}
+                                         "Bash(ag-tmux:*)"]]}]]}
 
    {:scenario :dry-run-makes-no-changes
     :given {:vars {:root "/tmp/dotagents-e2e-dry"
@@ -78,55 +78,6 @@
            [:fs-layout {:missing ["{home}/.claude"
                                   "{home}/.agents"
                                   "{home}/.pi"]}]]}]}
-
- {:suite :add-todo-helpers
-  :desc "Add-todo helper script behavior"
-  :given {:vars {:work "/work"
-                  :fixtures-dir "test/fixtures"}}
-  :cases
-  [{:scenario :todo-new-adds-empty-labels-by-default
-    :given {:vars {:root "/tmp/dotagents-e2e-todo-labels-default"}
-             :fixtures [[:remove "{root}"]
-                        [:dir "{root}"]]}
-    :cleanup {:fixtures [[:remove "{root}"]]}
-    :when {:cwd "{work}"
-           :run ["bash" "{work}/shared/skills/add-todo/todo-new.sh"
-                 "--type" "feature"
-                 "--slug" "labels-default"
-                 "--dir" "{root}/todos"]}
-    :then [[:exit-code 0]
-           [:stdout-contains "id=0001"]
-           [:fs-layout {:contains [["{root}/todos/0001-labels-default.md" "labels: []"]]}]]}
-
-   {:scenario :todo-new-writes-normalized-labels
-    :given {:vars {:root "/tmp/dotagents-e2e-todo-labels-custom"}
-             :fixtures [[:remove "{root}"]
-                        [:dir "{root}"]]}
-    :cleanup {:fixtures [[:remove "{root}"]]}
-    :when {:cwd "{work}"
-           :run ["bash" "{work}/shared/skills/add-todo/todo-new.sh"
-                 "--type" "feature"
-                 "--slug" "labels-custom"
-                 "--labels" "MVP, NEXT_VER, MVP"
-                 "--dir" "{root}/todos"]}
-    :then [[:exit-code 0]
-           [:stdout-contains "id=0001"]
-           [:fs-layout {:contains [["{root}/todos/0001-labels-custom.md" "labels: [MVP, NEXT_VER]"]]}]]}
-
-   {:scenario :todo-list-filters-by-label-and-ignores-missing-labels
-    :given {:vars {:root "/tmp/dotagents-e2e-todo-label-filter"}
-             :fixtures [[:remove "{root}"]
-                        [:dir "{root}/todos"]
-                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]
-                        [:copy "{fixtures-dir}/todos/0002-no-labels.md" "{root}/todos/0002-no-labels.md"]]}
-    :cleanup {:fixtures [[:remove "{root}"]]}
-    :when {:cwd "{work}"
-           :run ["bash" "{work}/shared/skills/add-todo/todo-list.sh"
-                 "--label" "MVP"
-                 "--dir" "{root}/todos"]}
-    :then [[:exit-code 0]
-           [:stdout-contains "0001"]
-           [:stderr-contains "1 todo(s) found"]]}]}
 
  {:suite :add-todo-bb
   :desc "Babashka todo CLI (replaces shell helpers)"
@@ -216,13 +167,13 @@
   [{:scenario :bb-tmux-create-and-run
     :when {:cwd "{work}"
            :run ["bash" "-c"
-                 "bb -cp {cli} -m tmux-agent.cli create e2e-tmux /tmp && bb -cp {cli} -m tmux-agent.cli run test-win 'echo hello-e2e' --sock /tmp/agents-e2e-tmux.sock --session e2e-tmux --timeout 10; rc=$?; tmux -S /tmp/agents-e2e-tmux.sock kill-server 2>/dev/null; exit $rc"]}
+                 "bb -m tmux-agent.cli create e2e-tmux /tmp && bb -m tmux-agent.cli run test-win 'echo hello-e2e' --sock /tmp/agents-e2e-tmux.sock --session e2e-tmux --timeout 10; rc=$?; tmux -S /tmp/agents-e2e-tmux.sock kill-server 2>/dev/null; exit $rc"]}
     :then [[:exit-code 0]
            [:stdout-contains "hello-e2e"]]}
 
    {:scenario :bb-tmux-create-is-idempotent
     :when {:cwd "{work}"
            :run ["bash" "-c"
-                 "bb -cp {cli} -m tmux-agent.cli create e2e-idem /tmp && bb -cp {cli} -m tmux-agent.cli create e2e-idem /tmp; rc=$?; tmux -S /tmp/agents-e2e-idem.sock kill-server 2>/dev/null; exit $rc"]}
+                 "bb -m tmux-agent.cli create e2e-idem /tmp && bb -m tmux-agent.cli create e2e-idem /tmp; rc=$?; tmux -S /tmp/agents-e2e-idem.sock kill-server 2>/dev/null; exit $rc"]}
     :then [[:exit-code 0]
            [:stdout-contains "Session already exists"]]}]}]
