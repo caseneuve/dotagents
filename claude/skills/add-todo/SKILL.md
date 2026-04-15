@@ -22,10 +22,10 @@ Items stored in `./todos/`. All commands print `key=value` on stdout.
 
 | Command | Usage |
 |---------|-------|
-| `todo next-id [PARENT]` | `todo next-id` → `0005`, `todo next-id 0001` → `0001.4` |
-| `todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID]` | Scaffold from template |
-| `todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID]` | List/filter todos |
-| `todo status ID STATUS` | Update status (`open`, `in_progress`, `closed`, `blocked`) |
+| `todo next-id [--dir DIR] [PARENT]` | `todo next-id` → `0005`, `todo next-id 0001` → `0001.4` |
+| `todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]` | Scaffold from template |
+| `todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]` | List/filter todos |
+| `todo status ID STATUS [--dir DIR]` | Update status (`open`, `in_progress`, `closed`, `blocked`) |
 
 ## Item Types
 

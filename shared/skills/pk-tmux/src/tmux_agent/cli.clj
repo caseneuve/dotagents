@@ -18,14 +18,25 @@
             [mux.runner.preflight :as preflight]))
 
 ;; ---------------------------------------------------------------------------
+;; Shared constants
+;; ---------------------------------------------------------------------------
+
+(def ^:private shell-commands #{"bash" "zsh" "fish" "sh"})
+
+(defn- shell-cmd? [cmd] (contains? shell-commands cmd))
+
+;; ---------------------------------------------------------------------------
 ;; I/O helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- sh?
   "Run command, return trimmed stdout or nil on failure."
   [& args]
-  (try (str/trim (:out (apply p/sh args)))
-       (catch Exception _ nil)))
+  (try
+    (let [result (apply p/sh args)]
+      (when (zero? (:exit result))
+        (str/trim (:out result))))
+    (catch Exception _ nil)))
 
 (defn- git-project []
   (some-> (sh? "git" "rev-parse" "--show-toplevel")
@@ -140,9 +151,16 @@
                 wcwd (mt/tmux! sock "display-message" "-t" (str session ":" idx)
                                "-p" "#{pane_current_path}")]
             (println (str "  " idx ": " name
-                          (when-not (#{"bash" "zsh" "fish" "sh"} cmd) " [RUNNING]")))
+                          (when-not (shell-cmd? cmd) " [RUNNING]")))
             (println (str "     cmd: " cmd))
-            (println (str "     cwd: " wcwd))))))))
+            (println (str "     cwd: " wcwd))))
+        (println)
+        (println "=== QUICK COMMANDS ===")
+        (println (str "New window:    tmux -S " sock " new-window -t " session " -n <name>"))
+        (println (str "Send command:  tmux -S " sock " send-keys -t " session ":<window> '<cmd>' Enter"))
+        (println (str "Capture out:   tmux -S " sock " capture-pane -t " session ":<window> -p -S -20"))
+        (println (str "Kill window:   tmux -S " sock " kill-window -t " session ":<window>"))
+        (println (str "Kill session:  tmux -S " sock " kill-session -t " session))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcommand: wait
@@ -162,10 +180,20 @@
 
     (println (str "Waiting for command to complete in " session ":" window "..."))
 
+    ;; Verify window exists
+    (let [win-names (some-> (mt/tmux? sock "list-windows" "-t" session "-F" "#{window_name}")
+                            str/split-lines set)
+          win-indices (some-> (mt/tmux? sock "list-windows" "-t" session "-F" "#{window_index}")
+                              str/split-lines set)]
+      (when-not (or (contains? win-names window) (contains? win-indices window))
+        (binding [*out* *err*]
+          (println (str "Error: Window '" window "' not found in session '" session "'")))
+        (System/exit 1)))
+
     (loop []
       (let [cmd (mt/tmux! sock "display-message" "-t" (str session ":" window)
                           "-p" "#{pane_current_command}")]
-        (if (#{"bash" "zsh" "fish" "sh"} cmd)
+        (if (shell-cmd? cmd)
           :done
           (do (Thread/sleep 1000) (recur)))))
 

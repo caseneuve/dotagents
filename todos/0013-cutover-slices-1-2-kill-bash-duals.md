@@ -51,7 +51,7 @@ implementations. This creates confusion — two code paths for the same behavior
 
 - [x] Update `scripts/bootstrap.clj` to install symlinks for `todo` and
       `tmux-agent` to `~/.local/bin/`
-- [x] On `--force`, remove stale `.sh` symlinks if they exist
+- [ ] On `--force`, remove stale `.sh` symlinks if they exist
 - [x] Update any `settings-permissions.json` entries that reference `.sh` paths
 
 ### Verification

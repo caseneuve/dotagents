@@ -1,6 +1,6 @@
 ---
 name: pk-tmux
-description: Run commands in persistent per-project tmux sessions and retrieve clean output through helper scripts.
+description: Run commands in persistent per-project tmux sessions and retrieve clean output through subcommands.
 ---
 
 # PK Tmux
