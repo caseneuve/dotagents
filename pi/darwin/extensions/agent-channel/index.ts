@@ -518,11 +518,24 @@ export default function (pi: ExtensionAPI) {
     poller?.stopAll();
   });
 
-  // ── Inject agent identity into system prompt ──
+  // ── Inject agent identity + comms protocol into system prompt ──
   pi.on("before_agent_start", async (event) => {
     const name = agentName();
     const commsState = commsMuted ? "off" : "on";
-    const identity = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
+    const lobby = process.env.CMUX_WORKSPACE_ID;
+
+    let identity = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
+
+    if (lobby) {
+      identity += `
+
+Comms protocol (lobby: ${lobby}):
+- The lobby is for SHORT coordination only — announce what you're doing, where to find results.
+- For actual work (code reviews, task exchanges), create a DEDICATED task channel with a descriptive name (e.g. "project/review-feature-x") and announce it on the lobby.
+- Never send long content (reviews, diffs, detailed results) on the lobby — it pollutes the shared space.
+- End messages with OVER (your turn) or OUT (conversation done, no reply expected).`;
+    }
+
     return {
       systemPrompt: event.systemPrompt + identity,
     };
