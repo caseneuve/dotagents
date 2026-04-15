@@ -533,7 +533,8 @@ Comms protocol (lobby: ${lobby}):
 - The lobby is for SHORT coordination only — announce what you're doing, where to find results.
 - For actual work (code reviews, task exchanges), create a DEDICATED task channel with a descriptive name (e.g. "project/review-feature-x") and announce it on the lobby.
 - Never send long content (reviews, diffs, detailed results) on the lobby — it pollutes the shared space.
-- End messages with OVER (your turn) or OUT (conversation done, no reply expected).`;
+- End messages with OVER (your turn) or OUT (conversation done, no reply expected).
+- For the full protocol (channel naming, timeouts, review format), read the cmux-comms skill.`;
     }
 
     return {
