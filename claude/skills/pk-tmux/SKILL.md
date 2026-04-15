@@ -10,30 +10,24 @@ triggers:
   - terminal session
 allowedPrompts:
   - tool: Bash
-    prompt: run tmux-run.sh to execute commands in tmux and return output
-  - tool: Bash
-    prompt: run tmux helper scripts (tmux-status.sh, tmux-create.sh, tmux-wait.sh)
-  - tool: Bash
-    prompt: send commands to tmux session
-  - tool: Bash
-    prompt: capture tmux pane output
+    prompt: tmux-agent
 ---
 
 # pk-tmux — Session Management Skill
 
-## tmux-run.sh — Preferred for all commands needing output
+## tmux-agent run — Preferred for all commands needing output
 
 One call handles session/window creation, execution, polling, and clean output extraction. Exits with the command's exit code.
 
 ```bash
-~/.claude/skills/pk-tmux/tmux-run.sh <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
+tmux-agent run <window> '<command>' [--timeout SECONDS] [--cd DIR] [--sock PATH] [--session NAME]
 ```
 
 ```bash
-~/.claude/skills/pk-tmux/tmux-run.sh test 'npm test'
-~/.claude/skills/pk-tmux/tmux-run.sh build 'make all' --timeout 600
-~/.claude/skills/pk-tmux/tmux-run.sh lint 'ruff check .' --cd ~/myproject
-~/.claude/skills/pk-tmux/tmux-run.sh deploy 'kubectl apply -f .' --sock /tmp/claude-app.sock --session app
+tmux-agent run test 'npm test'
+tmux-agent run build 'make all' --timeout 600
+tmux-agent run lint 'ruff check .' --cd ~/myproject
+tmux-agent run deploy 'kubectl apply -f .' --sock /tmp/custom.sock --session app
 ```
 
 Default timeout: 300s. Use `run_in_background: true` for long commands.
@@ -42,30 +36,32 @@ On first call, stderr shows the attach command — show it to the user so they c
 
 Use **unique window names** (`build`, `test`, `server`, `lint`). Filter verbose output with `| grep` or `| tail`.
 
-## Helper Scripts
+## Other Subcommands
 
 ```bash
-~/.claude/skills/pk-tmux/tmux-status.sh [project] [cwd]   # session state, windows, processes
-~/.claude/skills/pk-tmux/tmux-create.sh [project] [cwd]   # ensure session exists
-~/.claude/skills/pk-tmux/tmux-wait.sh <project> <window>  # poll until shell returns (for send-keys flows)
+tmux-agent status [PROJECT] [CWD]        # session state, windows, processes
+tmux-agent create [PROJECT] [CWD]        # ensure session exists
+tmux-agent wait [PROJECT] [WINDOW] [N]   # poll until shell returns
 ```
 
 ## Manual tmux Commands
 
+Default socket is `/tmp/mux.sock`:
+
 ```bash
 # Send command
-tmux -S /tmp/claude-<project>.sock send-keys -t <project>:<window> '<command>' Enter
+tmux -S /tmp/mux.sock send-keys -t <session>:<window> '<command>' Enter
 
 # Capture output
-tmux -S /tmp/claude-<project>.sock capture-pane -t <project>:<window> -p -S -20
+tmux -S /tmp/mux.sock capture-pane -t <session>:<window> -p -S -20
 
 # Check if busy
-tmux -S /tmp/claude-<project>.sock display-message -t <project>:<window> -p "#{pane_current_command}"
+tmux -S /tmp/mux.sock display-message -t <session>:<window> -p "#{pane_current_command}"
 
 # List windows
-tmux -S /tmp/claude-<project>.sock list-windows -t <project> -F "#{window_index}: #{window_name}"
+tmux -S /tmp/mux.sock list-windows -t <session> -F "#{window_index}: #{window_name}"
 
 # Kill window / session
-tmux -S /tmp/claude-<project>.sock kill-window -t <project>:<window>
-tmux -S /tmp/claude-<project>.sock kill-session -t <project>
+tmux -S /tmp/mux.sock kill-window -t <session>:<window>
+tmux -S /tmp/mux.sock kill-session -t <session>
 ```

@@ -131,12 +131,11 @@
 (deftest bin-ops-test
   (testing "produces symlink ops for CLI tools"
     (let [ops (sut/bin-ops "/repo/shared" "/home/user")]
-      (is (= 2 (count ops)))
+      (is (= 3 (count ops)))
       (is (every? #(= :link (:op %)) ops))
       (is (some #(clojure.string/ends-with? (:target %) ".local/bin/sandbox") ops))
       (is (some #(clojure.string/ends-with? (:target %) ".local/bin/todo") ops))
-      (is (some #(clojure.string/ends-with? (:source %) "sandbox/src/sandbox/cli.clj") ops))
-      (is (some #(clojure.string/ends-with? (:source %) "add-todo/src/todo/cli.clj") ops)))))
+      (is (some #(clojure.string/ends-with? (:target %) ".local/bin/tmux-agent") ops)))))
 
 (deftest plan-agents-includes-bin-ops
   (testing "plan-agents includes ~/.local/bin CLI links"
@@ -151,9 +150,10 @@
           bin-links (filter #(and (= (:op %) :link)
                                  (some-> (:label %) (clojure.string/includes? "local/bin")))
                             ops)]
-      (is (= 2 (count bin-links)))
+      (is (= 3 (count bin-links)))
       (is (some #(= "~/.local/bin/sandbox" (:label %)) bin-links))
-      (is (some #(= "~/.local/bin/todo" (:label %)) bin-links)))))
+      (is (some #(= "~/.local/bin/todo" (:label %)) bin-links))
+      (is (some #(= "~/.local/bin/tmux-agent" (:label %)) bin-links)))))
 
 (deftest plan-pi-excludes-bin-ops
   (testing "plan-pi does not include ~/.local/bin/ links"
