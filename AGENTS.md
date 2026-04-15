@@ -9,6 +9,7 @@ This repo maintains parallel agent runtimes and shared helpers:
 - `claude/` -- Claude-facing docs/config
 - `agents/` -- Codex/agents-facing docs/config
 - `shared/` -- shared hooks and helper scripts used by multiple runtimes
+- `shared/darwin/` -- macOS-specific shared skills (bootstrapped on Darwin only)
 - `pi/` -- Pi extensions and themes
 - `scripts/` -- repo-local Babashka entrypoints
 - `test/` -- unit + E2E tests
@@ -29,6 +30,10 @@ For Babashka scripts in this repo:
 
 If behavior is the same across runtimes, put it in `shared/` and wire runtime-specific trees around it.
 Do not copy helper logic into multiple runtime directories unless the behavior genuinely diverges.
+
+For platform-specific skills (e.g. macOS-only), the canonical content lives in
+`shared/darwin/skills/`. Runtime trees (Pi extensions, etc.) symlink back to it.
+Bootstrap handles symlinking into `~/.agents/skills/` on Darwin automatically.
 
 ### Preserve intentional parity across runtimes
 
