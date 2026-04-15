@@ -2,7 +2,7 @@
 
 ![vibe: slopped](.github/badges/vibe-slopped.svg)
 
-*Disclaimer* WIP. Ideas and guidelines are mine, implementations by the clankers.  Text
+*Disclaimer:* WIP. Ideas and guidelines are mine, implementations by the clankers. Text
 below is LLM-generated.
 
 ---
