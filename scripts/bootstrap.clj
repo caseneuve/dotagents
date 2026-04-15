@@ -151,7 +151,11 @@
     [{:op :link
       :source (str (fs/path shared-src "skills" "sandbox" "src" "sandbox" "cli.clj"))
       :target (str (fs/path bin-dir "sandbox"))
-      :label "~/.local/bin/sandbox"}]))
+      :label "~/.local/bin/sandbox"}
+     {:op :link
+      :source (str (fs/path shared-src "skills" "add-todo" "src" "todo" "cli.clj"))
+      :target (str (fs/path bin-dir "todo"))
+      :label "~/.local/bin/todo"}]))
 
 (defn plan-claude [p]
   (concat

@@ -9,14 +9,16 @@ Use this skill when the user wants to create, split, or update work items stored
 
 `labels` are optional metadata (for example `MVP`, `NEXT_VER`) used for filtering. Older todo files may omit `labels`; treat missing labels as empty.
 
-Helper scripts live in `~/.agents/skills/add-todo/` after bootstrap and print parseable `key=value` output.
+## Commands
 
-## Helper scripts
+```
+todo next-id [--dir DIR] [PARENT]
+todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]
+todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]
+todo status ID STATUS [--dir DIR]
+```
 
-- `todo-next-id.sh [--dir DIR] [PARENT]`
-- `todo-new.sh --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]`
-- `todo-list.sh [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]`
-- `todo-status.sh ID STATUS [--dir DIR]`
+All commands print parseable `key=value` output on stdout.
 
 ## Item types
 
@@ -54,17 +56,17 @@ When the user wants to resume work rather than create a fresh item:
    bb ~/.agents/skills/org-journal/new-entry.bb
    ```
    If the returned map includes `:last-entry`, read it for the prior session's state and next steps.
-2. List open items with `todo-list.sh --status open`.
+2. List open items with `todo list --status open`.
 3. Pick the highest-priority unblocked item.
-4. Move it to `in_progress` with `todo-status.sh`.
+4. Move it to `in_progress` with `todo status`.
 5. If the project uses isolated worktrees, start the `sandbox` workflow for that item.
 
 ## Workflow
 
-0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: “todo-only” vs “create todo, then implement”).
+0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: "todo-only" vs "create todo, then implement").
 1. Assess size first. Split work that spans multiple days, many unrelated files, or vague acceptance criteria.
 2. Gather the title, type, priority, optional labels (for example `MVP`, `NEXT_VER`), and optional parent item. If labels are not provided, default to none.
-3. Create the item with `todo-new.sh` (include `--labels` when provided).
+3. Create the item with `todo new` (include `--labels` when provided).
 4. Edit the generated file to fill in context, acceptance criteria, affected files, and the E2E spec when required.
 5. Show the draft to the user before treating it as finalized.
 

@@ -129,15 +129,17 @@
              (:extensions settings-op))))))
 
 (deftest bin-ops-test
-  (testing "produces sandbox symlink op"
+  (testing "produces symlink ops for CLI tools"
     (let [ops (sut/bin-ops "/repo/shared" "/home/user")]
-      (is (= 1 (count ops)))
-      (is (= :link (:op (first ops))))
-      (is (clojure.string/ends-with? (:target (first ops)) ".local/bin/sandbox"))
-      (is (clojure.string/ends-with? (:source (first ops)) "sandbox/src/sandbox/cli.clj")))))
+      (is (= 2 (count ops)))
+      (is (every? #(= :link (:op %)) ops))
+      (is (some #(clojure.string/ends-with? (:target %) ".local/bin/sandbox") ops))
+      (is (some #(clojure.string/ends-with? (:target %) ".local/bin/todo") ops))
+      (is (some #(clojure.string/ends-with? (:source %) "sandbox/src/sandbox/cli.clj") ops))
+      (is (some #(clojure.string/ends-with? (:source %) "add-todo/src/todo/cli.clj") ops)))))
 
 (deftest plan-agents-includes-bin-ops
-  (testing "plan-agents includes ~/.local/bin/sandbox link"
+  (testing "plan-agents includes ~/.local/bin CLI links"
     (let [p {:agents-src "/repo/agents"
              :agents-dst "/home/.agents"
              :codex-dst "/home/.codex"
@@ -149,8 +151,9 @@
           bin-links (filter #(and (= (:op %) :link)
                                  (some-> (:label %) (clojure.string/includes? "local/bin")))
                             ops)]
-      (is (= 1 (count bin-links)))
-      (is (= "~/.local/bin/sandbox" (:label (first bin-links)))))))
+      (is (= 2 (count bin-links)))
+      (is (some #(= "~/.local/bin/sandbox" (:label %)) bin-links))
+      (is (some #(= "~/.local/bin/todo" (:label %)) bin-links)))))
 
 (deftest plan-pi-excludes-bin-ops
   (testing "plan-pi does not include ~/.local/bin/ links"
