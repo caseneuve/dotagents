@@ -14,12 +14,12 @@ Core rule: never develop directly in the main repo when the project uses sandbox
 Run:
 
 ```bash
-~/.agents/skills/sandbox/sandbox-create.sh <ticket-num>
+sandbox create <ticket-num>
 ```
 
-Ticket numbers are flexible: `16`, `#16`, and `00016` should resolve to the same ticket when the helper supports it.
+Ticket numbers are flexible: `16`, `#16`, and `00016` all resolve to the same ticket. The tool strips `#` prefixes and matches with optional zero-padding automatically.
 
-The helper returns the main repo path, worktree path, branch, base branch, whether submodules are present, and the ticket file path.
+Output: MainRepo, Worktree path, Branch, BaseBranch, Status (created|exists), Submodules, Ticket file path. When running inside cmux, it also opens a new workspace for the worktree.
 
 After creation:
 
@@ -33,7 +33,7 @@ After creation:
 
 - Do all editing, testing, and commits inside the worktree.
 - Do not switch back to the main repo for implementation work.
-- Follow project safety rules for test execution. If tests must be isolated, use the project's containerized path rather than the host.
+- Do not execute project code on host (including test frameworks). Use the project's containerized path.
 - Keep commits scoped to the ticket and follow the repo's commit conventions.
 - At ticket start, inspect recent commit subjects in the worktree root (`git log --oneline -n 20`) and mirror the established format.
 - Keep commit cadence aligned with TDD slices (red -> green -> refactor), unless the user requests batching/squashing.
@@ -57,7 +57,7 @@ Typical flow:
 
 1. Show the pending diff:
    ```bash
-   ~/.agents/skills/sandbox/sandbox-finish.sh <ticket-num> --diff-only
+   sandbox finish <ticket-num> --diff-only
    ```
 2. Check for an existing review:
    ```bash
@@ -69,12 +69,13 @@ Typical flow:
 6. After explicit approval, finish from the main repo:
    ```bash
    cd <main-repo-path>
-   ~/.agents/skills/sandbox/sandbox-finish.sh <ticket-num>
+   sandbox finish <ticket-num>
    ```
 
 ## Safety rules
 
 - Never work in the main repo during sandboxed ticket development.
 - Never merge or delete a sandbox without explicit approval.
+- Never execute project code on host (including test frameworks).
 - Never ignore submodule state when a ticket touches submodules.
 - Validate paths before any cleanup step that removes a worktree.
