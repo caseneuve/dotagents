@@ -4,6 +4,7 @@ import * as net from "node:net";
 import type { MessageTransport } from "./interfaces";
 import { FileTransport, DEFAULT_CHANNEL_DIR } from "./file-transport";
 import { UdsTransport } from "./uds-transport";
+import { HttpTransport } from "./http-transport";
 
 export {
   FileTransport,
@@ -12,12 +13,13 @@ export {
   writeChannelFile,
 } from "./file-transport";
 export { UdsTransport } from "./uds-transport";
+export { HttpTransport } from "./http-transport";
 
 const DEFAULT_UDS_SOCKET = "/tmp/agent-channels.sock";
 
 export async function createTransport(): Promise<MessageTransport> {
+  // 1. Try UDS (local, fastest)
   const udsPath = process.env.AGENT_UDS_SOCKET || DEFAULT_UDS_SOCKET;
-  // Probe UDS socket: try to connect and immediately disconnect
   if (fs.existsSync(udsPath)) {
     try {
       await new Promise<void>((resolve, reject) => {
@@ -40,5 +42,20 @@ export async function createTransport(): Promise<MessageTransport> {
       // Socket file exists but relay is not running — fall through
     }
   }
+
+  // 2. Try HTTP (remote, cross-machine)
+  const relayUrl = process.env.AGENT_RELAY_URL;
+  if (relayUrl) {
+    try {
+      const res = await fetch(`${relayUrl.replace(/\/+$/, "")}/channels`, {
+        signal: AbortSignal.timeout(500),
+      });
+      if (res.ok) return new HttpTransport(relayUrl);
+    } catch {
+      // Relay not reachable — fall through
+    }
+  }
+
+  // 3. File fallback (zero-config)
   return new FileTransport(DEFAULT_CHANNEL_DIR);
 }
