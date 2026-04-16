@@ -807,6 +807,15 @@ Comms protocol:
             process.env.AGENT_UDS_SOCKET ||
             "/tmp/agent-channels.sock";
           newTransport = new UdsTransport(socketPath);
+          // Warn if relay isn't responding
+          try {
+            await newTransport.read("__probe__");
+          } catch {
+            ctx.ui.notify(
+              `Switched to UDS — warning: relay not responding at ${socketPath}`,
+              "warning",
+            );
+          }
           break;
         }
         case "http": {
@@ -819,6 +828,15 @@ Comms protocol:
             return;
           }
           newTransport = new HttpTransport(url);
+          // Warn if relay isn't responding
+          try {
+            await newTransport.read("__probe__");
+          } catch {
+            ctx.ui.notify(
+              `Switched to HTTP — warning: relay not responding at ${url}`,
+              "warning",
+            );
+          }
           break;
         }
         case "auto":
