@@ -53,6 +53,7 @@ type ClientRequest =
 export interface RelayServerOptions {
   socketPath: string;
   maxPerChannel?: number;
+  verbose?: boolean;
 }
 
 export class RelayServer {
@@ -61,11 +62,18 @@ export class RelayServer {
   private server: ReturnType<typeof Bun.listen> | null = null;
   readonly socketPath: string;
 
+  private verbose: boolean;
+
   constructor(opts: RelayServerOptions) {
     this.socketPath = opts.socketPath;
     this.store = new ChannelStore({
       maxPerChannel: opts.maxPerChannel ?? 1000,
     });
+    this.verbose = opts.verbose ?? false;
+  }
+
+  private log(msg: string): void {
+    if (this.verbose) console.log(`[relay] ${msg}`);
   }
 
   start(): void {
@@ -76,6 +84,7 @@ export class RelayServer {
       socket: {
         open(socket) {
           socket.data = { buffer: "" };
+          relay.log("client connected");
         },
         data(socket, data) {
           // Accumulate data and process complete NDJSON lines
@@ -98,6 +107,7 @@ export class RelayServer {
           }
         },
         close(socket) {
+          relay.log("client disconnected");
           // Remove from all subscription sets
           for (const [, sockets] of relay.subscribers) {
             sockets.delete(socket);
@@ -128,8 +138,13 @@ export class RelayServer {
     switch (req.action) {
       case "publish": {
         const msg = this.store.publish(req.msg);
-        // Fan out to all subscribers of this channel
         const subs = this.subscribers.get(req.channel);
+        const fanCount = subs
+          ? [...subs].filter((s) => s !== socket).length
+          : 0;
+        this.log(
+          `publish [${req.channel}] from=${req.msg.from} type=${req.msg.type} fanout=${fanCount}`,
+        );
         if (subs) {
           const frame =
             JSON.stringify({ type: "message", channel: req.channel, msg }) +
@@ -148,6 +163,7 @@ export class RelayServer {
           this.subscribers.set(req.channel, subs);
         }
         subs.add(socket);
+        this.log(`subscribe [${req.channel}] total=${subs.size}`);
         break;
       }
 
@@ -155,6 +171,7 @@ export class RelayServer {
         const subs = this.subscribers.get(req.channel);
         if (subs) {
           subs.delete(socket);
+          this.log(`unsubscribe [${req.channel}] remaining=${subs.size}`);
           if (subs.size === 0) this.subscribers.delete(req.channel);
         }
         break;
@@ -162,6 +179,7 @@ export class RelayServer {
 
       case "read": {
         const msgs = this.store.read(req.channel, req.opts);
+        this.log(`read [${req.channel}] results=${msgs.length}`);
         const frame =
           JSON.stringify({ type: "response", reqId: req.reqId, data: msgs }) +
           "\n";

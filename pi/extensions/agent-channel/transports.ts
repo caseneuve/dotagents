@@ -2,6 +2,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as net from "node:net";
 import {
   channelPath,
   filterMessages,
@@ -11,7 +12,6 @@ import {
   type FilterOpts,
 } from "./core";
 import type { MessageTransport } from "./interfaces";
-import type { Socket } from "bun";
 
 export const DEFAULT_CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
 const DEFAULT_UDS_SOCKET = "/tmp/agent-channels.sock";
@@ -26,22 +26,12 @@ export async function createTransport(): Promise<MessageTransport> {
           () => reject(new Error("probe timeout")),
           500,
         );
-        Bun.connect<{}>({
-          unix: udsPath,
-          socket: {
-            open(socket) {
-              clearTimeout(timeout);
-              socket.end();
-              resolve();
-            },
-            data() {},
-            close() {},
-            error(_, err) {
-              clearTimeout(timeout);
-              reject(err);
-            },
-          },
-        }).catch((err) => {
+        const sock = net.createConnection({ path: udsPath }, () => {
+          clearTimeout(timeout);
+          sock.destroy();
+          resolve();
+        });
+        sock.on("error", (err) => {
           clearTimeout(timeout);
           reject(err);
         });
@@ -127,7 +117,6 @@ export class FileTransport implements MessageTransport {
     callback: (msgs: ChannelMessage[]) => void,
     opts?: { intervalMs?: number },
   ): void {
-    // Reset if already subscribed
     this.unsubscribe(channel);
 
     const intervalMs = opts?.intervalMs ?? 3000;
@@ -163,6 +152,7 @@ export class FileTransport implements MessageTransport {
 
 // ─── UdsTransport ────────────────────────────────────────────────────────
 // Push-based transport via Unix Domain Socket. Connects to relay server.
+// Uses Node.js net module — works in both Node and Bun runtimes.
 // subscribe() receives pushed messages in real-time — no polling.
 
 interface PendingRequest {
@@ -173,13 +163,14 @@ interface PendingRequest {
 export class UdsTransport implements MessageTransport {
   readonly name = "uds";
   private socketPath: string;
-  private socket: Socket<{ buffer: string }> | null = null;
+  private socket: net.Socket | null = null;
   private connected: boolean = false;
   private connectPromise: Promise<void> | null = null;
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private subscriptions: Map<string, (msgs: ChannelMessage[]) => void> =
     new Map();
   private reqCounter = 0;
+  private buffer = "";
 
   constructor(socketPath: string) {
     this.socketPath = socketPath;
@@ -195,57 +186,54 @@ export class UdsTransport implements MessageTransport {
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
       const transport = this;
-      Bun.connect<{ buffer: string }>({
-        unix: this.socketPath,
-        socket: {
-          open(socket) {
-            socket.data = { buffer: "" };
-            transport.socket = socket;
-            transport.connected = true;
-            transport.connectPromise = null;
-            // Re-subscribe all active subscriptions after reconnect
-            for (const [channel] of transport.subscriptions) {
-              socket.write(
-                JSON.stringify({ action: "subscribe", channel }) + "\n",
-              );
-            }
-            resolve();
-          },
-          data(socket, data) {
-            socket.data.buffer += data.toString();
-            const lines = socket.data.buffer.split("\n");
-            socket.data.buffer = lines.pop() || "";
+      const sock = net.createConnection({ path: this.socketPath }, () => {
+        transport.socket = sock;
+        transport.connected = true;
+        transport.connectPromise = null;
+        // Re-subscribe all active subscriptions after reconnect
+        for (const [channel] of transport.subscriptions) {
+          sock.write(JSON.stringify({ action: "subscribe", channel }) + "\n");
+        }
+        resolve();
+      });
 
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-              try {
-                const frame = JSON.parse(trimmed);
-                transport.handleFrame(frame);
-              } catch (err) {
-                console.error(
-                  `[uds-transport] parse error: ${err instanceof Error ? err.message : err}`,
-                );
-              }
-            }
-          },
-          close() {
-            transport.connected = false;
-            transport.socket = null;
-            transport.connectPromise = null;
-            // Reject all pending requests
-            for (const [, pending] of transport.pendingRequests) {
-              pending.reject(new Error("Connection closed"));
-            }
-            transport.pendingRequests.clear();
-          },
-          error(_socket, err) {
-            transport.connected = false;
-            transport.connectPromise = null;
-            reject(err);
-          },
-        },
-      }).catch(reject);
+      sock.setEncoding("utf-8");
+
+      sock.on("data", (data: string) => {
+        transport.buffer += data;
+        const lines = transport.buffer.split("\n");
+        transport.buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const frame = JSON.parse(trimmed);
+            transport.handleFrame(frame);
+          } catch (err) {
+            console.error(
+              `[uds-transport] parse error: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+        }
+      });
+
+      sock.on("close", () => {
+        transport.connected = false;
+        transport.socket = null;
+        transport.connectPromise = null;
+        transport.buffer = "";
+        for (const [, pending] of transport.pendingRequests) {
+          pending.reject(new Error("Connection closed"));
+        }
+        transport.pendingRequests.clear();
+      });
+
+      sock.on("error", (err) => {
+        transport.connected = false;
+        transport.connectPromise = null;
+        reject(err);
+      });
     });
 
     return this.connectPromise;
@@ -253,11 +241,9 @@ export class UdsTransport implements MessageTransport {
 
   private handleFrame(frame: any): void {
     if (frame.type === "message") {
-      // Push delivery from subscription
       const cb = this.subscriptions.get(frame.channel);
       if (cb) cb([frame.msg]);
     } else if (frame.type === "response" && frame.reqId) {
-      // Response to a request
       const pending = this.pendingRequests.get(frame.reqId);
       if (pending) {
         this.pendingRequests.delete(frame.reqId);
@@ -277,7 +263,6 @@ export class UdsTransport implements MessageTransport {
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(reqId, { resolve, reject });
       this.send({ ...obj, reqId });
-      // Timeout after 5s
       setTimeout(() => {
         if (this.pendingRequests.has(reqId)) {
           this.pendingRequests.delete(reqId);
