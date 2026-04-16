@@ -255,6 +255,17 @@ export default function (pi: ExtensionAPI) {
     if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
       watchedChannels.add(lobbyChannel);
       transport.subscribe(lobbyChannel, onIncoming);
+      // Announce presence on the lobby (same as channel_watch tool)
+      const joinMsg: ChannelMessage = {
+        id: makeId(),
+        channel: lobbyChannel,
+        from: agentName(),
+        type: "presence",
+        body: `${agentName()} is now watching this channel.`,
+        timestamp: Date.now(),
+      };
+      trackOwnMessage(joinMsg.id);
+      await transport.publish(joinMsg);
       await display.log(
         `auto-watching lobby: ${lobbyChannel}`,
         "info",
