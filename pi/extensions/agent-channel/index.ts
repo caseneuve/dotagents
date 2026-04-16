@@ -17,20 +17,19 @@ import {
   generateId,
   type AgentIdentity,
 } from "./identity";
+import type { MessageTransport, StatusDisplay } from "./interfaces";
 import {
-  createBackend,
-  TmuxBackend,
-  CHANNEL_DIR,
+  FileTransport,
   readChannelFile,
   writeChannelFile,
-  execArgs,
-  type ChannelBackend,
-} from "./backends";
-import { ChannelPoller } from "./poller";
+  createTransport,
+  DEFAULT_DEFAULT_CHANNEL_DIR,
+} from "./transports";
+import { TmuxDisplay, createDisplay, execArgs } from "./displays";
 
 // Re-export types for external consumers
 export type { ChannelMessage } from "./core";
-export type { ChannelBackend } from "./backends";
+export type { MessageTransport, StatusDisplay } from "./interfaces";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -67,7 +66,7 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Track message IDs published by this agent instance so the poller can skip them.
+// Track message IDs published by this agent instance so the subscriber can skip them.
 // Capped to prevent unbounded growth in long sessions.
 const OWN_IDS_MAX = 1000;
 const ownMessageIds = new Set<string>();
@@ -94,9 +93,9 @@ function agentName(): string {
 
 // ─── Extension entry ──────────────────────────────────────────────────
 export default function (pi: ExtensionAPI) {
-  const backend = createBackend();
+  const transport = createTransport();
+  const display = createDisplay();
   let ctx: ExtensionContext | undefined;
-  let poller: ChannelPoller | undefined;
 
   // ── register bundled skills ──
   pi.on("resources_discover", async () => {
@@ -119,6 +118,8 @@ export default function (pi: ExtensionAPI) {
     if (commsMuted) return;
     const myName = agentName();
     for (const msg of msgs) {
+      // Skip own messages (by id tracking and by name)
+      if (ownMessageIds.has(msg.id)) continue;
       if (msg.from === myName) continue;
 
       const trigger = shouldTriggerTurn(msg);
@@ -146,7 +147,7 @@ export default function (pi: ExtensionAPI) {
           { triggerTurn: false },
         );
       }
-      backend.ack(msg.channel, msg.id).catch(() => {});
+      transport.ack(msg.channel, msg.id).catch(() => {});
       if (ctx?.hasUI) {
         ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
       }
@@ -170,15 +171,12 @@ export default function (pi: ExtensionAPI) {
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
-    poller = new ChannelPoller(backend, onIncoming, (id) =>
-      ownMessageIds.has(id),
-    );
     if (ctx.hasUI) {
-      ctx.ui.setStatus("agent-ch", `channel: ${backend.name}`);
+      ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
     }
     if (!commsMuted) {
-      if (backend instanceof TmuxBackend) backend.setup();
-      await backend.setStatus("agent", "ready", "🟢");
+      if (display instanceof TmuxDisplay) (display as TmuxDisplay).setup();
+      await display.setStatus("agent", "ready", "🟢");
     }
 
     // Restore or generate agent identity
@@ -236,10 +234,10 @@ export default function (pi: ExtensionAPI) {
     }
     for (const ch of latestChannels) {
       watchedChannels.add(ch);
-      poller!.watch(ch);
+      transport.subscribe(ch, onIncoming);
     }
     if (latestChannels.length > 0) {
-      await backend.log(
+      await display.log(
         `restored watches: ${latestChannels.join(", ")}`,
         "info",
         "channel",
@@ -250,8 +248,8 @@ export default function (pi: ExtensionAPI) {
     const lobbyChannel = resolveLobby();
     if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
       watchedChannels.add(lobbyChannel);
-      poller!.watch(lobbyChannel);
-      await backend.log(
+      transport.subscribe(lobbyChannel, onIncoming);
+      await display.log(
         `auto-watching lobby: ${lobbyChannel}`,
         "info",
         "channel",
@@ -260,9 +258,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
-    poller?.stopAll();
-    if (backend instanceof TmuxBackend && !commsMuted) {
-      backend.teardown();
+    transport.unsubscribeAll();
+    if (display instanceof TmuxDisplay && !commsMuted) {
+      (display as TmuxDisplay).teardown();
     }
   });
 
@@ -338,8 +336,8 @@ Comms protocol (lobby: ${lobby}):
       };
 
       trackOwnMessage(msg.id);
-      await backend.publish(msg);
-      await backend.log(
+      await transport.publish(msg);
+      await display.log(
         `sent [${msg.type}] to ${msg.channel}`,
         "info",
         "channel",
@@ -348,8 +346,8 @@ Comms protocol (lobby: ${lobby}):
       const isOutMessage = /\bOUT$/i.test(params.body.trimEnd());
 
       if (isOutMessage) {
-        await backend.clearProgress();
-        await backend.setStatus("agent", "ready", "🟢");
+        await display.clearProgress();
+        await display.setStatus("agent", "ready", "🟢");
       }
 
       const isCompletionType = ["task-complete", "approved"].includes(
@@ -359,7 +357,7 @@ Comms protocol (lobby: ${lobby}):
         params.notify === true ||
         (params.notify !== false && (isOutMessage || isCompletionType))
       ) {
-        await backend.notify(
+        await display.notify(
           `Agent ${msg.from}`,
           `${msg.type} on ${msg.channel}`,
         );
@@ -398,7 +396,7 @@ Comms protocol (lobby: ${lobby}):
     }),
     async execute(_toolCallId, params) {
       const unacked = params.unacked_only !== false;
-      const msgs = await backend.read(params.channel, {
+      const msgs = await transport.read(params.channel, {
         unacked,
         type: params.type,
       });
@@ -450,11 +448,11 @@ Comms protocol (lobby: ${lobby}):
       }),
     }),
     async execute(_toolCallId, params) {
-      const { ackedCount } = await backend.ack(
+      const { ackedCount } = await transport.ack(
         params.channel,
         params.message_id,
       );
-      await backend.log(
+      await display.log(
         `acked ${params.message_id} (${ackedCount} messages)`,
         "info",
         "channel",
@@ -516,21 +514,13 @@ Comms protocol (lobby: ${lobby}):
     }),
     async execute(_toolCallId, params) {
       const interval = (params.interval_seconds || 3) * 1000;
-      if (poller) {
-        poller.unwatch(params.channel);
-      } else {
-        poller = new ChannelPoller(
-          backend,
-          onIncoming,
-          (id) => ownMessageIds.has(id),
-          interval,
-        );
-      }
+      // Reset if already watching
+      transport.unsubscribe(params.channel);
 
-      // Catch-up: replay unacked messages before starting the poll
+      // Catch-up: replay unacked messages before starting the subscription
       let caughtUp = 0;
       if (params.catch_up) {
-        const unacked = await backend.read(params.channel, { unacked: true });
+        const unacked = await transport.read(params.channel, { unacked: true });
         const external = unacked.filter(
           (m) => !ownMessageIds.has(m.id) && m.from !== agentName(),
         );
@@ -539,11 +529,11 @@ Comms protocol (lobby: ${lobby}):
           caughtUp = external.length;
         }
         if (unacked.length > external.length) {
-          await backend.ack(params.channel, "*");
+          await transport.ack(params.channel, "*");
         }
       }
 
-      poller.watch(params.channel);
+      transport.subscribe(params.channel, onIncoming, { intervalMs: interval });
 
       watchedChannels.add(params.channel);
       pi.appendEntry("agent-channel-watches", {
@@ -560,10 +550,10 @@ Comms protocol (lobby: ${lobby}):
         timestamp: Date.now(),
       };
       trackOwnMessage(joinMsg.id);
-      await backend.publish(joinMsg);
+      await transport.publish(joinMsg);
 
-      await backend.setStatus("watching", `📡 ${params.channel}`, "📡");
-      await backend.log(`watching ${params.channel}`, "info", "channel");
+      await display.setStatus("watching", `📡 ${params.channel}`, "📡");
+      await display.log(`watching ${params.channel}`, "info", "channel");
 
       const catchUpNote =
         caughtUp > 0 ? ` Caught up on ${caughtUp} missed message(s).` : "";
@@ -591,14 +581,14 @@ Comms protocol (lobby: ${lobby}):
       }),
     }),
     async execute(_toolCallId, params) {
-      poller?.unwatch(params.channel);
+      transport.unsubscribe(params.channel);
 
       watchedChannels.delete(params.channel);
       pi.appendEntry("agent-channel-watches", {
         channels: [...watchedChannels],
       });
 
-      await backend.setStatus("watching", "idle", "💤");
+      await display.setStatus("watching", "idle", "💤");
 
       return {
         content: [
@@ -653,15 +643,15 @@ Comms protocol (lobby: ${lobby}):
       const parts: string[] = [];
 
       if (params.status) {
-        await backend.setStatus("agent", params.status, params.icon || "⚙️");
+        await display.setStatus("agent", params.status, params.icon || "⚙️");
         parts.push(`status: ${params.status}`);
       }
       if (params.progress !== undefined) {
         if (params.progress < 0) {
-          await backend.clearProgress();
+          await display.clearProgress();
           parts.push("progress: cleared");
         } else {
-          await backend.setProgress(
+          await display.setProgress(
             params.progress,
             params.progress_label || "",
           );
@@ -669,7 +659,7 @@ Comms protocol (lobby: ${lobby}):
         }
       }
       if (params.log_message) {
-        await backend.log(params.log_message, params.log_level, "agent");
+        await display.log(params.log_message, params.log_level, "agent");
         parts.push(`logged: ${params.log_message}`);
       }
 
@@ -693,18 +683,18 @@ Comms protocol (lobby: ${lobby}):
     promptSnippet: "List all inter-agent channels",
     parameters: Type.Object({}),
     async execute() {
-      if (!fs.existsSync(CHANNEL_DIR)) {
+      if (!fs.existsSync(DEFAULT_CHANNEL_DIR)) {
         return {
           content: [{ type: "text", text: "No channels found." }],
           details: { channels: [] },
         };
       }
       const files = fs
-        .readdirSync(CHANNEL_DIR)
+        .readdirSync(DEFAULT_CHANNEL_DIR)
         .filter((f) => f.endsWith(".json"));
       const channels = files.map((f) => {
         const ch = f.replace(/\.json$/, "");
-        const data = readChannelFile(ch);
+        const data = readChannelFile(DEFAULT_CHANNEL_DIR, ch);
         const unacked = data.messages.filter((m) => !m.acked).length;
         return { name: ch, total: data.messages.length, unacked };
       });
@@ -737,12 +727,12 @@ Comms protocol (lobby: ${lobby}):
     pi.events.emit("agent-channel:comms", !commsMuted);
     ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
     ctx.ui.notify(`Comms ${state}`, "info");
-    if (backend instanceof TmuxBackend) {
+    if (display instanceof TmuxDisplay) {
       if (commsMuted) {
-        backend.teardown();
+        (display as TmuxDisplay).teardown();
       } else {
-        backend.setup();
-        await backend.setStatus("agent", "ready", "🟢");
+        (display as TmuxDisplay).setup();
+        await display.setStatus("agent", "ready", "🟢");
       }
     }
   }
@@ -793,7 +783,7 @@ Comms protocol (lobby: ${lobby}):
         ctx.ui.notify("Usage: /channel-clear <channel-name>", "warning");
         return;
       }
-      writeChannelFile(channel, { messages: [] });
+      writeChannelFile(DEFAULT_CHANNEL_DIR, channel, { messages: [] });
       ctx.ui.notify(`Cleared channel '${channel}'`, "info");
     },
   });
@@ -802,12 +792,12 @@ Comms protocol (lobby: ${lobby}):
   pi.registerCommand("channel-ls", {
     description: "List all channels and their message counts",
     handler: async (_args, ctx) => {
-      if (!fs.existsSync(CHANNEL_DIR)) {
+      if (!fs.existsSync(DEFAULT_CHANNEL_DIR)) {
         ctx.ui.notify("No channels found.", "info");
         return;
       }
       const files = fs
-        .readdirSync(CHANNEL_DIR)
+        .readdirSync(DEFAULT_CHANNEL_DIR)
         .filter((f) => f.endsWith(".json"));
       if (files.length === 0) {
         ctx.ui.notify("No channels found.", "info");
@@ -815,7 +805,7 @@ Comms protocol (lobby: ${lobby}):
       }
       for (const f of files) {
         const ch = f.replace(/\.json$/, "");
-        const data = readChannelFile(ch);
+        const data = readChannelFile(DEFAULT_CHANNEL_DIR, ch);
         const unacked = data.messages.filter((m) => !m.acked).length;
         ctx.ui.notify(
           `${ch}: ${data.messages.length} msgs (${unacked} unacked)`,
