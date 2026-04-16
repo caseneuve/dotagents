@@ -9,22 +9,19 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  channelPath,
+  filterMessages,
+  ackMessages,
+  shouldTriggerTurn,
+  type ChannelMessage,
+  type ChannelFile,
+} from "./core";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-export interface ChannelMessage {
-  id: string;
-  channel: string;
-  from: string;
-  to?: string;
-  type: string;
-  body: string;
-  timestamp: number;
-  acked?: boolean;
-}
-
-interface ChannelFile {
-  messages: ChannelMessage[];
-}
+// Types re-exported from core
+export type { ChannelMessage, ChannelFile };
 
 // ─── Backend interface (pluggable) ─────────────────────────────────────
 export interface ChannelBackend {
@@ -57,13 +54,8 @@ export interface ChannelBackend {
 
 const CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
 
-function channelPath(channel: string): string {
-  const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return path.join(CHANNEL_DIR, `${safe}.json`);
-}
-
 function readChannelFile(channel: string): ChannelFile {
-  const p = channelPath(channel);
+  const p = channelPath(CHANNEL_DIR, channel);
   if (!fs.existsSync(p)) return { messages: [] };
   try {
     return JSON.parse(fs.readFileSync(p, "utf-8"));
@@ -74,42 +66,16 @@ function readChannelFile(channel: string): ChannelFile {
 
 function writeChannelFile(channel: string, data: ChannelFile): void {
   fs.mkdirSync(CHANNEL_DIR, { recursive: true });
-  fs.writeFileSync(channelPath(channel), JSON.stringify(data, null, 2));
+  fs.writeFileSync(
+    channelPath(CHANNEL_DIR, channel),
+    JSON.stringify(data, null, 2),
+  );
 }
 
-/** Shared ack logic used by all backends. Mutates file in place, returns count. */
-function ackMessages(
-  file: ChannelFile,
-  messageId: string,
-): { ackedCount: number } {
-  let ackedCount = 0;
-  if (messageId === "*") {
-    for (const m of file.messages) {
-      if (!m.acked) {
-        m.acked = true;
-        ackedCount++;
-      }
-    }
-  } else if (messageId === "last") {
-    const unacked = file.messages.filter((m) => !m.acked);
-    const last = unacked[unacked.length - 1];
-    if (last) {
-      last.acked = true;
-      ackedCount = 1;
-    }
-  } else {
-    const msg = file.messages.find((m) => m.id === messageId);
-    if (msg) {
-      msg.acked = true;
-      ackedCount = 1;
-    }
-  }
-  return { ackedCount };
-}
+// ackMessages, filterMessages, shouldTriggerTurn, channelPath imported from ./core
 
 // ─── CmuxBackend ──────────────────────────────────────────────────────
 function execArgs(args: string[]): string {
-  const { execFileSync } = require("node:child_process");
   try {
     return execFileSync(args[0], args.slice(1), {
       encoding: "utf-8",
@@ -122,7 +88,6 @@ function execArgs(args: string[]): string {
 
 function hasCmux(): boolean {
   try {
-    const { execFileSync } = require("node:child_process");
     execFileSync("cmux", ["ping"], { encoding: "utf-8", timeout: 5000 });
     return true;
   } catch {
@@ -144,21 +109,17 @@ class CmuxBackend implements ChannelBackend {
     opts?: { since?: number; unacked?: boolean; type?: string },
   ): Promise<ChannelMessage[]> {
     const file = readChannelFile(channel);
-    let msgs = file.messages;
-    if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
-    if (opts?.unacked) msgs = msgs.filter((m) => !m.acked);
-    if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
-    return msgs;
+    return filterMessages(file.messages, opts);
   }
 
   async ack(
     channel: string,
     messageId: string,
   ): Promise<{ ackedCount: number }> {
-    const file = readChannelFile(channel);
-    const result = ackMessages(file, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, file);
-    return result;
+    const original = readChannelFile(channel);
+    const result = ackMessages(original, messageId);
+    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
+    return { ackedCount: result.ackedCount };
   }
 
   async setStatus(key: string, value: string, icon?: string): Promise<void> {
@@ -199,7 +160,6 @@ function hasTmux(): boolean {
 
 function hasNotifySend(): boolean {
   try {
-    const { execFileSync } = require("node:child_process");
     execFileSync("which", ["notify-send"], {
       encoding: "utf-8",
       timeout: 5000,
@@ -281,21 +241,17 @@ class TmuxBackend implements ChannelBackend {
     opts?: { since?: number; unacked?: boolean; type?: string },
   ): Promise<ChannelMessage[]> {
     const file = readChannelFile(channel);
-    let msgs = file.messages;
-    if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
-    if (opts?.unacked) msgs = msgs.filter((m) => !m.acked);
-    if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
-    return msgs;
+    return filterMessages(file.messages, opts);
   }
 
   async ack(
     channel: string,
     messageId: string,
   ): Promise<{ ackedCount: number }> {
-    const file = readChannelFile(channel);
-    const result = ackMessages(file, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, file);
-    return result;
+    const original = readChannelFile(channel);
+    const result = ackMessages(original, messageId);
+    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
+    return { ackedCount: result.ackedCount };
   }
 
   // ── Status → tmux pane title + user options ──
@@ -395,20 +351,16 @@ class FileOnlyBackend implements ChannelBackend {
     opts?: { since?: number; unacked?: boolean; type?: string },
   ): Promise<ChannelMessage[]> {
     const file = readChannelFile(channel);
-    let msgs = file.messages;
-    if (opts?.since) msgs = msgs.filter((m) => m.timestamp > opts.since!);
-    if (opts?.unacked) msgs = msgs.filter((m) => !m.acked);
-    if (opts?.type) msgs = msgs.filter((m) => m.type === opts.type);
-    return msgs;
+    return filterMessages(file.messages, opts);
   }
   async ack(
     channel: string,
     messageId: string,
   ): Promise<{ ackedCount: number }> {
-    const file = readChannelFile(channel);
-    const result = ackMessages(file, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, file);
-    return result;
+    const original = readChannelFile(channel);
+    const result = ackMessages(original, messageId);
+    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
+    return { ackedCount: result.ackedCount };
   }
   async setStatus(_key: string, _value: string): Promise<void> {
     /* no-op */
@@ -457,7 +409,6 @@ function createBackend(): ChannelBackend {
 
 /** Short hash for lobby channel names. */
 function shortHash(input: string): string {
-  const { createHash } = require("node:crypto");
   return createHash("sha256").update(input).digest("hex").slice(0, 4);
 }
 
@@ -589,18 +540,7 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // ── Radio protocol: message endings control turn-taking ──
-  // Body ending with OUT  → no reply expected (triggerTurn: false)
-  // Body ending with OVER → your turn, act on it (triggerTurn: true)
-  // No suffix              → your turn, act on it (triggerTurn: true)
-  function shouldTriggerTurn(msg: ChannelMessage): boolean {
-    // Presence messages are informational — never wake the agent
-    if (msg.type === "presence") return false;
-    const trimmed = msg.body.trimEnd();
-    // OUT at end of message = conversation done, don't trigger
-    if (/\bOUT$/i.test(trimmed)) return false;
-    return true;
-  }
+  // ── Radio protocol: shouldTriggerTurn imported from ./core ──
 
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
