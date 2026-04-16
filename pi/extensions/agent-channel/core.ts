@@ -1,4 +1,5 @@
 // ─── Pure core: zero I/O, fully testable ────────────────────────────────
+import * as path from "node:path";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 export interface ChannelMessage {
@@ -27,7 +28,7 @@ export interface FilterOpts {
 /** Build the filesystem path for a channel name. Pure string→string. */
 export function channelPath(channelDir: string, channel: string): string {
   const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `${channelDir}/${safe}.json`;
+  return path.join(channelDir, `${safe}.json`);
 }
 
 /** Filter messages by since/unacked/type. Shared across all backends. */
