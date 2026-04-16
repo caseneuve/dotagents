@@ -1,6 +1,6 @@
 ---
 title: "agent-channel FCIS refactor: pure core, tests, module split"
-status: open
+status: done
 priority: medium
 type: refactor
 labels: [code-excellence, FCIS]
@@ -24,11 +24,11 @@ Goal: refactor toward FCIS (Functional Core, Imperative Shell) with full test co
 on the pure core. Split the monolith into focused modules.
 
 ## Acceptance Criteria
-- [ ] Pure core extracted and tested (T1, T2)
-- [ ] Identity consolidated (T3)
-- [ ] Monolith split into modules (T4)
-- [ ] Robustness improvements landed (T5)
-- [ ] All existing functionality preserved (no behavior changes)
+- [x] Pure core extracted and tested (T1, T2)
+- [x] Identity consolidated (T3)
+- [x] Monolith split into modules (T4)
+- [x] Robustness improvements landed (T5)
+- [x] All existing functionality preserved (no behavior changes)
 
 ## Sub-tasks
 - 0010.1: Extract pure core + dedup backend filtering
