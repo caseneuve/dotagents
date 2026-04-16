@@ -9,7 +9,6 @@ This repo maintains parallel agent runtimes and shared helpers:
 - `claude/` -- Claude-facing docs/config
 - `agents/` -- Codex/agents-facing docs/config
 - `shared/` -- shared hooks and helper scripts used by multiple runtimes
-- `shared/scripts/` -- shared helper scripts (e.g. tmux-status.sh)
 - `pi/` -- Pi extensions and themes
 - `scripts/` -- repo-local Babashka entrypoints
 - `test/` -- unit + E2E tests

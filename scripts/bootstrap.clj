@@ -161,15 +161,6 @@
       :target (str (fs/path bin-dir "ag-tmux"))
       :label "~/.local/bin/ag-tmux"}]))
 
-(defn script-ops
-  "Symlink ops for shared helper scripts (~/.agent-channels/)."
-  [shared-src home]
-  (let [channels-dir (str (fs/path home ".agent-channels"))]
-    [{:op :link
-      :source (str (fs/path shared-src "scripts" "tmux-status.sh"))
-      :target (str (fs/path channels-dir "tmux-status.sh"))
-      :label "~/.agent-channels/tmux-status.sh"}]))
-
 (defn plan-claude [p]
   (concat
    [(section "Claude")]
@@ -180,9 +171,7 @@
      :hooks-json (:hooks-json p)
      :perms-json (:perms-json p)}]
    [(section "CLI binaries")]
-   (bin-ops (:shared-src p) (:home p))
-   [(section "Helper scripts")]
-   (script-ops (:shared-src p) (:home p))))
+   (bin-ops (:shared-src p) (:home p))))
 
 (defn plan-agents [p]
   (concat
@@ -205,9 +194,7 @@
                :dst (str (fs/path (:agents-dst p) "skills"))
                :markdown-mode :link})
    [(section "CLI binaries")]
-   (bin-ops (:shared-src p) (:home p))
-   [(section "Helper scripts")]
-   (script-ops (:shared-src p) (:home p))))
+   (bin-ops (:shared-src p) (:home p))))
 
 (defn plan-pi [p]
   [{:op :section :title "Pi"}

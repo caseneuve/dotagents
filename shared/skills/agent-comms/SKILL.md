@@ -263,12 +263,6 @@ set -g pane-border-format "#{pane_title}"
 set -g pane-border-status top
 ```
 
-For a status-right integration, use the bundled helper:
-
-```tmux
-set -g status-right '#(~/.agent-channels/tmux-status.sh #{pane_id})'
-```
-
 ### file-only (fallback)
 
 Messages work (file-based). Status and progress are no-ops.

@@ -55,8 +55,7 @@
                                     "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-run.sh:*)"]}
               :custom {:nested true}}
         hooks {:hooks {:PostToolUse [{:hooks [{:command "$HOME/.claude/hooks/smart-lint.sh"}]}]}}
-        perms {:permissions {:allow ["Bash($HOME/.claude/skills/pk-tmux/tmux-run.sh:*)"
-                                     "Bash($HOME/.claude/skills/pk-tmux/tmux-status.sh:*)"]}}
+        perms {:permissions {:allow ["Bash($HOME/.claude/skills/pk-tmux/tmux-run.sh:*)"]}}
         merged (sut/merge-claude-settings base hooks perms "/tmp/home")]
     (testing "preserves unrelated base settings"
       (is (= "keep-me" (:model merged)))
@@ -68,8 +67,7 @@
 
     (testing "merges permission allows with expansion and dedupe"
       (is (= ["Bash(/tmp/existing:*)"
-              "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-run.sh:*)"
-              "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-status.sh:*)"]
+              "Bash(/tmp/home/.claude/skills/pk-tmux/tmux-run.sh:*)"]
              (get-in merged [:permissions :allow]))))))
 
 (deftest plan-agents-includes-shared-skills
