@@ -82,14 +82,28 @@ GET    /channels/:channel/stream         → subscribe (SSE)
 GET    /channels                         → list
 ```
 
-UDS: JSON frames with `{action, channel, msg?}` structure.
+UDS: NDJSON (newline-delimited JSON) — one `{action, channel, msg?}` object per `\n`.
+Simple, debuggable with `socat`, no custom framing parser needed.
 
 Cross-machine scoping:
 - Same machine: lobby derived from env (same as today)
-- Cross-machine: `relay/${hash_of_server_url}` or `AGENT_LOBBY` env override
+- Cross-machine: `relay/${hash_of_server_url}` (8 hex chars) or `AGENT_LOBBY` env override
+
+## Security
+
+The relay has no authentication. Only run it on trusted networks.
+`--bind` flag allows restricting to specific interfaces.
+
+## Known limitations (v1)
+
+- In-memory store: relay restart loses undelivered messages. Lightweight WAL is a v1.1 follow-up.
+- Cross-transport message ordering is best-effort (clock skew between machines).
+- No auth — trusted LAN only.
 
 ## Notes
 - Relay server in Bun/TypeScript (same stack as extensions)
+- Relay lives in `shared/relay/` (serves all runtimes, not just pi)
 - Poller becomes a FileTransport implementation detail, not top-level
 - Race condition on file writes documented (0010.5) — UDS/HTTP eliminate it
 - File pruning concern (0010.5) — server-managed transports don't accumulate files
+- Review feedback incorporated from 3h2h
