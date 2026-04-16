@@ -68,7 +68,22 @@ function makeId(): string {
 }
 
 // Track message IDs published by this agent instance so the poller can skip them.
+// Capped to prevent unbounded growth in long sessions.
+const OWN_IDS_MAX = 1000;
 const ownMessageIds = new Set<string>();
+
+function trackOwnMessage(id: string): void {
+  ownMessageIds.add(id);
+  if (ownMessageIds.size > OWN_IDS_MAX) {
+    // Remove oldest entries (Set iterates in insertion order)
+    const excess = ownMessageIds.size - OWN_IDS_MAX;
+    let removed = 0;
+    for (const old of ownMessageIds) {
+      ownMessageIds.delete(old);
+      if (++removed >= excess) break;
+    }
+  }
+}
 
 // Agent identity: single structure, resolved via identity module.
 let identity: AgentIdentity = { id: generateId() };
@@ -322,7 +337,7 @@ Comms protocol (lobby: ${lobby}):
         timestamp: Date.now(),
       };
 
-      ownMessageIds.add(msg.id);
+      trackOwnMessage(msg.id);
       await backend.publish(msg);
       await backend.log(
         `sent [${msg.type}] to ${msg.channel}`,
@@ -544,7 +559,7 @@ Comms protocol (lobby: ${lobby}):
         body: `${agentName()} is now watching this channel.`,
         timestamp: Date.now(),
       };
-      ownMessageIds.add(joinMsg.id);
+      trackOwnMessage(joinMsg.id);
       await backend.publish(joinMsg);
 
       await backend.setStatus("watching", `📡 ${params.channel}`, "📡");

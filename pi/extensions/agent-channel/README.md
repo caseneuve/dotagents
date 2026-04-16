@@ -174,3 +174,24 @@ Set `AGENT_NOTIFY_MODE` to override TmuxBackend notification strategy:
 Future backends could add:
 - **RemoteBackend** — HTTP/WebSocket for cross-machine agents
 - **RedisBackend** — for high-throughput multi-agent systems
+
+## Known limitations
+
+### File write race condition
+
+Channel file I/O uses read-mutate-write which is not atomic. Concurrent
+writes from multiple agents can race. This is acceptable for local dev —
+channel files are append-mostly and the worst case is a lost message, not
+corruption. A future improvement could use file locking or append-only
+logs.
+
+### Channel file pruning
+
+Messages accumulate in channel files forever. For long-running sessions
+with high message volume, files may grow large. Current mitigation:
+
+- Use `/channel-clear <channel>` to manually clear a channel
+- Start new task channels per task (they’re small and short-lived)
+
+A future `/channel-prune` command or automatic TTL-based cleanup could
+be added if this becomes a practical problem.

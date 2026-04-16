@@ -35,6 +35,10 @@ export interface ChannelBackend {
 }
 
 // ─── File-based channel store (shared between backends) ────────────────
+// NOTE: File I/O uses read-mutate-write which is not atomic. Concurrent writes
+// from multiple agents can race. This is acceptable for local dev — channel files
+// are append-mostly and the worst case is a lost message, not corruption.
+// A future improvement could use file locking or append-only logs.
 export const CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
 
 export function readChannelFile(channel: string): ChannelFile {
@@ -42,7 +46,10 @@ export function readChannelFile(channel: string): ChannelFile {
   if (!fs.existsSync(p)) return { messages: [] };
   try {
     return JSON.parse(fs.readFileSync(p, "utf-8"));
-  } catch {
+  } catch (err) {
+    console.error(
+      `[agent-channel] failed to parse ${p}: ${err instanceof Error ? err.message : err}`,
+    );
     return { messages: [] };
   }
 }
@@ -84,7 +91,10 @@ export function execArgs(args: string[]): string {
       encoding: "utf-8",
       timeout: 5000,
     }).trim();
-  } catch {
+  } catch (err) {
+    console.error(
+      `[agent-channel] exec failed: ${args.join(" ")}: ${err instanceof Error ? err.message : err}`,
+    );
     return "";
   }
 }
