@@ -20,6 +20,8 @@ import {
 import type { MessageTransport, StatusDisplay } from "./interfaces";
 import {
   FileTransport,
+  UdsTransport,
+  HttpTransport,
   readChannelFile,
   writeChannelFile,
   createTransport,
@@ -777,6 +779,73 @@ Comms protocol:
     handler: async (ctx) => {
       toggleComms();
       await applyCommsState(ctx);
+    },
+  });
+
+  // ── Command: /transport ──
+  pi.registerCommand("transport", {
+    description:
+      "Switch transport (usage: /transport [file|uds|http <url>|auto])",
+    handler: async (args, ctx) => {
+      const parts = args.trim().split(/\s+/);
+      const mode = parts[0]?.toLowerCase();
+
+      if (!mode) {
+        ctx.ui.notify(`Current transport: ${transport.name}`, "info");
+        return;
+      }
+
+      let newTransport: MessageTransport | null = null;
+
+      switch (mode) {
+        case "file":
+          newTransport = new FileTransport(DEFAULT_CHANNEL_DIR);
+          break;
+        case "uds": {
+          const socketPath =
+            parts[1] ||
+            process.env.AGENT_UDS_SOCKET ||
+            "/tmp/agent-channels.sock";
+          newTransport = new UdsTransport(socketPath);
+          break;
+        }
+        case "http": {
+          const url = parts[1] || process.env.AGENT_RELAY_URL;
+          if (!url) {
+            ctx.ui.notify(
+              "Usage: /transport http <url> (e.g. http://pi.local:7700)",
+              "warning",
+            );
+            return;
+          }
+          newTransport = new HttpTransport(url);
+          break;
+        }
+        case "auto":
+          newTransport = await createTransport();
+          break;
+        default:
+          ctx.ui.notify(
+            "Usage: /transport [file|uds|http <url>|auto]",
+            "warning",
+          );
+          return;
+      }
+
+      // Migrate subscriptions to new transport
+      const channels = [...watchedChannels];
+      transport.unsubscribeAll();
+      transport = newTransport;
+
+      for (const ch of channels) {
+        transport.subscribe(ch, onIncoming);
+      }
+
+      ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
+      ctx.ui.notify(
+        `Transport switched to: ${transport.name}${channels.length > 0 ? ` (${channels.length} channels migrated)` : ""}`,
+        "info",
+      );
     },
   });
 
