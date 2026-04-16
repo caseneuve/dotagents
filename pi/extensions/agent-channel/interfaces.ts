@@ -1,5 +1,5 @@
 // ─── Transport + Display interfaces ─────────────────────────────────────
-import type { ChannelMessage, ChannelFile, FilterOpts } from "./core";
+import type { ChannelMessage, FilterOpts } from "./core";
 
 // ─── MessageTransport: messaging over any medium ────────────────────────
 export interface MessageTransport {

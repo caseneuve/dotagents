@@ -23,7 +23,7 @@ import {
   readChannelFile,
   writeChannelFile,
   createTransport,
-  DEFAULT_DEFAULT_CHANNEL_DIR,
+  DEFAULT_CHANNEL_DIR,
 } from "./transports";
 import { TmuxDisplay, createDisplay, execArgs } from "./displays";
 
@@ -175,7 +175,7 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
     }
     if (!commsMuted) {
-      if (display instanceof TmuxDisplay) (display as TmuxDisplay).setup();
+      if (display instanceof TmuxDisplay) display.setup();
       await display.setStatus("agent", "ready", "🟢");
     }
 
@@ -260,7 +260,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", async () => {
     transport.unsubscribeAll();
     if (display instanceof TmuxDisplay && !commsMuted) {
-      (display as TmuxDisplay).teardown();
+      display.teardown();
     }
   });
 
@@ -729,9 +729,9 @@ Comms protocol (lobby: ${lobby}):
     ctx.ui.notify(`Comms ${state}`, "info");
     if (display instanceof TmuxDisplay) {
       if (commsMuted) {
-        (display as TmuxDisplay).teardown();
+        display.teardown();
       } else {
-        (display as TmuxDisplay).setup();
+        display.setup();
         await display.setStatus("agent", "ready", "🟢");
       }
     }
