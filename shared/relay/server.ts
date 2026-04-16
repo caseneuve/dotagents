@@ -12,11 +12,6 @@ interface Subscriber {
   id: number;
 }
 
-let subscriberId = 0;
-function nextSubscriberId(): number {
-  return ++subscriberId;
-}
-
 // ─── Server ─────────────────────────────────────────────────────────────
 
 export interface RelayServerOptions {
@@ -32,6 +27,7 @@ export class RelayServer {
   private subscribers: Map<string, Set<Subscriber>> = new Map();
   private udsServer: ReturnType<typeof Bun.listen> | null = null;
   private httpServer: BunServer | null = null;
+  private nextSubId = 0;
   readonly socketPath: string;
   readonly httpPort: number;
   readonly httpHost: string;
@@ -49,6 +45,16 @@ export class RelayServer {
 
   private log(msg: string): void {
     if (this.verbose) console.log(`[relay] ${msg}`);
+  }
+
+  private corsJson(data: any, status = 200): Response {
+    return new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   }
 
   // ─── Fan-out to subscribers ───────────────────────────────────────────
@@ -115,7 +121,7 @@ export class RelayServer {
         open(socket) {
           socket.data = { buffer: "" };
           const sub: Subscriber = {
-            id: nextSubscriberId(),
+            id: ++relay.nextSubId,
             write(data: string) {
               socket.write(data);
             },
@@ -165,6 +171,18 @@ export class RelayServer {
       port: this.httpPort,
       hostname: this.httpHost,
       fetch(req) {
+        // CORS preflight
+        if (req.method === "OPTIONS") {
+          return new Response(null, {
+            status: 204,
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type",
+            },
+          });
+        }
+
         const url = new URL(req.url);
         const parts = url.pathname.split("/").filter(Boolean);
 
@@ -174,7 +192,7 @@ export class RelayServer {
           parts[0] === "channels" &&
           parts.length === 1
         ) {
-          return Response.json(relay.store.list());
+          return relay.corsJson(relay.store.list());
         }
 
         // GET /channels/:channel/stream — SSE subscription
@@ -231,7 +249,7 @@ export class RelayServer {
     const relay = this;
     const encoder = new TextEncoder();
     const sub: Subscriber = {
-      id: nextSubscriberId(),
+      id: ++relay.nextSubId,
       write(_data: string) {
         // Will be replaced once the stream controller is available
       },
@@ -269,27 +287,33 @@ export class RelayServer {
     req: Request,
     channel: string,
   ): Promise<Response> {
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return this.corsJson({ error: "Invalid JSON" }, 400);
+    }
+    // URL is authoritative for channel
     const msg: ChannelMessage = { ...body, channel };
     this.store.publish(msg);
     const fanCount = this.fanOut(channel, msg);
     this.log(
       `http publish [${channel}] from=${msg.from} type=${msg.type} fanout=${fanCount}`,
     );
-    return Response.json({ ok: true, id: msg.id });
+    return this.corsJson({ ok: true, id: msg.id });
   }
 
   private handleHttpRead(req: Request, channel: string): Response {
     const url = new URL(req.url);
-    const opts: any = {};
+    const opts: Partial<{ since: number; unacked: boolean; type: string }> = {};
     if (url.searchParams.has("since"))
       opts.since = Number(url.searchParams.get("since"));
     if (url.searchParams.has("unacked"))
       opts.unacked = url.searchParams.get("unacked") === "true";
-    if (url.searchParams.has("type")) opts.type = url.searchParams.get("type");
+    if (url.searchParams.has("type")) opts.type = url.searchParams.get("type")!;
     const msgs = this.store.read(channel, opts);
     this.log(`http read [${channel}] results=${msgs.length}`);
-    return Response.json(msgs);
+    return this.corsJson(msgs);
   }
 
   private handleHttpAck(channel: string, messageId: string): Response {
@@ -297,7 +321,7 @@ export class RelayServer {
     this.log(
       `http ack [${channel}] id=${messageId} count=${result.ackedCount}`,
     );
-    return Response.json(result);
+    return this.corsJson(result);
   }
 
   // ─── NDJSON request handler (used by UDS) ─────────────────────────────
