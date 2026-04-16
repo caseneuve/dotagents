@@ -194,10 +194,6 @@ export class TmuxBackend implements ChannelBackend {
     execArgs(["tmux", "set-option", "-pu", "-t", this.paneId, opt]);
   }
 
-  private getOpt(opt: string): string {
-    return execArgs(["tmux", "show-options", "-pqv", "-t", this.paneId, opt]);
-  }
-
   /** Configure tmux pane border to show agent status automatically.
    *  Called when comms are turned ON. */
   setup(): void {
