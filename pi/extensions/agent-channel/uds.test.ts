@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { RelayServer } from "../../../shared/relay/server";
-import { UdsTransport } from "./transports";
+import { UdsTransport, createTransport, FileTransport } from "./transports";
 import type { ChannelMessage } from "./core";
 
 function tmpSocket(): string {
@@ -126,5 +126,110 @@ describe("UdsTransport + RelayServer", () => {
 
   test("name is 'uds'", () => {
     expect(transport.name).toBe("uds");
+  });
+
+  // ── self-skip in fan-out ──
+
+  test("publisher does not receive its own message via subscription", async () => {
+    const received: ChannelMessage[] = [];
+    transport.subscribe("test/self", (msgs) => received.push(...msgs));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Publish on the same transport that is subscribed
+    await transport.publish(msg({ channel: "test/self", body: "self-msg" }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Should NOT receive own message
+    expect(received).toHaveLength(0);
+  });
+
+  // ── reconnect + re-subscribe ──
+
+  test("re-subscribes after relay restart", async () => {
+    const received: ChannelMessage[] = [];
+    transport.subscribe("test/recon", (msgs) => received.push(...msgs));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Restart the relay (simulates crash + recovery)
+    server.stop();
+    await new Promise((r) => setTimeout(r, 100));
+    server = new RelayServer({ socketPath });
+    server.start();
+
+    // Give transport time to notice disconnect + reconnect on next operation
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Publish from a second transport — should arrive via re-subscription
+    const t2 = new UdsTransport(socketPath);
+    await t2.publish(msg({ channel: "test/recon", body: "after-restart" }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    // The first transport needs to reconnect — trigger via a read
+    try {
+      await transport.read("test/recon");
+    } catch {
+      // Connection may fail first time
+    }
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Now publish again — subscription should be re-registered
+    await t2.publish(msg({ channel: "test/recon", body: "after-reconnect" }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    const afterReconnect = received.filter((m) => m.body === "after-reconnect");
+    expect(afterReconnect.length).toBeGreaterThanOrEqual(1);
+
+    t2.unsubscribeAll();
+  });
+});
+
+// ── Stale socket / createTransport fallback ────────────────────────────
+
+describe("createTransport", () => {
+  test("returns FileTransport when no socket exists", async () => {
+    const prev = process.env.AGENT_UDS_SOCKET;
+    process.env.AGENT_UDS_SOCKET = "/tmp/nonexistent-test.sock";
+    try {
+      const t = await createTransport();
+      expect(t.name).toBe("file");
+      expect(t).toBeInstanceOf(FileTransport);
+    } finally {
+      if (prev !== undefined) process.env.AGENT_UDS_SOCKET = prev;
+      else delete process.env.AGENT_UDS_SOCKET;
+    }
+  });
+
+  test("returns FileTransport when socket file exists but relay is down", async () => {
+    // Create a stale socket file (not a real socket)
+    const stalePath = path.join(os.tmpdir(), `stale-test-${Date.now()}.sock`);
+    fs.writeFileSync(stalePath, "");
+    const prev = process.env.AGENT_UDS_SOCKET;
+    process.env.AGENT_UDS_SOCKET = stalePath;
+    try {
+      const t = await createTransport();
+      expect(t.name).toBe("file");
+    } finally {
+      if (prev !== undefined) process.env.AGENT_UDS_SOCKET = prev;
+      else delete process.env.AGENT_UDS_SOCKET;
+      fs.unlinkSync(stalePath);
+    }
+  });
+
+  test("returns UdsTransport when relay is running", async () => {
+    const sockPath = path.join(os.tmpdir(), `probe-test-${Date.now()}.sock`);
+    const srv = new RelayServer({ socketPath: sockPath });
+    srv.start();
+    const prev = process.env.AGENT_UDS_SOCKET;
+    process.env.AGENT_UDS_SOCKET = sockPath;
+    try {
+      const t = await createTransport();
+      expect(t.name).toBe("uds");
+      expect(t).toBeInstanceOf(UdsTransport);
+      t.unsubscribeAll();
+    } finally {
+      if (prev !== undefined) process.env.AGENT_UDS_SOCKET = prev;
+      else delete process.env.AGENT_UDS_SOCKET;
+      srv.stop();
+    }
   });
 });
