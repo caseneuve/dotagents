@@ -1,71 +1,46 @@
-// ─── Relay server: UDS pub/sub broker ───────────────────────────────────
+// ─── Relay server: UDS + HTTP/SSE pub/sub broker ────────────────────────
 import { ChannelStore, type ChannelMessage } from "./store";
-import type { Socket } from "bun";
+import type { Socket, Server as BunServer } from "bun";
 import * as fs from "node:fs";
 
-// ─── NDJSON protocol types ──────────────────────────────────────────────
+// ─── Subscriber: abstraction over UDS socket and SSE response ───────────
 
-interface PublishRequest {
-  action: "publish";
-  channel: string;
-  msg: ChannelMessage;
+interface Subscriber {
+  /** Write a string to this subscriber. */
+  write(data: string): void;
+  /** Unique identity for dedup / removal. */
+  id: number;
 }
 
-interface SubscribeRequest {
-  action: "subscribe";
-  channel: string;
+let subscriberId = 0;
+function nextSubscriberId(): number {
+  return ++subscriberId;
 }
-
-interface UnsubscribeRequest {
-  action: "unsubscribe";
-  channel: string;
-}
-
-interface ReadRequest {
-  action: "read";
-  channel: string;
-  opts?: { since?: number; unacked?: boolean; type?: string };
-  reqId: string;
-}
-
-interface AckRequest {
-  action: "ack";
-  channel: string;
-  messageId: string;
-  reqId: string;
-}
-
-interface ListRequest {
-  action: "list";
-  reqId: string;
-}
-
-type ClientRequest =
-  | PublishRequest
-  | SubscribeRequest
-  | UnsubscribeRequest
-  | ReadRequest
-  | AckRequest
-  | ListRequest;
 
 // ─── Server ─────────────────────────────────────────────────────────────
 
 export interface RelayServerOptions {
   socketPath: string;
+  httpPort?: number;
+  httpHost?: string;
   maxPerChannel?: number;
   verbose?: boolean;
 }
 
 export class RelayServer {
   private store: ChannelStore;
-  private subscribers: Map<string, Set<Socket<{ buffer: string }>>> = new Map();
-  private server: ReturnType<typeof Bun.listen> | null = null;
+  private subscribers: Map<string, Set<Subscriber>> = new Map();
+  private udsServer: ReturnType<typeof Bun.listen> | null = null;
+  private httpServer: BunServer | null = null;
   readonly socketPath: string;
-
+  readonly httpPort: number;
+  readonly httpHost: string;
   private verbose: boolean;
 
   constructor(opts: RelayServerOptions) {
     this.socketPath = opts.socketPath;
+    this.httpPort = opts.httpPort ?? 7700;
+    this.httpHost = opts.httpHost ?? "0.0.0.0";
     this.store = new ChannelStore({
       maxPerChannel: opts.maxPerChannel ?? 1000,
     });
@@ -76,29 +51,90 @@ export class RelayServer {
     if (this.verbose) console.log(`[relay] ${msg}`);
   }
 
+  // ─── Fan-out to subscribers ───────────────────────────────────────────
+
+  private fanOut(
+    channel: string,
+    msg: ChannelMessage,
+    excludeId?: number,
+  ): number {
+    const subs = this.subscribers.get(channel);
+    if (!subs) return 0;
+    const frame = JSON.stringify({ type: "message", channel, msg }) + "\n";
+    let count = 0;
+    for (const sub of subs) {
+      if (sub.id !== excludeId) {
+        sub.write(frame);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private addSubscriber(channel: string, sub: Subscriber): void {
+    let subs = this.subscribers.get(channel);
+    if (!subs) {
+      subs = new Set();
+      this.subscribers.set(channel, subs);
+    }
+    subs.add(sub);
+    this.log(`subscribe [${channel}] total=${subs.size}`);
+  }
+
+  private removeSubscriber(channel: string, sub: Subscriber): void {
+    const subs = this.subscribers.get(channel);
+    if (subs) {
+      subs.delete(sub);
+      this.log(`unsubscribe [${channel}] remaining=${subs.size}`);
+      if (subs.size === 0) this.subscribers.delete(channel);
+    }
+  }
+
+  private removeSubscriberFromAll(sub: Subscriber): void {
+    for (const [, subs] of this.subscribers) {
+      subs.delete(sub);
+    }
+  }
+
+  // ─── UDS server ──────────────────────────────────────────────────────
+
   start(): void {
+    this.startUds();
+    this.startHttp();
+  }
+
+  private startUds(): void {
     const relay = this;
 
-    this.server = Bun.listen<{ buffer: string }>({
+    // Map UDS sockets to their subscriber wrappers
+    const socketSubs = new WeakMap<Socket<{ buffer: string }>, Subscriber>();
+
+    this.udsServer = Bun.listen<{ buffer: string }>({
       unix: this.socketPath,
       socket: {
         open(socket) {
           socket.data = { buffer: "" };
-          relay.log("client connected");
+          const sub: Subscriber = {
+            id: nextSubscriberId(),
+            write(data: string) {
+              socket.write(data);
+            },
+          };
+          socketSubs.set(socket, sub);
+          relay.log(`uds client connected (id=${sub.id})`);
         },
         data(socket, data) {
-          // Accumulate data and process complete NDJSON lines
           socket.data.buffer += data.toString();
           const lines = socket.data.buffer.split("\n");
-          // Keep incomplete last line in buffer
           socket.data.buffer = lines.pop() || "";
 
+          const sub = socketSubs.get(socket)!;
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
             try {
-              const req = JSON.parse(trimmed) as ClientRequest;
-              relay.handleRequest(socket, req);
+              const req = JSON.parse(trimmed);
+              relay.handleNdjsonRequest(sub, req);
             } catch (err) {
               console.error(
                 `[relay] failed to parse: ${err instanceof Error ? err.message : err}`,
@@ -107,109 +143,233 @@ export class RelayServer {
           }
         },
         close(socket) {
-          relay.log("client disconnected");
-          // Remove from all subscription sets
-          for (const [, sockets] of relay.subscribers) {
-            sockets.delete(socket);
+          const sub = socketSubs.get(socket);
+          if (sub) {
+            relay.log(`uds client disconnected (id=${sub.id})`);
+            relay.removeSubscriberFromAll(sub);
           }
         },
         error(_socket, err) {
-          console.error(`[relay] socket error: ${err.message}`);
+          console.error(`[relay] uds socket error: ${err.message}`);
         },
       },
     });
   }
 
-  stop(): void {
-    this.server?.stop(true);
-    this.server = null;
-    // Clean up socket file
-    try {
-      fs.unlinkSync(this.socketPath);
-    } catch {
-      /* already gone */
-    }
+  // ─── HTTP/SSE server ─────────────────────────────────────────────────
+
+  private startHttp(): void {
+    const relay = this;
+
+    this.httpServer = Bun.serve({
+      port: this.httpPort,
+      hostname: this.httpHost,
+      fetch(req) {
+        const url = new URL(req.url);
+        const parts = url.pathname.split("/").filter(Boolean);
+
+        // GET /channels — list
+        if (
+          req.method === "GET" &&
+          parts[0] === "channels" &&
+          parts.length === 1
+        ) {
+          return Response.json(relay.store.list());
+        }
+
+        // GET /channels/:channel/stream — SSE subscription
+        if (
+          req.method === "GET" &&
+          parts[0] === "channels" &&
+          parts.length >= 3 &&
+          parts[parts.length - 1] === "stream"
+        ) {
+          const channel = parts.slice(1, -1).join("/");
+          return relay.handleSse(channel);
+        }
+
+        // POST /channels/:channel/messages — publish
+        if (
+          req.method === "POST" &&
+          parts[0] === "channels" &&
+          parts.length >= 3 &&
+          parts[parts.length - 1] === "messages"
+        ) {
+          const channel = parts.slice(1, -1).join("/");
+          return relay.handleHttpPublish(req, channel);
+        }
+
+        // PATCH /channels/:channel/messages/:id — ack
+        if (
+          req.method === "PATCH" &&
+          parts[0] === "channels" &&
+          parts.length >= 4 &&
+          parts[parts.length - 2] === "messages"
+        ) {
+          const channel = parts.slice(1, -2).join("/");
+          const messageId = parts[parts.length - 1];
+          return relay.handleHttpAck(channel, messageId);
+        }
+
+        // GET /channels/:channel/messages — read
+        if (
+          req.method === "GET" &&
+          parts[0] === "channels" &&
+          parts.length >= 3 &&
+          parts[parts.length - 1] === "messages"
+        ) {
+          const channel = parts.slice(1, -1).join("/");
+          return relay.handleHttpRead(req, channel);
+        }
+
+        return new Response("Not Found", { status: 404 });
+      },
+    });
   }
 
-  private handleRequest(
-    socket: Socket<{ buffer: string }>,
-    req: ClientRequest,
-  ): void {
+  private handleSse(channel: string): Response {
+    const relay = this;
+    const encoder = new TextEncoder();
+    const sub: Subscriber = {
+      id: nextSubscriberId(),
+      write(_data: string) {
+        // Will be replaced once the stream controller is available
+      },
+    };
+
+    const stream = new ReadableStream({
+      start(controller) {
+        sub.write = (data: string) => {
+          // SSE format: data: <json>\n\n
+          const lines = data.trim().split("\n");
+          for (const line of lines) {
+            controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          }
+        };
+        relay.addSubscriber(channel, sub);
+        relay.log(`sse client connected (id=${sub.id}) [${channel}]`);
+      },
+      cancel() {
+        relay.removeSubscriber(channel, sub);
+        relay.log(`sse client disconnected (id=${sub.id}) [${channel}]`);
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
+
+  private async handleHttpPublish(
+    req: Request,
+    channel: string,
+  ): Promise<Response> {
+    const body = await req.json();
+    const msg: ChannelMessage = { ...body, channel };
+    this.store.publish(msg);
+    const fanCount = this.fanOut(channel, msg);
+    this.log(
+      `http publish [${channel}] from=${msg.from} type=${msg.type} fanout=${fanCount}`,
+    );
+    return Response.json({ ok: true, id: msg.id });
+  }
+
+  private handleHttpRead(req: Request, channel: string): Response {
+    const url = new URL(req.url);
+    const opts: any = {};
+    if (url.searchParams.has("since"))
+      opts.since = Number(url.searchParams.get("since"));
+    if (url.searchParams.has("unacked"))
+      opts.unacked = url.searchParams.get("unacked") === "true";
+    if (url.searchParams.has("type")) opts.type = url.searchParams.get("type");
+    const msgs = this.store.read(channel, opts);
+    this.log(`http read [${channel}] results=${msgs.length}`);
+    return Response.json(msgs);
+  }
+
+  private handleHttpAck(channel: string, messageId: string): Response {
+    const result = this.store.ack(channel, messageId);
+    this.log(
+      `http ack [${channel}] id=${messageId} count=${result.ackedCount}`,
+    );
+    return Response.json(result);
+  }
+
+  // ─── NDJSON request handler (used by UDS) ─────────────────────────────
+
+  private handleNdjsonRequest(sub: Subscriber, req: any): void {
     switch (req.action) {
       case "publish": {
-        const msg = this.store.publish(req.msg);
-        const subs = this.subscribers.get(req.channel);
-        const fanCount = subs
-          ? [...subs].filter((s) => s !== socket).length
-          : 0;
+        this.store.publish(req.msg);
+        const fanCount = this.fanOut(req.channel, req.msg, sub.id);
         this.log(
           `publish [${req.channel}] from=${req.msg.from} type=${req.msg.type} fanout=${fanCount}`,
         );
-        if (subs) {
-          const frame =
-            JSON.stringify({ type: "message", channel: req.channel, msg }) +
-            "\n";
-          for (const sub of subs) {
-            if (sub !== socket) sub.write(frame); // skip sender
-          }
-        }
         break;
       }
 
       case "subscribe": {
-        let subs = this.subscribers.get(req.channel);
-        if (!subs) {
-          subs = new Set();
-          this.subscribers.set(req.channel, subs);
-        }
-        subs.add(socket);
-        this.log(`subscribe [${req.channel}] total=${subs.size}`);
+        this.addSubscriber(req.channel, sub);
         break;
       }
 
       case "unsubscribe": {
-        const subs = this.subscribers.get(req.channel);
-        if (subs) {
-          subs.delete(socket);
-          this.log(`unsubscribe [${req.channel}] remaining=${subs.size}`);
-          if (subs.size === 0) this.subscribers.delete(req.channel);
-        }
+        this.removeSubscriber(req.channel, sub);
         break;
       }
 
       case "read": {
         const msgs = this.store.read(req.channel, req.opts);
         this.log(`read [${req.channel}] results=${msgs.length}`);
-        const frame =
+        sub.write(
           JSON.stringify({ type: "response", reqId: req.reqId, data: msgs }) +
-          "\n";
-        socket.write(frame);
+            "\n",
+        );
         break;
       }
 
       case "ack": {
         const result = this.store.ack(req.channel, req.messageId);
-        const frame =
+        sub.write(
           JSON.stringify({
             type: "response",
             reqId: req.reqId,
             data: result,
-          }) + "\n";
-        socket.write(frame);
+          }) + "\n",
+        );
         break;
       }
 
       case "list": {
         const channels = this.store.list();
-        const frame =
+        sub.write(
           JSON.stringify({
             type: "response",
             reqId: req.reqId,
             data: channels,
-          }) + "\n";
-        socket.write(frame);
+          }) + "\n",
+        );
         break;
       }
+    }
+  }
+
+  // ─── Lifecycle ────────────────────────────────────────────────────────
+
+  stop(): void {
+    this.udsServer?.stop(true);
+    this.udsServer = null;
+    this.httpServer?.stop(true);
+    this.httpServer = null;
+    try {
+      fs.unlinkSync(this.socketPath);
+    } catch {
+      /* already gone */
     }
   }
 }

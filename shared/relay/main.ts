@@ -4,6 +4,8 @@ import { RelayServer } from "./server";
 import * as fs from "node:fs";
 
 const socketPath = process.argv[2] || "/tmp/agent-channels.sock";
+const httpPort = parseInt(process.env.RELAY_HTTP_PORT || "7700", 10);
+const httpHost = process.env.RELAY_HTTP_HOST || "0.0.0.0";
 const quiet = process.argv.includes("--quiet");
 
 // Clean up stale socket
@@ -13,10 +15,16 @@ try {
   /* doesn't exist */
 }
 
-const server = new RelayServer({ socketPath, verbose: !quiet });
+const server = new RelayServer({
+  socketPath,
+  httpPort,
+  httpHost,
+  verbose: !quiet,
+});
 server.start();
 
-console.log(`[relay] listening on ${socketPath}`);
+console.log(`[relay] UDS listening on ${socketPath}`);
+console.log(`[relay] HTTP listening on http://${httpHost}:${httpPort}`);
 console.log(`[relay] logging: ${quiet ? "quiet" : "verbose"}`);
 
 // Graceful shutdown
