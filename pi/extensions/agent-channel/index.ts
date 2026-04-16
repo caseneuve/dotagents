@@ -712,10 +712,10 @@ export default function (pi: ExtensionAPI) {
     const commsState = commsMuted ? "off" : "on";
     const lobby = resolveLobby();
 
-    let identity = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
+    let identitySnippet = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
 
     if (lobby) {
-      identity += `
+      identitySnippet += `
 
 Comms protocol (lobby: ${lobby}):
 - The lobby is for SHORT coordination only — announce what you're doing, where to find results.
@@ -726,7 +726,7 @@ Comms protocol (lobby: ${lobby}):
     }
 
     return {
-      systemPrompt: event.systemPrompt + identity,
+      systemPrompt: event.systemPrompt + identitySnippet,
     };
   });
 
