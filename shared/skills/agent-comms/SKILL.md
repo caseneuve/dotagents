@@ -273,3 +273,7 @@ set -g status-right '#(~/.agent-channels/tmux-status.sh #{pane_id})'
 
 Messages work (file-based). Status and progress are no-ops.
 Notifications fall back to `osascript` on macOS or `notify-send` on Linux.
+
+Lobby is `file/lobby` — a machine-global channel shared by all Pi agents
+running in bare terminals. Any agent on the same machine auto-discovers
+others without configuration. Use dedicated task channels for isolation.

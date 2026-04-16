@@ -462,9 +462,11 @@ function shortHash(input: string): string {
 }
 
 /** Derive the lobby channel from the environment.
- *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session hash → undefined.
+ *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session hash → file/lobby.
  *  The tmux lobby hashes socket_path + session_name so different servers
- *  or sessions never collide, even with generic names like "main". */
+ *  or sessions never collide, even with generic names like "main".
+ *  The file/lobby fallback is a machine-global meeting point for agents
+ *  running in bare terminals without tmux or cmux. */
 function resolveLobby(): string | undefined {
   if (process.env.CMUX_WORKSPACE_ID) return process.env.CMUX_WORKSPACE_ID;
   if (process.env.TMUX) {
@@ -485,7 +487,8 @@ function resolveLobby(): string | undefined {
       /* tmux unavailable */
     }
   }
-  return undefined;
+  // Fallback: machine-global lobby via shared ~/.agent-channels/
+  return "file/lobby";
 }
 
 function makeId(): string {
