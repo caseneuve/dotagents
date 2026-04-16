@@ -19,6 +19,14 @@ import {
   type ChannelMessage,
   type ChannelFile,
 } from "./core";
+import {
+  resolveIdentity,
+  setLabel,
+  identityToData,
+  identityFromData,
+  generateId,
+  type AgentIdentity,
+} from "./identity";
 
 // Types re-exported from core
 export type { ChannelMessage, ChannelFile };
@@ -450,22 +458,11 @@ function makeId(): string {
 // This is more reliable than name comparison (which can fail if name changes mid-session).
 const ownMessageIds = new Set<string>();
 
-// Agent identity: stable per session, persisted across reloads.
-// Generated once on first session_start, restored from session state thereafter.
-let agentId: string | undefined;
-let agentLabel: string | undefined;
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 6);
-}
+// Agent identity: single structure, resolved via identity module.
+let identity: AgentIdentity = { id: generateId() };
 
 function agentName(): string {
-  // Prefer explicit env, then user-set label, then session-stable id
-  if (process.env.CMUX_AGENT_NAME) return process.env.CMUX_AGENT_NAME;
-  if (agentLabel) return agentLabel;
-  if (agentId) return agentId;
-  // Fallback before session_start (shouldn't happen in practice)
-  return generateId();
+  return resolveIdentity(identity);
 }
 
 // ─── Poller: background check for incoming messages ───────────────────
@@ -619,21 +616,19 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Restore or generate agent identity
-    agentId = undefined;
-    agentLabel = undefined;
+    let restoredData: { id?: string; label?: string } = {};
     for (const entry of ctx.sessionManager.getEntries()) {
       if (
         entry.type === "custom" &&
         entry.customType === "agent-channel-identity"
       ) {
         const data = (entry as any).data;
-        if (data?.id) agentId = data.id;
-        if (data?.label) agentLabel = data.label;
+        if (data) restoredData = data;
       }
     }
-    if (!agentId && !process.env.CMUX_AGENT_NAME) {
-      agentId = generateId();
-      pi.appendEntry("agent-channel-identity", { id: agentId });
+    identity = identityFromData(restoredData, process.env.CMUX_AGENT_NAME);
+    if (!restoredData.id && !process.env.CMUX_AGENT_NAME) {
+      pi.appendEntry("agent-channel-identity", identityToData(identity));
     }
     // Broadcast name to other extensions (e.g. runtime-footer)
     pi.events.emit("agent-channel:name", agentName());
@@ -1223,11 +1218,8 @@ Comms protocol (lobby: ${lobby}):
         ctx.ui.notify(`Current name: ${agentName()}`, "info");
         return;
       }
-      agentLabel = name;
-      pi.appendEntry("agent-channel-identity", {
-        id: agentId,
-        label: agentLabel,
-      });
+      identity = setLabel(identity, name);
+      pi.appendEntry("agent-channel-identity", identityToData(identity));
       pi.events.emit("agent-channel:name", agentName());
       ctx.ui.setStatus("agent-name", agentName());
       ctx.ui.notify(`Agent name set to: ${agentName()}`, "info");
