@@ -292,7 +292,10 @@ export default function (pi: ExtensionAPI) {
     if (lobby) {
       identitySnippet += `
 
-Comms protocol (lobby: ${lobby}):
+The lobby channel is exactly: ${lobby}
+Use this EXACT string as the channel parameter — do not add prefixes like "lobby/" or "lobby-".
+
+Comms protocol:
 - The lobby is for SHORT coordination only — announce what you're doing, where to find results.
 - For actual work (code reviews, task exchanges), create a DEDICATED task channel with a descriptive name (e.g. "project/review-feature-x") and announce it on the lobby.
 - Never send long content (reviews, diffs, detailed results) on the lobby — it pollutes the shared space.
