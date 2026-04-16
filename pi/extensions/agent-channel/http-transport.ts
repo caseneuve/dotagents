@@ -73,6 +73,14 @@ export class HttpTransport implements MessageTransport {
     const url = `${this.channelUrl(channel)}/stream`;
     let buffer = "";
 
+    const reconnect = () => {
+      // Only reconnect if still subscribed (not manually unsubscribed)
+      if (!this.sseConnections.has(channel)) return;
+      setTimeout(() => {
+        this.subscribe(channel, callback);
+      }, 2000);
+    };
+
     const req = http.get(url, (res) => {
       res.setEncoding("utf-8");
       res.on("data", (chunk: string) => {
@@ -96,12 +104,14 @@ export class HttpTransport implements MessageTransport {
           }
         }
       });
+      res.on("end", reconnect);
     });
 
     req.on("error", (err) => {
       console.error(
         `[http-transport] SSE error on [${channel}]: ${err.message}`,
       );
+      reconnect();
     });
 
     this.sseConnections.set(channel, { req, callback });
