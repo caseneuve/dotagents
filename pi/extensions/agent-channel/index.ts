@@ -575,13 +575,17 @@ Comms protocol:
       await display.setStatus("watching", `📡 ${params.channel}`, "📡");
       await display.log(`watching ${params.channel}`, "info", "channel");
 
+      const watchMode =
+        transport.name === "file"
+          ? `polling every ${params.interval_seconds || 3}s`
+          : "push delivery";
       const catchUpNote =
         caughtUp > 0 ? ` Caught up on ${caughtUp} missed message(s).` : "";
       return {
         content: [
           {
             type: "text",
-            text: `Now watching channel '${params.channel}' (polling every ${params.interval_seconds || 3}s). Incoming messages will be injected automatically.${catchUpNote}`,
+            text: `Now watching channel '${params.channel}' (${watchMode}). Incoming messages will be injected automatically.${catchUpNote}`,
           },
         ],
         details: { caughtUp },

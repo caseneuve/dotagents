@@ -7,7 +7,15 @@ import { UdsTransport, createTransport, FileTransport } from "./transports";
 import type { ChannelMessage } from "./core";
 
 function tmpSocket(): string {
-  return path.join(os.tmpdir(), `agent-test-${Date.now()}.sock`);
+  return path.join(
+    os.tmpdir(),
+    `agent-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.sock`,
+  );
+}
+
+let testPort = 18800 + Math.floor(Math.random() * 1000);
+function nextPort(): number {
+  return testPort++;
 }
 
 function msg(overrides: Partial<ChannelMessage> = {}): ChannelMessage {
@@ -29,7 +37,11 @@ describe("UdsTransport + RelayServer", () => {
 
   beforeEach(() => {
     socketPath = tmpSocket();
-    server = new RelayServer({ socketPath });
+    server = new RelayServer({
+      socketPath,
+      httpPort: nextPort(),
+      httpHost: "127.0.0.1",
+    });
     server.start();
     transport = new UdsTransport(socketPath);
   });
@@ -153,7 +165,11 @@ describe("UdsTransport + RelayServer", () => {
     // Restart the relay (simulates crash + recovery)
     server.stop();
     await new Promise((r) => setTimeout(r, 100));
-    server = new RelayServer({ socketPath });
+    server = new RelayServer({
+      socketPath,
+      httpPort: nextPort(),
+      httpHost: "127.0.0.1",
+    });
     server.start();
 
     // Give transport time to notice disconnect + reconnect on next operation
@@ -217,7 +233,11 @@ describe("createTransport", () => {
 
   test("returns UdsTransport when relay is running", async () => {
     const sockPath = path.join(os.tmpdir(), `probe-test-${Date.now()}.sock`);
-    const srv = new RelayServer({ socketPath: sockPath });
+    const srv = new RelayServer({
+      socketPath: sockPath,
+      httpPort: nextPort(),
+      httpHost: "127.0.0.1",
+    });
     srv.start();
     const prev = process.env.AGENT_UDS_SOCKET;
     process.env.AGENT_UDS_SOCKET = sockPath;
