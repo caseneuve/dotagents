@@ -8,17 +8,8 @@ import { Type, type Static } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  channelPath,
-  filterMessages,
-  ackMessages,
-  shouldTriggerTurn,
-  type ChannelMessage,
-  type ChannelFile,
-} from "./core";
+import { shouldTriggerTurn, type ChannelMessage } from "./core";
 import {
   resolveIdentity,
   setLabel,
@@ -27,391 +18,20 @@ import {
   generateId,
   type AgentIdentity,
 } from "./identity";
+import {
+  createBackend,
+  TmuxBackend,
+  CHANNEL_DIR,
+  readChannelFile,
+  writeChannelFile,
+  execArgs,
+  type ChannelBackend,
+} from "./backends";
+import { ChannelPoller } from "./poller";
 
-// Types re-exported from core
-export type { ChannelMessage, ChannelFile };
-
-// ─── Backend interface (pluggable) ─────────────────────────────────────
-export interface ChannelBackend {
-  /** Unique backend name, e.g. "cmux", "tmux", "file" */
-  name: string;
-  /** Publish a message to the channel. */
-  publish(msg: ChannelMessage): Promise<void>;
-  /** Read messages from a channel, optionally filtering. */
-  read(
-    channel: string,
-    opts?: { since?: number; unacked?: boolean; type?: string },
-  ): Promise<ChannelMessage[]>;
-  /** Mark a message as acked. Supports "last" (most recent unacked) and "*" (all unacked). */
-  ack(channel: string, messageId: string): Promise<{ ackedCount: number }>;
-  /** Set sidebar status (no-op on backends without sidebar). */
-  setStatus(key: string, value: string, icon?: string): Promise<void>;
-  /** Set sidebar progress (no-op on backends without sidebar). */
-  setProgress(fraction: number, label: string): Promise<void>;
-  /** Clear sidebar progress. */
-  clearProgress(): Promise<void>;
-  /** Append a sidebar log line. */
-  log(message: string, level?: string, source?: string): Promise<void>;
-  /** Send a notification. */
-  notify(title: string, body: string): Promise<void>;
-}
-
-// ─── File-based channel store (shared between backends) ────────────────
-// All backends use the same filesystem directory for messages.
-// This keeps it simple and lets any process read/write regardless of backend.
-
-const CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
-
-function readChannelFile(channel: string): ChannelFile {
-  const p = channelPath(CHANNEL_DIR, channel);
-  if (!fs.existsSync(p)) return { messages: [] };
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf-8"));
-  } catch {
-    return { messages: [] };
-  }
-}
-
-function writeChannelFile(channel: string, data: ChannelFile): void {
-  fs.mkdirSync(CHANNEL_DIR, { recursive: true });
-  fs.writeFileSync(
-    channelPath(CHANNEL_DIR, channel),
-    JSON.stringify(data, null, 2),
-  );
-}
-
-// ackMessages, filterMessages, shouldTriggerTurn, channelPath imported from ./core
-
-// ─── CmuxBackend ──────────────────────────────────────────────────────
-function execArgs(args: string[]): string {
-  try {
-    return execFileSync(args[0], args.slice(1), {
-      encoding: "utf-8",
-      timeout: 5000,
-    }).trim();
-  } catch {
-    return "";
-  }
-}
-
-function hasCmux(): boolean {
-  try {
-    execFileSync("cmux", ["ping"], { encoding: "utf-8", timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-class CmuxBackend implements ChannelBackend {
-  name = "cmux";
-
-  async publish(msg: ChannelMessage): Promise<void> {
-    const file = readChannelFile(msg.channel);
-    file.messages.push(msg);
-    writeChannelFile(msg.channel, file);
-  }
-
-  async read(
-    channel: string,
-    opts?: { since?: number; unacked?: boolean; type?: string },
-  ): Promise<ChannelMessage[]> {
-    const file = readChannelFile(channel);
-    return filterMessages(file.messages, opts);
-  }
-
-  async ack(
-    channel: string,
-    messageId: string,
-  ): Promise<{ ackedCount: number }> {
-    const original = readChannelFile(channel);
-    const result = ackMessages(original, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
-    return { ackedCount: result.ackedCount };
-  }
-
-  async setStatus(key: string, value: string, icon?: string): Promise<void> {
-    const args = ["cmux", "set-status", key, value];
-    if (icon) args.push("--icon", icon);
-    execArgs(args);
-  }
-
-  async setProgress(fraction: number, label: string): Promise<void> {
-    execArgs(["cmux", "set-progress", String(fraction), "--label", label]);
-  }
-
-  async clearProgress(): Promise<void> {
-    execArgs(["cmux", "clear-progress"]);
-  }
-
-  async log(message: string, level?: string, source?: string): Promise<void> {
-    const args = ["cmux", "log"];
-    if (level) args.push("--level", level);
-    if (source) args.push("--source", source);
-    args.push("--", message);
-    execArgs(args);
-  }
-
-  async notify(title: string, body: string): Promise<void> {
-    execArgs(["cmux", "notify", "--title", title, "--body", body]);
-  }
-}
-
-// ─── TmuxBackend (Linux/cross-platform, tmux status + notifications) ──
-
-/** Notification strategy for TmuxBackend. */
-type TmuxNotifyMode = "tmux" | "notify-send" | "auto";
-
-function hasTmux(): boolean {
-  return !!process.env.TMUX;
-}
-
-function hasNotifySend(): boolean {
-  try {
-    execFileSync("which", ["notify-send"], {
-      encoding: "utf-8",
-      timeout: 5000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-class TmuxBackend implements ChannelBackend {
-  name = "tmux";
-  private notifyMode: TmuxNotifyMode;
-  private useNotifySend: boolean;
-  /** Pane ID for this pi instance — all tmux commands target this pane. */
-  private paneId: string;
-
-  constructor(notifyMode: TmuxNotifyMode = "auto") {
-    this.notifyMode = notifyMode;
-    this.useNotifySend =
-      notifyMode === "notify-send" ||
-      (notifyMode === "auto" && hasNotifySend());
-    // Capture the pane we're running in — never changes, even if focus moves.
-    this.paneId =
-      process.env.TMUX_PANE ||
-      execArgs(["tmux", "display-message", "-p", "#{pane_id}"]) ||
-      "";
-  }
-
-  // ── Helpers: always target our pane ──
-
-  private setOpt(opt: string, value: string): void {
-    execArgs(["tmux", "set-option", "-p", "-t", this.paneId, opt, value]);
-  }
-
-  private unsetOpt(opt: string): void {
-    execArgs(["tmux", "set-option", "-pu", "-t", this.paneId, opt]);
-  }
-
-  private getOpt(opt: string): string {
-    return execArgs(["tmux", "show-options", "-pqv", "-t", this.paneId, opt]);
-  }
-
-  /** Configure tmux pane border to show agent status automatically.
-   *  Called when comms are turned ON. */
-  setup(): void {
-    // Enable pane border at top with agent status + progress
-    this.setOpt("pane-border-status", "top");
-    this.setOpt(
-      "pane-border-format",
-      " #{@agent-agent}#{?@agent-progress, [#{@agent-progress}],} ",
-    );
-  }
-
-  /** Restore tmux pane border to its pre-comms state.
-   *  Called when comms are turned OFF or session shuts down.
-   *  Always unsets rather than restoring — the save/restore pattern is fragile
-   *  across pi reloads (each reload captures the previous setup's state as
-   *  "original", causing drift). */
-  teardown(): void {
-    // Clear agent options
-    this.unsetOpt("@agent-agent");
-    this.unsetOpt("@agent-progress");
-    // Remove our border customizations — let tmux fall back to defaults
-    this.unsetOpt("pane-border-status");
-    this.unsetOpt("pane-border-format");
-  }
-
-  // ── Messaging (file-based, shared) ──
-
-  async publish(msg: ChannelMessage): Promise<void> {
-    const file = readChannelFile(msg.channel);
-    file.messages.push(msg);
-    writeChannelFile(msg.channel, file);
-  }
-
-  async read(
-    channel: string,
-    opts?: { since?: number; unacked?: boolean; type?: string },
-  ): Promise<ChannelMessage[]> {
-    const file = readChannelFile(channel);
-    return filterMessages(file.messages, opts);
-  }
-
-  async ack(
-    channel: string,
-    messageId: string,
-  ): Promise<{ ackedCount: number }> {
-    const original = readChannelFile(channel);
-    const result = ackMessages(original, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
-    return { ackedCount: result.ackedCount };
-  }
-
-  // ── Status → tmux pane title + user options ──
-
-  async setStatus(key: string, value: string, icon?: string): Promise<void> {
-    const display = icon ? `${icon} ${value}` : value;
-    // Store in pane user option — pane-border-format reads it via #{@agent-*}
-    this.setOpt(`@agent-${key}`, display);
-  }
-
-  async setProgress(fraction: number, label: string): Promise<void> {
-    const filled = Math.round(fraction * 10);
-    const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
-    const pct = `${Math.round(fraction * 100)}%`;
-    const display = `${bar} ${pct}${label ? " " + label : ""}`;
-    this.setOpt("@agent-progress", display);
-    // Also push to notify-send with dunst replace-id for live-updating progress
-    if (this.useNotifySend) {
-      execArgs([
-        "notify-send",
-        "-h",
-        `int:value:${Math.round(fraction * 100)}`,
-        "-h",
-        "string:x-dunst-stack-tag:agent-progress",
-        "Agent Progress",
-        `${label || "working"} ${pct}`,
-      ]);
-    }
-  }
-
-  async clearProgress(): Promise<void> {
-    this.unsetOpt("@agent-progress");
-  }
-
-  /** Display a centered message in the tmux status bar for this pane's client. */
-  private displayMessage(text: string, durationMs: number): void {
-    const width = parseInt(
-      execArgs([
-        "tmux",
-        "display-message",
-        "-t",
-        this.paneId,
-        "-p",
-        "#{client_width}",
-      ]) || "0",
-      10,
-    );
-    const pad =
-      width > text.length
-        ? " ".repeat(Math.floor((width - text.length) / 2))
-        : "";
-    execArgs([
-      "tmux",
-      "display-message",
-      "-t",
-      this.paneId,
-      "-d",
-      String(durationMs),
-      `${pad}${text}`,
-    ]);
-  }
-
-  async log(message: string, level?: string, _source?: string): Promise<void> {
-    // Only show warnings and errors as tmux display-messages.
-    // Info-level logs are too noisy for tmux (every send/ack/watch triggers one).
-    if (level && level !== "info") {
-      this.displayMessage(`[${level}] ${message}`, 3000);
-    }
-  }
-
-  async notify(title: string, body: string): Promise<void> {
-    if (this.useNotifySend) {
-      execArgs([
-        "notify-send",
-        "-h",
-        "string:x-dunst-stack-tag:agent-notify",
-        title,
-        body,
-      ]);
-    } else {
-      this.displayMessage(`📡 ${title}: ${body}`, 5000);
-    }
-  }
-}
-
-// ─── FileOnlyBackend (fallback, no sidebar) ───────────────────────────
-class FileOnlyBackend implements ChannelBackend {
-  name = "file";
-
-  async publish(msg: ChannelMessage): Promise<void> {
-    const file = readChannelFile(msg.channel);
-    file.messages.push(msg);
-    writeChannelFile(msg.channel, file);
-  }
-  async read(
-    channel: string,
-    opts?: { since?: number; unacked?: boolean; type?: string },
-  ): Promise<ChannelMessage[]> {
-    const file = readChannelFile(channel);
-    return filterMessages(file.messages, opts);
-  }
-  async ack(
-    channel: string,
-    messageId: string,
-  ): Promise<{ ackedCount: number }> {
-    const original = readChannelFile(channel);
-    const result = ackMessages(original, messageId);
-    if (result.ackedCount > 0) writeChannelFile(channel, result.file);
-    return { ackedCount: result.ackedCount };
-  }
-  async setStatus(_key: string, _value: string): Promise<void> {
-    /* no-op */
-  }
-  async setProgress(_fraction: number, _label: string): Promise<void> {
-    /* no-op */
-  }
-  async clearProgress(): Promise<void> {
-    /* no-op */
-  }
-  async log(_message: string): Promise<void> {
-    /* no-op */
-  }
-  async notify(title: string, body: string): Promise<void> {
-    if (process.platform === "darwin") {
-      execArgs([
-        "osascript",
-        "-e",
-        `display notification "${body}" with title "${title}"`,
-      ]);
-    } else {
-      // Linux fallback — notify-send if available, otherwise silent
-      try {
-        execArgs(["notify-send", title, body]);
-      } catch {
-        /* no notification backend available */
-      }
-    }
-  }
-}
-
-// ─── Backend factory ──────────────────────────────────────────────────
-function createBackend(): ChannelBackend {
-  if (process.env.CMUX_SOCKET_PATH || hasCmux()) {
-    return new CmuxBackend();
-  }
-  if (hasTmux()) {
-    const notifyMode =
-      (process.env.AGENT_NOTIFY_MODE as TmuxNotifyMode) || "auto";
-    return new TmuxBackend(notifyMode);
-  }
-  return new FileOnlyBackend();
-}
+// Re-export types for external consumers
+export type { ChannelMessage } from "./core";
+export type { ChannelBackend } from "./backends";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -421,11 +41,7 @@ function shortHash(input: string): string {
 }
 
 /** Derive the lobby channel from the environment.
- *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session hash → file/lobby.
- *  The tmux lobby hashes socket_path + session_name so different servers
- *  or sessions never collide, even with generic names like "main".
- *  The file/lobby fallback is a machine-global meeting point for agents
- *  running in bare terminals without tmux or cmux. */
+ *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session hash → file/lobby. */
 function resolveLobby(): string | undefined {
   if (process.env.CMUX_WORKSPACE_ID) return process.env.CMUX_WORKSPACE_ID;
   if (process.env.TMUX) {
@@ -437,7 +53,6 @@ function resolveLobby(): string | undefined {
         "#{session_name}",
       ]);
       if (session) {
-        // $TMUX = socket_path,pid,pane_index
         const socket = (process.env.TMUX || "").split(",")[0] || "";
         const hash = shortHash(`${socket}/${session}`);
         return `tmux/${session}-${hash}`;
@@ -446,7 +61,6 @@ function resolveLobby(): string | undefined {
       /* tmux unavailable */
     }
   }
-  // Fallback: machine-global lobby via shared ~/.agent-channels/
   return "file/lobby";
 }
 
@@ -455,7 +69,6 @@ function makeId(): string {
 }
 
 // Track message IDs published by this agent instance so the poller can skip them.
-// This is more reliable than name comparison (which can fail if name changes mid-session).
 const ownMessageIds = new Set<string>();
 
 // Agent identity: single structure, resolved via identity module.
@@ -463,56 +76,6 @@ let identity: AgentIdentity = { id: generateId() };
 
 function agentName(): string {
   return resolveIdentity(identity);
-}
-
-// ─── Poller: background check for incoming messages ───────────────────
-class ChannelPoller {
-  private timers: Map<string, ReturnType<typeof setInterval>> = new Map();
-  private lastSeen: Map<string, number> = new Map();
-  private callback: (msgs: ChannelMessage[]) => void;
-  private backend: ChannelBackend;
-  private intervalMs: number;
-
-  constructor(
-    backend: ChannelBackend,
-    callback: (msgs: ChannelMessage[]) => void,
-    intervalMs = 3000,
-  ) {
-    this.backend = backend;
-    this.callback = callback;
-    this.intervalMs = intervalMs;
-  }
-
-  watch(channel: string): void {
-    if (this.timers.has(channel)) return;
-    this.lastSeen.set(channel, Date.now());
-    const timer = setInterval(async () => {
-      const since = this.lastSeen.get(channel) || 0;
-      const msgs = await this.backend.read(channel, { since });
-      // Filter out messages published by this agent instance
-      const external = msgs.filter((m) => !ownMessageIds.has(m.id));
-      if (external.length > 0) {
-        this.lastSeen.set(channel, Math.max(...msgs.map((m) => m.timestamp)));
-        this.callback(external);
-      } else if (msgs.length > 0) {
-        // Still advance lastSeen past own messages to avoid re-reading them
-        this.lastSeen.set(channel, Math.max(...msgs.map((m) => m.timestamp)));
-      }
-    }, this.intervalMs);
-    this.timers.set(channel, timer);
-  }
-
-  unwatch(channel: string): void {
-    const timer = this.timers.get(channel);
-    if (timer) {
-      clearInterval(timer);
-      this.timers.delete(channel);
-    }
-  }
-
-  stopAll(): void {
-    for (const [ch] of this.timers) this.unwatch(ch);
-  }
 }
 
 // ─── Extension entry ──────────────────────────────────────────────────
@@ -537,17 +100,11 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // ── Radio protocol: shouldTriggerTurn imported from ./core ──
-
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
-    // When muted, messages are intentionally skipped (not queued).
-    // The poller still advances lastSeen, so these messages won't be re-delivered.
-    // They remain unacked and can be retrieved via channel_read if needed.
     if (commsMuted) return;
     const myName = agentName();
     for (const msg of msgs) {
-      // Skip own messages
       if (msg.from === myName) continue;
 
       const trigger = shouldTriggerTurn(msg);
@@ -555,8 +112,6 @@ export default function (pi: ExtensionAPI) {
       const content = `${label}\n\n${msg.body}`;
 
       if (trigger) {
-        // sendMessage with triggerTurn wakes idle agents via agent.prompt().
-        // When agent is busy, it steers the message into the active turn.
         pi.sendMessage(
           {
             customType: "agent-channel",
@@ -567,7 +122,6 @@ export default function (pi: ExtensionAPI) {
           { triggerTurn: true, deliverAs: "steer" },
         );
       } else {
-        // Display-only: no turn trigger needed (OUT messages, presence)
         pi.sendMessage(
           {
             customType: "agent-channel",
@@ -578,7 +132,6 @@ export default function (pi: ExtensionAPI) {
           { triggerTurn: false },
         );
       }
-      // Auto-ack: message was injected into conversation, no need for manual ack
       backend.ack(msg.channel, msg.id).catch(() => {});
       if (ctx?.hasUI) {
         ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
@@ -590,7 +143,6 @@ export default function (pi: ExtensionAPI) {
   const watchedChannels = new Set<string>();
   let commsMuted = true;
 
-  // All channel tool names — used by tool_call blocker when comms are muted
   const channelToolNames = [
     "channel_send",
     "channel_read",
@@ -604,12 +156,12 @@ export default function (pi: ExtensionAPI) {
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
-    poller = new ChannelPoller(backend, onIncoming);
+    poller = new ChannelPoller(backend, onIncoming, (id) =>
+      ownMessageIds.has(id),
+    );
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-ch", `channel: ${backend.name}`);
     }
-    // Tmux pane border is configured when comms are turned ON (see applyCommsState).
-    // On session start, just mark ready if comms happen to be on already.
     if (!commsMuted) {
       if (backend instanceof TmuxBackend) backend.setup();
       await backend.setStatus("agent", "ready", "🟢");
@@ -630,12 +182,9 @@ export default function (pi: ExtensionAPI) {
     if (!restoredData.id && !process.env.CMUX_AGENT_NAME) {
       pi.appendEntry("agent-channel-identity", identityToData(identity));
     }
-    // Broadcast name to other extensions (e.g. runtime-footer)
     pi.events.emit("agent-channel:name", agentName());
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-name", agentName());
-      // Install custom editor that shows agent name in the top border.
-      // Uses agentName() dynamically so /agent-name changes are reflected without reload.
       const fullTheme = ctx.ui.theme;
       ctx.ui.setEditorComponent((tui, theme, keybindings) => {
         const editor = new (class extends CustomEditor {
@@ -646,8 +195,6 @@ export default function (pi: ExtensionAPI) {
               const labelWidth = visibleWidth(label);
               if (labelWidth + 2 <= width) {
                 const styledLabel = fullTheme.fg("accent", label);
-                // Rebuild the border line from scratch — the super.render() line
-                // contains ANSI escapes, so raw string slicing breaks widths.
                 const b = "─";
                 const afterLabel = width - 1 - labelWidth;
                 lines[0] =
@@ -663,7 +210,7 @@ export default function (pi: ExtensionAPI) {
       });
     }
 
-    // Restore watches from session state (take last snapshot — each entry is the full set)
+    // Restore watches from session state
     let latestChannels: string[] = [];
     for (const entry of ctx.sessionManager.getEntries()) {
       if (
@@ -685,7 +232,7 @@ export default function (pi: ExtensionAPI) {
       );
     }
 
-    // Auto-watch the lobby (cmux workspace or tmux session) if available
+    // Auto-watch the lobby
     const lobbyChannel = resolveLobby();
     if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
       watchedChannels.add(lobbyChannel);
@@ -700,7 +247,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     poller?.stopAll();
-    // Restore tmux pane border on exit (safety net — also done on /comms off)
     if (backend instanceof TmuxBackend && !commsMuted) {
       backend.teardown();
     }
@@ -787,15 +333,11 @@ Comms protocol (lobby: ${lobby}):
 
       const isOutMessage = /\bOUT$/i.test(params.body.trimEnd());
 
-      // When this agent sends an OUT message, reset to idle state
-      // (done before notify so the notification isn't immediately overwritten)
       if (isOutMessage) {
         await backend.clearProgress();
         await backend.setStatus("agent", "ready", "🟢");
       }
 
-      // Notify only on task-completion messages (OUT, task-complete, approved)
-      // to avoid noisy notifications on every status/progress update.
       const isCompletionType = ["task-complete", "approved"].includes(
         params.type,
       );
@@ -961,9 +503,14 @@ Comms protocol (lobby: ${lobby}):
     async execute(_toolCallId, params) {
       const interval = (params.interval_seconds || 3) * 1000;
       if (poller) {
-        poller.unwatch(params.channel); // reset if already watching
+        poller.unwatch(params.channel);
       } else {
-        poller = new ChannelPoller(backend, onIncoming, interval);
+        poller = new ChannelPoller(
+          backend,
+          onIncoming,
+          (id) => ownMessageIds.has(id),
+          interval,
+        );
       }
 
       // Catch-up: replay unacked messages before starting the poll
@@ -974,10 +521,9 @@ Comms protocol (lobby: ${lobby}):
           (m) => !ownMessageIds.has(m.id) && m.from !== agentName(),
         );
         if (external.length > 0) {
-          onIncoming(external); // injects + auto-acks each message
+          onIncoming(external);
           caughtUp = external.length;
         }
-        // Ack any remaining (own messages that were unacked)
         if (unacked.length > external.length) {
           await backend.ack(params.channel, "*");
         }
@@ -985,7 +531,6 @@ Comms protocol (lobby: ${lobby}):
 
       poller.watch(params.channel);
 
-      // Persist watch list for restore on reload
       watchedChannels.add(params.channel);
       pi.appendEntry("agent-channel-watches", {
         channels: [...watchedChannels],
@@ -1034,7 +579,6 @@ Comms protocol (lobby: ${lobby}):
     async execute(_toolCallId, params) {
       poller?.unwatch(params.channel);
 
-      // Persist watch list for restore on reload
       watchedChannels.delete(params.channel);
       pi.appendEntry("agent-channel-watches", {
         channels: [...watchedChannels],
@@ -1179,7 +723,6 @@ Comms protocol (lobby: ${lobby}):
     pi.events.emit("agent-channel:comms", !commsMuted);
     ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
     ctx.ui.notify(`Comms ${state}`, "info");
-    // Set up / tear down tmux pane border based on comms state
     if (backend instanceof TmuxBackend) {
       if (commsMuted) {
         backend.teardown();
