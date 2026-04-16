@@ -93,7 +93,7 @@ function agentName(): string {
 
 // ─── Extension entry ──────────────────────────────────────────────────
 export default function (pi: ExtensionAPI) {
-  const transport = createTransport();
+  let transport: MessageTransport = new FileTransport(DEFAULT_CHANNEL_DIR);
   const display = createDisplay();
   let ctx: ExtensionContext | undefined;
 
@@ -171,6 +171,12 @@ export default function (pi: ExtensionAPI) {
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
+    // Try to upgrade to UDS transport (probe the socket)
+    const upgraded = await createTransport();
+    if (upgraded.name !== transport.name) {
+      transport.unsubscribeAll();
+      transport = upgraded;
+    }
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
     }

@@ -1,6 +1,7 @@
 // ─── Relay server: UDS pub/sub broker ───────────────────────────────────
 import { ChannelStore, type ChannelMessage } from "./store";
 import type { Socket } from "bun";
+import * as fs from "node:fs";
 
 // ─── NDJSON protocol types ──────────────────────────────────────────────
 
@@ -114,7 +115,6 @@ export class RelayServer {
     this.server = null;
     // Clean up socket file
     try {
-      const fs = require("node:fs");
       fs.unlinkSync(this.socketPath);
     } catch {
       /* already gone */
@@ -135,7 +135,7 @@ export class RelayServer {
             JSON.stringify({ type: "message", channel: req.channel, msg }) +
             "\n";
           for (const sub of subs) {
-            sub.write(frame);
+            if (sub !== socket) sub.write(frame); // skip sender
           }
         }
         break;

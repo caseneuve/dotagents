@@ -16,14 +16,39 @@ import type { Socket } from "bun";
 export const DEFAULT_CHANNEL_DIR = path.join(os.homedir(), ".agent-channels");
 const DEFAULT_UDS_SOCKET = "/tmp/agent-channels.sock";
 
-export function createTransport(): MessageTransport {
+export async function createTransport(): Promise<MessageTransport> {
   const udsPath = process.env.AGENT_UDS_SOCKET || DEFAULT_UDS_SOCKET;
-  // Try UDS if socket exists
+  // Probe UDS socket: try to connect and immediately disconnect
   if (fs.existsSync(udsPath)) {
     try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("probe timeout")),
+          500,
+        );
+        Bun.connect<{}>({
+          unix: udsPath,
+          socket: {
+            open(socket) {
+              clearTimeout(timeout);
+              socket.end();
+              resolve();
+            },
+            data() {},
+            close() {},
+            error(_, err) {
+              clearTimeout(timeout);
+              reject(err);
+            },
+          },
+        }).catch((err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
       return new UdsTransport(udsPath);
     } catch {
-      // Fall through to file transport
+      // Socket file exists but relay is not running — fall through
     }
   }
   return new FileTransport(DEFAULT_CHANNEL_DIR);
@@ -178,6 +203,12 @@ export class UdsTransport implements MessageTransport {
             transport.socket = socket;
             transport.connected = true;
             transport.connectPromise = null;
+            // Re-subscribe all active subscriptions after reconnect
+            for (const [channel] of transport.subscriptions) {
+              socket.write(
+                JSON.stringify({ action: "subscribe", channel }) + "\n",
+              );
+            }
             resolve();
           },
           data(socket, data) {
