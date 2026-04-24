@@ -164,6 +164,25 @@ export function parseChannelFile(text: string): ParseResult {
 
 // ─── Stream framing ────────────────────────────────────────────────────────
 
+/** Default cap for preview strings. */
+export const PREVIEW_MAX = 500;
+
+/** Truncate a string to at most `max` characters, adding a trailing ellipsis
+ *  when it actually had to be cut. Pure. */
+export function previewString(s: string, max: number = PREVIEW_MAX): string {
+  if (s == null) return "";
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+/** JSON.stringify that never throws (circular refs / BigInt → `String(v)`). */
+export function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+}
+
 /**
  * Split a buffer of concatenated JSON frames into complete frames plus any
  * incomplete remainder. Each frame starts with `{` or `[` and is balanced on
@@ -174,8 +193,14 @@ export function parseChannelFile(text: string): ParseResult {
  *   - frames glued without a separator ("}{" — observed in the wild)
  *   - frames split across chunks (last incomplete frame goes to `remainder`)
  *
- * Never throws and never calls `JSON.parse`; callers parse the returned
- * strings and decide how to handle individual parse errors.
+ * Contract notes:
+ *   - Between frames, any byte that isn't a JSON opener (`{` / `[`) is
+ *     silently skipped — that covers whitespace, leftover newlines, and the
+ *     stray bytes we've occasionally seen from buggy relays. Callers that
+ *     need to surface upstream corruption should detect it at the parse step
+ *     (invalid-JSON-inside-a-frame) or at higher layers.
+ *   - Never throws and never calls `JSON.parse`; callers parse the returned
+ *     strings and decide how to handle individual parse errors.
  */
 export function splitJsonFrames(buf: string): {
   frames: string[];
@@ -191,10 +216,14 @@ export function splitJsonFrames(buf: string): {
     const c = buf[i];
 
     if (depth === 0 && start === -1) {
-      // Between frames — skip whitespace/garbage until we hit a JSON opener.
+      // Between frames — skip any bytes that aren't a JSON opener.
       if (c === "{" || c === "[") {
         start = i;
         depth = 1;
+        // Reset string-scanner state at every frame boundary so a stray
+        // escape from a malformed prior chunk can't leak into the next frame.
+        inString = false;
+        escape = false;
       }
       continue;
     }

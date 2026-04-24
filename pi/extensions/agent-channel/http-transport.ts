@@ -2,22 +2,14 @@
 // Publish/read/ack via fetch(). Subscribe via SSE using node:http
 // (Bun's fetch doesn't stream incrementally). Works in both Node and Bun.
 import * as http from "node:http";
-import { isValidMessage, type ChannelMessage, type FilterOpts } from "./core";
+import {
+  isValidMessage,
+  previewString,
+  safeStringify,
+  type ChannelMessage,
+  type FilterOpts,
+} from "./core";
 import type { MessageTransport, ParseErrorInfo } from "./interfaces";
-
-const PREVIEW_MAX = 500;
-
-function preview(s: string): string {
-  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) + "…" : s;
-}
-
-function safeStringify(v: unknown): string {
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
-}
 
 export class HttpTransport implements MessageTransport {
   readonly name = "http";
@@ -78,11 +70,16 @@ export class HttpTransport implements MessageTransport {
       throw new Error(`read failed: invalid JSON from server: ${msg}`);
     }
     if (!Array.isArray(data)) {
+      const shape = data === null ? "null" : typeof data;
       console.error(
-        `[http-transport] read [${channel}]: expected array, got ${
-          data === null ? "null" : typeof data
-        }`,
+        `[http-transport] read [${channel}]: expected array, got ${shape}`,
       );
+      this.onParseError?.({
+        transport: "http",
+        error: `read response not an array (got ${shape})`,
+        rawPreview: previewString(safeStringify(data)),
+        channel,
+      });
       return [];
     }
     const valid: ChannelMessage[] = [];
@@ -124,7 +121,7 @@ export class HttpTransport implements MessageTransport {
       typeof (body as { ackedCount?: unknown }).ackedCount !== "number"
     ) {
       throw new Error(
-        `ack failed: unexpected response shape: ${preview(safeStringify(body))}`,
+        `ack failed: unexpected response shape: ${previewString(safeStringify(body))}`,
       );
     }
     return body as { ackedCount: number };
@@ -170,7 +167,7 @@ export class HttpTransport implements MessageTransport {
                 this.onParseError?.({
                   transport: "http",
                   error: "malformed ChannelMessage shape (SSE)",
-                  rawPreview: preview(safeStringify(frame.msg)),
+                  rawPreview: previewString(safeStringify(frame.msg)),
                   channel,
                 });
               }
@@ -183,7 +180,7 @@ export class HttpTransport implements MessageTransport {
             this.onParseError?.({
               transport: "http",
               error: msg,
-              rawPreview: preview(jsonStr),
+              rawPreview: previewString(jsonStr),
               channel,
             });
           }

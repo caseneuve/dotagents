@@ -5,17 +5,20 @@
 import * as net from "node:net";
 import {
   isValidMessage,
+  previewString,
+  safeStringify,
   splitJsonFrames,
   type ChannelMessage,
   type FilterOpts,
 } from "./core";
 import type { MessageTransport, ParseErrorInfo } from "./interfaces";
 
-const PREVIEW_MAX = 500;
-
-function preview(s: string): string {
-  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) + "…" : s;
-}
+/**
+ * Safety cap on in-flight reassembly buffer size. A hostile / buggy relay
+ * that sends `{` and never closes it would otherwise grow this unbounded.
+ * 1 MiB is ~15× the largest real-world message we've ever seen.
+ */
+const MAX_BUFFER_BYTES = 1_000_000;
 
 interface PendingRequest {
   resolve: (data: any) => void;
@@ -64,6 +67,24 @@ export class UdsTransport implements MessageTransport {
 
       sock.on("data", (data: string) => {
         transport.buffer += data;
+
+        // Guard against an unterminated frame growing the buffer unbounded.
+        // If the buffer exceeds the cap and we're clearly mid-frame, drop it
+        // and surface the incident so the agent knows we've lost context.
+        if (transport.buffer.length > MAX_BUFFER_BYTES) {
+          const dropped = previewString(transport.buffer);
+          transport.buffer = "";
+          console.error(
+            `[uds-transport] buffer overflow (>${MAX_BUFFER_BYTES} bytes) — dropping reassembly buffer`,
+          );
+          transport.onParseError?.({
+            transport: "uds",
+            error: `buffer overflow (>${MAX_BUFFER_BYTES} bytes), dropping unterminated frame`,
+            rawPreview: dropped,
+          });
+          return;
+        }
+
         const { frames, remainder } = splitJsonFrames(transport.buffer);
         transport.buffer = remainder;
 
@@ -77,7 +98,7 @@ export class UdsTransport implements MessageTransport {
             transport.onParseError?.({
               transport: "uds",
               error: msg,
-              rawPreview: preview(raw),
+              rawPreview: previewString(raw),
             });
             continue;
           }
@@ -108,13 +129,7 @@ export class UdsTransport implements MessageTransport {
 
   private handleFrame(frame: unknown): void {
     if (frame == null || typeof frame !== "object") {
-      const pv = (() => {
-        try {
-          return preview(JSON.stringify(frame));
-        } catch {
-          return String(frame);
-        }
-      })();
+      const pv = previewString(safeStringify(frame));
       console.error(`[uds-transport] dropping non-object frame: ${pv}`);
       this.onParseError?.({
         transport: "uds",
@@ -137,7 +152,7 @@ export class UdsTransport implements MessageTransport {
         this.onParseError?.({
           transport: "uds",
           error: "message frame missing channel",
-          rawPreview: preview(JSON.stringify(f)),
+          rawPreview: previewString(safeStringify(f)),
         });
         return;
       }
@@ -150,7 +165,7 @@ export class UdsTransport implements MessageTransport {
         this.onParseError?.({
           transport: "uds",
           error: "malformed ChannelMessage shape",
-          rawPreview: preview(JSON.stringify(f.msg)),
+          rawPreview: previewString(safeStringify(f.msg)),
           channel: f.channel,
         });
         return;
@@ -193,11 +208,16 @@ export class UdsTransport implements MessageTransport {
   async read(channel: string, opts?: FilterOpts): Promise<ChannelMessage[]> {
     const data = await this.request({ action: "read", channel, opts });
     if (!Array.isArray(data)) {
+      const shape = data === null ? "null" : typeof data;
       console.error(
-        `[uds-transport] read [${channel}]: expected array, got ${
-          data === null ? "null" : typeof data
-        }`,
+        `[uds-transport] read [${channel}]: expected array, got ${shape}`,
       );
+      this.onParseError?.({
+        transport: "uds",
+        error: `read response not an array (got ${shape})`,
+        rawPreview: previewString(safeStringify(data)),
+        channel,
+      });
       return [];
     }
     const valid: ChannelMessage[] = [];
@@ -225,15 +245,7 @@ export class UdsTransport implements MessageTransport {
       typeof (data as { ackedCount?: unknown }).ackedCount !== "number"
     ) {
       throw new Error(
-        `ack failed: unexpected response shape: ${preview(
-          (() => {
-            try {
-              return JSON.stringify(data);
-            } catch {
-              return String(data);
-            }
-          })(),
-        )}`,
+        `ack failed: unexpected response shape: ${previewString(safeStringify(data))}`,
       );
     }
     return data as { ackedCount: number };

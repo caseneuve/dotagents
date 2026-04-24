@@ -6,6 +6,8 @@ import {
   shouldTriggerTurn,
   isValidMessage,
   parseChannelFile,
+  previewString,
+  safeStringify,
   splitJsonFrames,
   type ChannelMessage,
   type ChannelFile,
@@ -406,5 +408,83 @@ describe("splitJsonFrames", () => {
     const second = splitJsonFrames(first.remainder + '2}\n{"c"');
     expect(second.frames).toEqual(['{"b":2}']);
     expect(second.remainder).toBe('{"c"');
+  });
+
+  test("only-garbage input yields no frames and empty remainder", () => {
+    const r = splitJsonFrames("xxx ))) zzz");
+    expect(r.frames).toEqual([]);
+    expect(r.remainder).toBe("");
+  });
+
+  test("garbage between frames is silently skipped (documented contract)", () => {
+    const r = splitJsonFrames('junk{"a":1}more junk{"b":2}tail');
+    expect(r.frames).toEqual(['{"a":1}', '{"b":2}']);
+    // `tail` after the last frame is non-opener garbage — silently eaten.
+    expect(r.remainder).toBe("");
+  });
+
+  test("\\uXXXX escapes inside strings do not confuse the scanner", () => {
+    // The literal JSON string value "A\u007D B" contains a `}` (0x7D) in its
+    // decoded form but the escape is six source characters; the scanner
+    // treats it as part of the string, so the frame boundary is correct.
+    const frame = '{"body":"A\\u007D B"}';
+    const r = splitJsonFrames(frame + '{"x":1}');
+    expect(r.frames).toEqual([frame, '{"x":1}']);
+    // Double-check the frame is still valid JSON when parsed.
+    expect(JSON.parse(r.frames[0]).body).toBe("A} B");
+  });
+
+  test("escaped backslash before a quote does not re-enter string mode", () => {
+    // `\\` is an escaped backslash, then `"` closes the string.
+    const frame = '{"s":"end\\\\"}';
+    const r = splitJsonFrames(frame);
+    expect(r.frames).toEqual([frame]);
+    expect(JSON.parse(r.frames[0]).s).toBe("end\\");
+  });
+});
+
+// ─── previewString + safeStringify ──────────────────────────────────────
+
+describe("previewString", () => {
+  test("returns empty string for null/undefined", () => {
+    expect(previewString(null as unknown as string)).toBe("");
+    expect(previewString(undefined as unknown as string)).toBe("");
+  });
+
+  test("passes short strings through unchanged", () => {
+    expect(previewString("hello", 10)).toBe("hello");
+  });
+
+  test("truncates + ellipses strings over the cap", () => {
+    expect(previewString("abcdefghij", 4)).toBe("abcd…");
+  });
+
+  test("respects the default cap of 500 chars", () => {
+    const long = "x".repeat(600);
+    const out = previewString(long);
+    expect(out.length).toBe(501); // 500 + ellipsis
+    expect(out.endsWith("…")).toBe(true);
+  });
+});
+
+describe("safeStringify", () => {
+  test("stringifies a plain object", () => {
+    expect(safeStringify({ a: 1, b: "x" })).toBe('{"a":1,"b":"x"}');
+  });
+
+  test("handles circular references without throwing", () => {
+    const cyclic: Record<string, unknown> = { a: 1 };
+    cyclic.self = cyclic;
+    expect(() => safeStringify(cyclic)).not.toThrow();
+    // Fallback just stringifies to `[object Object]`.
+    expect(safeStringify(cyclic)).toContain("object");
+  });
+
+  test("handles BigInt without throwing", () => {
+    expect(() => safeStringify({ n: 1n })).not.toThrow();
+  });
+
+  test("undefined stringifies to the string 'undefined'", () => {
+    expect(safeStringify(undefined)).toBe("undefined");
   });
 });

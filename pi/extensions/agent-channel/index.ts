@@ -8,7 +8,13 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { shouldTriggerTurn, isValidMessage, type ChannelMessage } from "./core";
+import {
+  shouldTriggerTurn,
+  isValidMessage,
+  previewString,
+  safeStringify,
+  type ChannelMessage,
+} from "./core";
 import {
   resolveIdentity,
   setLabel,
@@ -121,17 +127,10 @@ export default function (pi: ExtensionAPI) {
 
   let identityHintSent = false;
 
-  // Cap on how much of a malformed payload we persist / show.
-  const RAW_PREVIEW_MAX = 500;
+  /** Cap + stringify an arbitrary value for inclusion in session state. */
   function toPreview(value: unknown): string {
-    let s: string;
-    try {
-      s = typeof value === "string" ? value : JSON.stringify(value);
-    } catch {
-      s = String(value);
-    }
-    if (s == null) return "";
-    return s.length > RAW_PREVIEW_MAX ? s.slice(0, RAW_PREVIEW_MAX) + "…" : s;
+    const s = typeof value === "string" ? value : safeStringify(value);
+    return previewString(s);
   }
 
   // Wire transport-level parse errors to the conversation + sidebar log so
@@ -903,6 +902,7 @@ export default function (pi: ExtensionAPI) {
       switch (mode) {
         case "file":
           newTransport = new FileTransport(DEFAULT_CHANNEL_DIR);
+          wireParseErrorHook(newTransport);
           break;
         case "uds": {
           const socketPath =
@@ -910,7 +910,9 @@ export default function (pi: ExtensionAPI) {
             process.env.AGENT_UDS_SOCKET ||
             "/tmp/agent-channels.sock";
           newTransport = new UdsTransport(socketPath);
-          // Warn if relay isn't responding
+          // Wire the parse-error hook *before* the probe so a malformed
+          // probe response is surfaced just like any other parse error.
+          wireParseErrorHook(newTransport);
           try {
             await newTransport.read("__probe__");
           } catch {
@@ -931,7 +933,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
           newTransport = new HttpTransport(url);
-          // Warn if relay isn't responding
+          wireParseErrorHook(newTransport);
           try {
             await newTransport.read("__probe__");
           } catch {
@@ -944,6 +946,7 @@ export default function (pi: ExtensionAPI) {
         }
         case "auto":
           newTransport = await createTransport();
+          wireParseErrorHook(newTransport);
           break;
         default:
           ctx.ui.notify(
@@ -957,7 +960,6 @@ export default function (pi: ExtensionAPI) {
       const channels = [...watchedChannels];
       transport.unsubscribeAll();
       transport = newTransport;
-      wireParseErrorHook(transport);
 
       for (const ch of channels) {
         transport.subscribe(ch, onIncoming);
