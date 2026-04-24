@@ -71,6 +71,43 @@ describe("FileTransport", () => {
     expect(msgs).toEqual([]);
   });
 
+  test("read tolerates a channel file with broken JSON", async () => {
+    const file = path.join(dir, "test_broken.json");
+    fs.writeFileSync(file, "{not valid json");
+    const msgs = await transport.read("test/broken");
+    expect(msgs).toEqual([]);
+  });
+
+  test("read tolerates a channel file with the wrong top-level shape", async () => {
+    const file = path.join(dir, "test_shape.json");
+    fs.writeFileSync(file, JSON.stringify({ unexpected: true }));
+    const msgs = await transport.read("test/shape");
+    expect(msgs).toEqual([]);
+  });
+
+  test("read drops malformed message entries but keeps valid ones", async () => {
+    const good = msg({ channel: "test/mix", id: "good" });
+    const file = path.join(dir, "test_mix.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        messages: [good, { id: "no-body" }, null, "nope"],
+      }),
+    );
+    const msgs = await transport.read("test/mix");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].id).toBe("good");
+  });
+
+  test("publish onto a corrupted channel file replaces it without crashing", async () => {
+    const file = path.join(dir, "test_recover.json");
+    fs.writeFileSync(file, "{not valid json");
+    // Should not throw
+    await transport.publish(msg({ channel: "test/recover", id: "fresh" }));
+    const msgs = await transport.read("test/recover");
+    expect(msgs.map((m) => m.id)).toEqual(["fresh"]);
+  });
+
   test("read returns all messages", async () => {
     const m1 = msg({ channel: "test/read", timestamp: 100 });
     const m2 = msg({ channel: "test/read", timestamp: 200 });

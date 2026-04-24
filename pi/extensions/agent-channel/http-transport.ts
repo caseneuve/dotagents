@@ -2,11 +2,26 @@
 // Publish/read/ack via fetch(). Subscribe via SSE using node:http
 // (Bun's fetch doesn't stream incrementally). Works in both Node and Bun.
 import * as http from "node:http";
-import type { ChannelMessage, FilterOpts } from "./core";
-import type { MessageTransport } from "./interfaces";
+import { isValidMessage, type ChannelMessage, type FilterOpts } from "./core";
+import type { MessageTransport, ParseErrorInfo } from "./interfaces";
+
+const PREVIEW_MAX = 500;
+
+function preview(s: string): string {
+  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) + "…" : s;
+}
+
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
 
 export class HttpTransport implements MessageTransport {
   readonly name = "http";
+  onParseError?: (info: ParseErrorInfo) => void;
   private baseUrl: string;
   private sseConnections: Map<
     string,
@@ -49,7 +64,39 @@ export class HttpTransport implements MessageTransport {
     if (!res.ok) {
       throw new Error(`read failed: ${res.status} ${await res.text()}`);
     }
-    return res.json();
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.onParseError?.({
+        transport: "http",
+        error: `invalid JSON from server on read`,
+        rawPreview: msg,
+        channel,
+      });
+      throw new Error(`read failed: invalid JSON from server: ${msg}`);
+    }
+    if (!Array.isArray(data)) {
+      console.error(
+        `[http-transport] read [${channel}]: expected array, got ${
+          data === null ? "null" : typeof data
+        }`,
+      );
+      return [];
+    }
+    const valid: ChannelMessage[] = [];
+    let dropped = 0;
+    for (const entry of data) {
+      if (isValidMessage(entry)) valid.push(entry);
+      else dropped++;
+    }
+    if (dropped > 0) {
+      console.error(
+        `[http-transport] read [${channel}]: dropped ${dropped} malformed message(s)`,
+      );
+    }
+    return valid;
   }
 
   async ack(
@@ -63,7 +110,24 @@ export class HttpTransport implements MessageTransport {
     if (!res.ok) {
       throw new Error(`ack failed: ${res.status} ${await res.text()}`);
     }
-    return res.json();
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch (err) {
+      throw new Error(
+        `ack failed: invalid JSON from server: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+    if (
+      body == null ||
+      typeof body !== "object" ||
+      typeof (body as { ackedCount?: unknown }).ackedCount !== "number"
+    ) {
+      throw new Error(
+        `ack failed: unexpected response shape: ${preview(safeStringify(body))}`,
+      );
+    }
+    return body as { ackedCount: number };
   }
 
   subscribe(channel: string, callback: (msgs: ChannelMessage[]) => void): void {
@@ -96,11 +160,32 @@ export class HttpTransport implements MessageTransport {
           const jsonStr = trimmed.replace(/^data:\s*/, "");
           try {
             const frame = JSON.parse(jsonStr);
-            if (frame.type === "message" && frame.msg) {
-              callback([frame.msg]);
+            if (frame && frame.type === "message") {
+              if (isValidMessage(frame.msg)) {
+                callback([frame.msg]);
+              } else {
+                console.error(
+                  `[http-transport] dropping malformed SSE message on [${channel}]`,
+                );
+                this.onParseError?.({
+                  transport: "http",
+                  error: "malformed ChannelMessage shape (SSE)",
+                  rawPreview: preview(safeStringify(frame.msg)),
+                  channel,
+                });
+              }
             }
-          } catch {
-            // Ignore malformed SSE events
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[http-transport] SSE parse error on [${channel}]: ${msg}`,
+            );
+            this.onParseError?.({
+              transport: "http",
+              error: msg,
+              rawPreview: preview(jsonStr),
+              channel,
+            });
           }
         }
       });

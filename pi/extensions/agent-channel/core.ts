@@ -89,3 +89,150 @@ export function shouldTriggerTurn(msg: ChannelMessage): boolean {
   if (/\bOUT$/i.test(trimmed)) return false;
   return true;
 }
+
+// ─── Message validation ────────────────────────────────────────────────
+
+/** Structural type guard. Any field missing / wrong type → not a message. */
+export function isValidMessage(obj: unknown): obj is ChannelMessage {
+  if (obj == null || typeof obj !== "object") return false;
+  const m = obj as Record<string, unknown>;
+  return (
+    typeof m.id === "string" &&
+    typeof m.channel === "string" &&
+    typeof m.from === "string" &&
+    typeof m.type === "string" &&
+    typeof m.body === "string" &&
+    typeof m.timestamp === "number" &&
+    Number.isFinite(m.timestamp) &&
+    (m.to === undefined || typeof m.to === "string") &&
+    (m.acked === undefined || typeof m.acked === "boolean")
+  );
+}
+
+export interface ParseResult {
+  /** Always a well-formed ChannelFile, even on errors (may have empty messages). */
+  file: ChannelFile;
+  /** Parsed entries that failed isValidMessage() and were skipped. */
+  droppedCount: number;
+  /** Non-null when the whole payload was unusable (bad JSON or wrong shape). */
+  error?: string;
+}
+
+/**
+ * Safely parse the raw text of a channel file into a ChannelFile.
+ * Never throws — returns `{ file: { messages: [] }, error }` on bad JSON or
+ * unexpected shape, and drops individual malformed messages when the top-level
+ * shape is otherwise fine.
+ */
+export function parseChannelFile(text: string): ParseResult {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    return {
+      file: { messages: [] },
+      droppedCount: 0,
+      error: `invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  if (raw == null || typeof raw !== "object") {
+    return {
+      file: { messages: [] },
+      droppedCount: 0,
+      error: "channel file is not an object",
+    };
+  }
+
+  const messagesRaw = (raw as { messages?: unknown }).messages;
+  if (!Array.isArray(messagesRaw)) {
+    return {
+      file: { messages: [] },
+      droppedCount: 0,
+      error: "channel file is missing a `messages` array",
+    };
+  }
+
+  const valid: ChannelMessage[] = [];
+  let dropped = 0;
+  for (const entry of messagesRaw) {
+    if (isValidMessage(entry)) valid.push(entry);
+    else dropped++;
+  }
+  return { file: { messages: valid }, droppedCount: dropped };
+}
+
+// ─── Stream framing ────────────────────────────────────────────────────────
+
+/**
+ * Split a buffer of concatenated JSON frames into complete frames plus any
+ * incomplete remainder. Each frame starts with `{` or `[` and is balanced on
+ * brackets, ignoring brackets that appear inside JSON string literals.
+ *
+ * Tolerates:
+ *   - whitespace / newlines between frames (what we send today)
+ *   - frames glued without a separator ("}{" — observed in the wild)
+ *   - frames split across chunks (last incomplete frame goes to `remainder`)
+ *
+ * Never throws and never calls `JSON.parse`; callers parse the returned
+ * strings and decide how to handle individual parse errors.
+ */
+export function splitJsonFrames(buf: string): {
+  frames: string[];
+  remainder: string;
+} {
+  const frames: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let start = -1;
+
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+
+    if (depth === 0 && start === -1) {
+      // Between frames — skip whitespace/garbage until we hit a JSON opener.
+      if (c === "{" || c === "[") {
+        start = i;
+        depth = 1;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (c === "\\") {
+        escape = true;
+        continue;
+      }
+      if (c === '"') {
+        inString = false;
+        continue;
+      }
+      continue;
+    }
+
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      depth++;
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        frames.push(buf.slice(start, i + 1));
+        start = -1;
+      }
+      continue;
+    }
+  }
+
+  const remainder = start !== -1 ? buf.slice(start) : "";
+  return { frames, remainder };
+}

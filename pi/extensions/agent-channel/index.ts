@@ -8,7 +8,7 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { shouldTriggerTurn, type ChannelMessage } from "./core";
+import { shouldTriggerTurn, isValidMessage, type ChannelMessage } from "./core";
 import {
   resolveIdentity,
   setLabel,
@@ -17,7 +17,11 @@ import {
   generateId,
   type AgentIdentity,
 } from "./identity";
-import type { MessageTransport, StatusDisplay } from "./interfaces";
+import type {
+  MessageTransport,
+  ParseErrorInfo,
+  StatusDisplay,
+} from "./interfaces";
 import {
   FileTransport,
   UdsTransport,
@@ -117,26 +121,113 @@ export default function (pi: ExtensionAPI) {
 
   let identityHintSent = false;
 
+  // Cap on how much of a malformed payload we persist / show.
+  const RAW_PREVIEW_MAX = 500;
+  function toPreview(value: unknown): string {
+    let s: string;
+    try {
+      s = typeof value === "string" ? value : JSON.stringify(value);
+    } catch {
+      s = String(value);
+    }
+    if (s == null) return "";
+    return s.length > RAW_PREVIEW_MAX ? s.slice(0, RAW_PREVIEW_MAX) + "…" : s;
+  }
+
+  // Wire transport-level parse errors to the conversation + sidebar log so
+  // the agent / human learn about dropped frames instead of only seeing them
+  // on stderr. Re-installed whenever the active transport changes.
+  function wireParseErrorHook(t: MessageTransport): void {
+    t.onParseError = (info: ParseErrorInfo) => {
+      const where = info.channel ? ` on channel ${info.channel}` : "";
+      const content =
+        `⚠️ agent-channel (${info.transport} transport) dropped a malformed frame${where}: ${info.error}. ` +
+        `Preview: ${toPreview(info.rawPreview)}`;
+      try {
+        pi.sendMessage(
+          {
+            customType: "agent-channel",
+            content,
+            display: true,
+            details: {
+              error: "parse-error",
+              transport: info.transport,
+              channel: info.channel,
+              rawPreview: toPreview(info.rawPreview),
+              reason: info.error,
+            },
+          },
+          { triggerTurn: false },
+        );
+      } catch (err) {
+        console.error(
+          `[agent-channel] failed to report parse error: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+      display
+        .log(
+          `${info.transport} parse error: ${info.error}`,
+          "warning",
+          "channel",
+        )
+        .catch(() => {});
+    };
+  }
+
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
     if (commsMuted) return;
     const myName = agentName();
-    for (const msg of msgs) {
+    for (const rawMsg of msgs) {
+      // Guard: a broken transport / bad server can hand us objects that
+      // aren't valid ChannelMessages. Surface them to the agent instead of
+      // crashing when we later touch msg.body / msg.id / etc.
+      if (!isValidMessage(rawMsg)) {
+        const previewText = toPreview(rawMsg);
+        try {
+          pi.sendMessage(
+            {
+              customType: "agent-channel",
+              content:
+                `⚠️ agent-channel received a malformed message on an active subscription and skipped it. ` +
+                `The raw payload was: ${previewText}`,
+              display: true,
+              details: {
+                error: "malformed-message",
+                rawPreview: previewText,
+              },
+            },
+            { triggerTurn: false },
+          );
+        } catch (err) {
+          console.error(
+            `[agent-channel] failed to inject malformed-message diagnostic: ${
+              err instanceof Error ? err.message : err
+            }`,
+          );
+        }
+        display
+          .log("dropped malformed incoming message", "warning", "channel")
+          .catch(() => {});
+        continue;
+      }
+
+      const msg = rawMsg;
+
       // Skip own messages (by id tracking and by name)
       if (ownMessageIds.has(msg.id)) continue;
       if (msg.from === myName) continue;
 
-      const trigger = shouldTriggerTurn(msg);
-      const label = `📨 [${msg.channel}] from ${msg.from}: ${msg.type}`;
-      let content: string;
-      if (!identityHintSent) {
-        content = `[You are agent "${myName}". Respond on channel ${msg.channel}.]\n${label}\n\n${msg.body}`;
-        identityHintSent = true;
-      } else {
-        content = `${label}\n\n${msg.body}`;
-      }
+      try {
+        const trigger = shouldTriggerTurn(msg);
+        const label = `📨 [${msg.channel}] from ${msg.from}: ${msg.type}`;
+        const needsHint = !identityHintSent;
+        const content = needsHint
+          ? `[You are agent "${myName}". Respond on channel ${msg.channel}.]\n${label}\n\n${msg.body}`
+          : `${label}\n\n${msg.body}`;
 
-      if (trigger) {
         pi.sendMessage(
           {
             customType: "agent-channel",
@@ -144,22 +235,49 @@ export default function (pi: ExtensionAPI) {
             display: true,
             details: { channelMessage: msg },
           },
-          { triggerTurn: true, deliverAs: "steer" },
+          trigger
+            ? { triggerTurn: true, deliverAs: "steer" }
+            : { triggerTurn: false },
         );
-      } else {
-        pi.sendMessage(
-          {
-            customType: "agent-channel",
-            content,
-            display: true,
-            details: { channelMessage: msg },
-          },
-          { triggerTurn: false },
-        );
-      }
-      transport.ack(msg.channel, msg.id).catch(() => {});
-      if (ctx?.hasUI) {
-        ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
+
+        // Only mark the hint as sent after a successful send so a thrown
+        // pi.sendMessage (caught below) doesn't swallow the one-shot hint.
+        if (needsHint) identityHintSent = true;
+
+        transport.ack(msg.channel, msg.id).catch(() => {});
+        if (ctx?.hasUI) {
+          ctx.ui.notify(`${msg.from}: ${msg.type}`, "info");
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        try {
+          pi.sendMessage(
+            {
+              customType: "agent-channel",
+              content:
+                `⚠️ agent-channel failed to deliver an incoming message (${errMsg}). ` +
+                `The message was skipped to keep the session alive.`,
+              display: true,
+              details: {
+                error: errMsg,
+                messageId: msg.id,
+                channel: msg.channel,
+                from: msg.from,
+                type: msg.type,
+              },
+            },
+            { triggerTurn: false },
+          );
+        } catch (innerErr) {
+          console.error(
+            `[agent-channel] failed to report delivery error: ${
+              innerErr instanceof Error ? innerErr.message : innerErr
+            }`,
+          );
+        }
+        display
+          .log(`delivery error: ${errMsg}`, "error", "channel")
+          .catch(() => {});
       }
     }
   }
@@ -181,11 +299,15 @@ export default function (pi: ExtensionAPI) {
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
+    // Wire parse-error hook on the initial (file) transport. We'll re-wire
+    // after every transport swap below so the hook survives upgrades.
+    wireParseErrorHook(transport);
     // Try to upgrade to UDS transport (probe the socket)
     const upgraded = await createTransport();
     if (upgraded.name !== transport.name) {
       transport.unsubscribeAll();
       transport = upgraded;
+      wireParseErrorHook(transport);
     }
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
@@ -835,6 +957,7 @@ export default function (pi: ExtensionAPI) {
       const channels = [...watchedChannels];
       transport.unsubscribeAll();
       transport = newTransport;
+      wireParseErrorHook(transport);
 
       for (const ch of channels) {
         transport.subscribe(ch, onIncoming);

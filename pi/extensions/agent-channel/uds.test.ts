@@ -1,10 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import * as os from "node:os";
 import { RelayServer } from "../../../shared/relay/server";
 import { UdsTransport, createTransport, FileTransport } from "./transports";
 import type { ChannelMessage } from "./core";
+import type { ParseErrorInfo } from "./interfaces";
 
 function tmpSocket(): string {
   return path.join(
@@ -251,5 +253,156 @@ describe("createTransport", () => {
       else delete process.env.AGENT_UDS_SOCKET;
       srv.stop();
     }
+  });
+});
+
+// ─── Framing / parse error surfacing ────────────────────────────────────
+//
+// Exercise UdsTransport against a *minimal* fake relay that lets us inject
+// specific byte sequences: truncated JSON, glued frames without a newline,
+// and malformed ChannelMessage payloads. The real relay never produces these
+// but we've seen them reach the client in the wild (see position-811 report).
+
+interface FakeRelayHandle {
+  socketPath: string;
+  send: (bytes: string) => void;
+  close: () => Promise<void>;
+}
+
+async function startFakeRelay(): Promise<FakeRelayHandle> {
+  const socketPath = tmpSocket();
+  let client: net.Socket | null = null;
+  const server = net.createServer((c) => {
+    client = c;
+    c.setEncoding("utf-8");
+    // Drain subscribe/publish requests but don't interpret them.
+    c.on("data", () => {});
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, () => resolve());
+  });
+  return {
+    socketPath,
+    send: (bytes: string) => {
+      if (!client) throw new Error("no client connected yet");
+      client.write(bytes);
+    },
+    close: () =>
+      new Promise<void>((resolve) => {
+        if (client) client.destroy();
+        server.close(() => resolve());
+      }),
+  };
+}
+
+describe("UdsTransport framing + onParseError", () => {
+  let relay: FakeRelayHandle;
+  let transport: UdsTransport;
+  const errors: ParseErrorInfo[] = [];
+
+  beforeEach(async () => {
+    relay = await startFakeRelay();
+    transport = new UdsTransport(relay.socketPath);
+    errors.length = 0;
+    transport.onParseError = (info) => {
+      errors.push(info);
+    };
+    // Force connection so relay.send has a client to write to.
+    transport.subscribe("test/framing", () => {});
+    // Wait for the socket to actually connect.
+    await new Promise((r) => setTimeout(r, 40));
+  });
+
+  afterEach(async () => {
+    transport.unsubscribeAll();
+    await relay.close();
+    try {
+      fs.unlinkSync(relay.socketPath);
+    } catch {
+      /* may already be gone */
+    }
+  });
+
+  test("balanced-but-invalid JSON surfaces a parse error to onParseError", async () => {
+    // Brace-balanced so splitJsonFrames yields it as a complete frame,
+    // but `bar` is not a valid JSON value so JSON.parse rejects it.
+    relay.send('{"type":"message","channel":"test/framing","msg":bar}\n');
+    await new Promise((r) => setTimeout(r, 40));
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors[0].transport).toBe("uds");
+    expect(errors[0].error).toMatch(/JSON|Expected|Unexpected/i);
+    expect(errors[0].rawPreview.length).toBeLessThanOrEqual(501);
+  });
+
+  test("truncated frames are buffered, not dropped", async () => {
+    // An unbalanced frame must stay in the buffer until more data arrives.
+    relay.send('{"type":"message","channel":"test/framing","msg":');
+    await new Promise((r) => setTimeout(r, 40));
+    expect(errors).toEqual([]);
+  });
+
+  test("glued frames without a separator are both parsed", async () => {
+    const delivered: ChannelMessage[] = [];
+    transport.unsubscribeAll();
+    transport.subscribe("test/framing", (ms) => delivered.push(...ms));
+    // Give the new subscribe time to round-trip to the fake relay.
+    await new Promise((r) => setTimeout(r, 40));
+
+    const m1 = msg({ channel: "test/framing", id: "a", body: "one" });
+    const m2 = msg({ channel: "test/framing", id: "b", body: "two" });
+    const f1 = JSON.stringify({
+      type: "message",
+      channel: "test/framing",
+      msg: m1,
+    });
+    const f2 = JSON.stringify({
+      type: "message",
+      channel: "test/framing",
+      msg: m2,
+    });
+    relay.send(f1 + f2); // no newline / separator
+    await new Promise((r) => setTimeout(r, 60));
+
+    expect(delivered.map((m) => m.id)).toEqual(["a", "b"]);
+    // No parse errors should have been produced for this case.
+    expect(errors).toEqual([]);
+  });
+
+  test("malformed ChannelMessage inside a well-formed frame is reported", async () => {
+    const delivered: ChannelMessage[] = [];
+    transport.unsubscribeAll();
+    transport.subscribe("test/framing", (ms) => delivered.push(...ms));
+    await new Promise((r) => setTimeout(r, 40));
+
+    // Frame parses as JSON but msg is missing required fields.
+    const frame = JSON.stringify({
+      type: "message",
+      channel: "test/framing",
+      msg: { id: "only-id" },
+    });
+    relay.send(frame + "\n");
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(delivered).toEqual([]);
+    expect(errors.length).toBe(1);
+    expect(errors[0].transport).toBe("uds");
+    expect(errors[0].error).toMatch(/malformed/i);
+    expect(errors[0].channel).toBe("test/framing");
+  });
+
+  test("array-shaped frame does not dispatch and does not raise", async () => {
+    // Arrays are `typeof === 'object'` so they pass the null-guard in
+    // handleFrame; but they have no `type` field so nothing happens.
+    const delivered: ChannelMessage[] = [];
+    transport.unsubscribeAll();
+    transport.subscribe("test/framing", (ms) => delivered.push(...ms));
+    await new Promise((r) => setTimeout(r, 40));
+
+    relay.send("[1,2,3]\n");
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(delivered).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });

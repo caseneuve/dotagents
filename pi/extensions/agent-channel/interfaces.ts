@@ -1,10 +1,30 @@
 // ─── Transport + Display interfaces ─────────────────────────────────────
 import type { ChannelMessage, FilterOpts } from "./core";
 
+// ─── Parse-error reporting ──────────────────────────────────────────────
+
+export interface ParseErrorInfo {
+  /** Which transport saw the error ("uds", "http", "file"). */
+  transport: string;
+  /** Human-readable error (JSON.parse message or our shape-check label). */
+  error: string;
+  /** Truncated preview of the offending bytes — always safe to log. */
+  rawPreview: string;
+  /** Channel the frame was destined for, if we could tell before the error. */
+  channel?: string;
+}
+
 // ─── MessageTransport: messaging over any medium ────────────────────────
 export interface MessageTransport {
   /** Transport name, e.g. "file", "uds", "http" */
   readonly name: string;
+
+  /**
+   * Optional sink for malformed frames the transport had to drop.
+   * Set by the extension host to surface the error to the agent / UI.
+   * Transports MUST NOT throw if this is undefined.
+   */
+  onParseError?: (info: ParseErrorInfo) => void;
 
   /** Publish a message to a channel. */
   publish(msg: ChannelMessage): Promise<void>;

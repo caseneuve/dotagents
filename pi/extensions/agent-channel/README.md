@@ -195,3 +195,22 @@ with high message volume, files may grow large. Current mitigation:
 
 A future `/channel-prune` command or automatic TTL-based cleanup could
 be added if this becomes a practical problem.
+
+## Handling malformed frames
+
+The extension never crashes on bad input; instead it **drops the bad
+frame and tells the agent what happened**:
+
+- A channel file with broken JSON or the wrong top-level shape returns an
+  empty message list and logs the reason on stderr. The next `publish`
+  overwrites the file, so recovery is automatic.
+- Individual malformed messages inside an otherwise valid channel file
+  are filtered out with a `dropped N malformed message(s)` warning.
+- UDS frames are reassembled with a bracket-aware splitter that tolerates
+  both newline-separated and glued (`}{`) frames and that carries
+  partial frames across chunk boundaries.
+- Whenever a transport has to drop a frame, it invokes its
+  `onParseError` hook. The extension wires this hook to `pi.sendMessage`
+  (non-triggering) so the agent sees a short diagnostic with a 500-char
+  preview of the offending payload, and to the sidebar log for the
+  human.

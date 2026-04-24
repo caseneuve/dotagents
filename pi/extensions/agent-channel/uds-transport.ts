@@ -3,8 +3,19 @@
 // Node and Bun runtimes. subscribe() receives pushed messages in
 // real-time — no polling.
 import * as net from "node:net";
-import type { ChannelMessage, FilterOpts } from "./core";
-import type { MessageTransport } from "./interfaces";
+import {
+  isValidMessage,
+  splitJsonFrames,
+  type ChannelMessage,
+  type FilterOpts,
+} from "./core";
+import type { MessageTransport, ParseErrorInfo } from "./interfaces";
+
+const PREVIEW_MAX = 500;
+
+function preview(s: string): string {
+  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) + "…" : s;
+}
 
 interface PendingRequest {
   resolve: (data: any) => void;
@@ -13,6 +24,7 @@ interface PendingRequest {
 
 export class UdsTransport implements MessageTransport {
   readonly name = "uds";
+  onParseError?: (info: ParseErrorInfo) => void;
   private socketPath: string;
   private socket: net.Socket | null = null;
   private connected: boolean = false;
@@ -52,20 +64,24 @@ export class UdsTransport implements MessageTransport {
 
       sock.on("data", (data: string) => {
         transport.buffer += data;
-        const lines = transport.buffer.split("\n");
-        transport.buffer = lines.pop() || "";
+        const { frames, remainder } = splitJsonFrames(transport.buffer);
+        transport.buffer = remainder;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        for (const raw of frames) {
+          let frame: unknown;
           try {
-            const frame = JSON.parse(trimmed);
-            transport.handleFrame(frame);
+            frame = JSON.parse(raw);
           } catch (err) {
-            console.error(
-              `[uds-transport] parse error: ${err instanceof Error ? err.message : err}`,
-            );
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[uds-transport] parse error: ${msg}`);
+            transport.onParseError?.({
+              transport: "uds",
+              error: msg,
+              rawPreview: preview(raw),
+            });
+            continue;
           }
+          transport.handleFrame(frame);
         }
       });
 
@@ -90,15 +106,61 @@ export class UdsTransport implements MessageTransport {
     return this.connectPromise;
   }
 
-  private handleFrame(frame: any): void {
-    if (frame.type === "message") {
-      const cb = this.subscriptions.get(frame.channel);
-      if (cb) cb([frame.msg]);
-    } else if (frame.type === "response" && frame.reqId) {
-      const pending = this.pendingRequests.get(frame.reqId);
+  private handleFrame(frame: unknown): void {
+    if (frame == null || typeof frame !== "object") {
+      const pv = (() => {
+        try {
+          return preview(JSON.stringify(frame));
+        } catch {
+          return String(frame);
+        }
+      })();
+      console.error(`[uds-transport] dropping non-object frame: ${pv}`);
+      this.onParseError?.({
+        transport: "uds",
+        error: "non-object frame",
+        rawPreview: pv,
+      });
+      return;
+    }
+    const f = frame as {
+      type?: unknown;
+      channel?: unknown;
+      msg?: unknown;
+      reqId?: unknown;
+      data?: unknown;
+    };
+
+    if (f.type === "message") {
+      if (typeof f.channel !== "string") {
+        console.error("[uds-transport] dropping message frame with no channel");
+        this.onParseError?.({
+          transport: "uds",
+          error: "message frame missing channel",
+          rawPreview: preview(JSON.stringify(f)),
+        });
+        return;
+      }
+      const cb = this.subscriptions.get(f.channel);
+      if (!cb) return;
+      if (!isValidMessage(f.msg)) {
+        console.error(
+          `[uds-transport] dropping malformed message frame on [${f.channel}]`,
+        );
+        this.onParseError?.({
+          transport: "uds",
+          error: "malformed ChannelMessage shape",
+          rawPreview: preview(JSON.stringify(f.msg)),
+          channel: f.channel,
+        });
+        return;
+      }
+      cb([f.msg]);
+    } else if (f.type === "response" && typeof f.reqId === "string") {
+      const pending = this.pendingRequests.get(f.reqId);
       if (pending) {
-        this.pendingRequests.delete(frame.reqId);
-        pending.resolve(frame.data);
+        this.pendingRequests.delete(f.reqId);
+        pending.resolve(f.data);
       }
     }
   }
@@ -129,14 +191,52 @@ export class UdsTransport implements MessageTransport {
   }
 
   async read(channel: string, opts?: FilterOpts): Promise<ChannelMessage[]> {
-    return this.request({ action: "read", channel, opts });
+    const data = await this.request({ action: "read", channel, opts });
+    if (!Array.isArray(data)) {
+      console.error(
+        `[uds-transport] read [${channel}]: expected array, got ${
+          data === null ? "null" : typeof data
+        }`,
+      );
+      return [];
+    }
+    const valid: ChannelMessage[] = [];
+    let dropped = 0;
+    for (const entry of data) {
+      if (isValidMessage(entry)) valid.push(entry);
+      else dropped++;
+    }
+    if (dropped > 0) {
+      console.error(
+        `[uds-transport] read [${channel}]: dropped ${dropped} malformed message(s)`,
+      );
+    }
+    return valid;
   }
 
   async ack(
     channel: string,
     messageId: string,
   ): Promise<{ ackedCount: number }> {
-    return this.request({ action: "ack", channel, messageId });
+    const data = await this.request({ action: "ack", channel, messageId });
+    if (
+      data == null ||
+      typeof data !== "object" ||
+      typeof (data as { ackedCount?: unknown }).ackedCount !== "number"
+    ) {
+      throw new Error(
+        `ack failed: unexpected response shape: ${preview(
+          (() => {
+            try {
+              return JSON.stringify(data);
+            } catch {
+              return String(data);
+            }
+          })(),
+        )}`,
+      );
+    }
+    return data as { ackedCount: number };
   }
 
   subscribe(channel: string, callback: (msgs: ChannelMessage[]) => void): void {
