@@ -9,22 +9,14 @@ Agents communicate through named channels backed by shared JSON files.
 The protocol is the same regardless of backend (cmux, tmux, or file-only).
 Status, progress, and notifications adapt to whatever is available.
 
-## Setup — do this immediately
+## Setup — automatic
 
-The lobby channel is **injected into your system prompt** by the extension.
-Look for `Comms protocol (lobby: <channel>):` near the end of your prompt.
-Use that channel directly — do not re-derive it from environment variables.
+The extension handles setup automatically:
+- The lobby channel is **auto-watched** on session start — you don't need to call `channel_watch` for it.
+- Your **agent name** is delivered with the first incoming message — use it when identifying yourself.
+- A **presence announcement** is automatically sent when you join a channel.
 
-Start watching it right away:
-
-```
-channel_watch(channel: <lobby>)
-```
-
-Every agent in the workspace does this. The lobby is always open.
-
-When you call `channel_watch`, a **presence announcement** is automatically
-sent on the channel so other agents know you're listening.
+You're ready to communicate as soon as a message arrives.
 
 ## Lobby vs task channels
 

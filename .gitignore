@@ -3,3 +3,4 @@
 .pi/playwright-policy.json
 .pi/playwright/screenshots/
 .reviews/
+node_modules/

@@ -115,6 +115,8 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  let identityHintSent = false;
+
   // ── on incoming messages, inject them into the conversation ──
   function onIncoming(msgs: ChannelMessage[]) {
     if (commsMuted) return;
@@ -126,7 +128,13 @@ export default function (pi: ExtensionAPI) {
 
       const trigger = shouldTriggerTurn(msg);
       const label = `📨 [${msg.channel}] from ${msg.from}: ${msg.type}`;
-      const content = `${label}\n\n${msg.body}`;
+      let content: string;
+      if (!identityHintSent) {
+        content = `[You are agent "${myName}". Respond on channel ${msg.channel}.]\n${label}\n\n${msg.body}`;
+        identityHintSent = true;
+      } else {
+        content = `${label}\n\n${msg.body}`;
+      }
 
       if (trigger) {
         pi.sendMessage(
@@ -281,33 +289,6 @@ export default function (pi: ExtensionAPI) {
     if (display instanceof TmuxDisplay && !commsMuted) {
       display.teardown();
     }
-  });
-
-  // ── Inject agent identity + comms protocol into system prompt ──
-  pi.on("before_agent_start", async (event) => {
-    const name = agentName();
-    const commsState = commsMuted ? "off" : "on";
-    const lobby = resolveLobby();
-
-    let identitySnippet = `\nYour agent name is "${name}". Use this name when identifying yourself in conversations. Comms are currently ${commsState}.`;
-
-    if (lobby) {
-      identitySnippet += `
-
-The lobby channel is exactly: ${lobby}
-Use this EXACT string as the channel parameter — do not add prefixes like "lobby/" or "lobby-".
-
-Comms protocol:
-- The lobby is for SHORT coordination only — announce what you're doing, where to find results.
-- For actual work (code reviews, task exchanges), create a DEDICATED task channel with a descriptive name (e.g. "project/review-feature-x") and announce it on the lobby.
-- Never send long content (reviews, diffs, detailed results) on the lobby — it pollutes the shared space.
-- End messages with OVER (your turn) or OUT (conversation done, no reply expected).
-- For the full protocol (channel naming, timeouts, review format), read the agent-comms skill.`;
-    }
-
-    return {
-      systemPrompt: event.systemPrompt + identitySnippet,
-    };
   });
 
   // ── Tool: channel_send ──
