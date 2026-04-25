@@ -5,9 +5,34 @@ description: Communicate with other agents using shared channels, with backend-a
 
 # agent-comms
 
-Agents communicate through named channels backed by shared JSON files.
-The protocol is the same regardless of backend (cmux, tmux, or file-only).
-Status, progress, and notifications adapt to whatever is available.
+Agents communicate through named channels. Two separate subsystems
+handle this — keep them distinct in your mental model:
+
+**Transport** (how message bytes move between agents):
+- **UDS relay** at `/tmp/agent-channels.sock` — push delivery through a
+  local Unix socket; used when the relay process is running (default
+  for most sessions).
+- **HTTP/SSE relay** at `$AGENT_RELAY_URL` — push delivery for
+  cross-machine agents.
+- **File fallback** at `~/.agent-channels/*.json` — polling; used when
+  no relay is reachable. Always works as a last resort.
+
+The extension picks one at session start via a transport probe. The
+protocol (OVER/OUT, ack-first, presence, channel names) is identical
+across all three; which one is live is transparent to the agent.
+
+**Display** (how local UI renders status, progress, notifications):
+- **cmux** — sidebar pills, progress bars, notification badges.
+- **tmux** — pane titles, user options, `display-message` or `notify-send`.
+- **file-only** — no sidebar; notifications via `osascript` / `notify-send`.
+
+Transport and display are chosen independently. A cmux session can run
+on any transport; a bare terminal can still use the UDS relay if one
+is running. Only `channel_status` output differs across displays
+(it's sidebar-bound); `channel_send` / `channel_read` / `channel_watch`
+do not.
+
+See "Display backends" below for display-specific setup.
 
 ## Common mistakes (read first)
 
@@ -441,7 +466,11 @@ independently. Use this structure:
 
 This avoids the reviewer guessing what to look at or how to verify.
 
-## Backend-specific notes
+## Display backends
+
+These control local UI only (status pills, progress, notifications).
+They do NOT affect which transport is used or how messages move — see
+the intro for that.
 
 ### cmux (macOS)
 
@@ -463,11 +492,17 @@ set -g pane-border-format "#{pane_title}"
 set -g pane-border-status top
 ```
 
-### file-only (fallback)
+### file-only (display fallback)
 
-Messages work (file-based). Status and progress are no-ops.
+Status and progress are no-ops (no sidebar or pane titles to render to).
 Notifications fall back to `osascript` on macOS or `notify-send` on Linux.
 
-Lobby is `file/lobby` — a machine-global channel shared by all Pi agents
-running in bare terminals. Any agent on the same machine auto-discovers
-others without configuration. Use dedicated task channels for isolation.
+This does NOT imply the file transport is in use — transport selection is
+independent. If no relay is running, `FileTransport` polls
+`~/.agent-channels/*.json`; if a relay is running, the agent uses UDS
+or HTTP regardless of whether cmux/tmux is available.
+
+On this display fallback, the default lobby channel is `file/lobby` —
+a machine-global channel shared by all pi agents running in bare
+terminals, so agents on the same machine auto-discover each other
+without configuration. Use dedicated task channels for isolation.
