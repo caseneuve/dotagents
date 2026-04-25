@@ -5,6 +5,8 @@ import {
   ackMessages,
   shouldTriggerTurn,
   endsWithOut,
+  endsWithOver,
+  classifySuffix,
   detectOutMisuse,
   isValidMessage,
   parseChannelFile,
@@ -231,6 +233,55 @@ describe("endsWithOut", () => {
     expect(endsWithOut("your turn. OVER")).toBe(false);
     expect(endsWithOut("a plain body")).toBe(false);
     expect(endsWithOut("OUT of ideas, help me")).toBe(false);
+  });
+});
+
+// ─── endsWithOver ────────────────────────────────────────────────────
+
+describe("endsWithOver", () => {
+  test("detects OVER/over/Over at end", () => {
+    expect(endsWithOver("your turn. OVER")).toBe(true);
+    expect(endsWithOver("your turn. over")).toBe(true);
+    expect(endsWithOver("your turn. Over")).toBe(true);
+  });
+
+  test("tolerates trailing whitespace", () => {
+    expect(endsWithOver("your turn. OVER\n")).toBe(true);
+  });
+
+  test("does not match OVER inside words", () => {
+    expect(endsWithOver("OVERflow detected.")).toBe(false);
+  });
+
+  test("returns false for non-OVER endings", () => {
+    expect(endsWithOver("done. OUT")).toBe(false);
+    expect(endsWithOver("plain body")).toBe(false);
+  });
+});
+
+// ─── classifySuffix ──────────────────────────────────────────────────────
+
+describe("classifySuffix", () => {
+  test("returns 'OUT' for OUT-terminated bodies", () => {
+    expect(classifySuffix("done. OUT")).toBe("OUT");
+    expect(classifySuffix("done. out\n")).toBe("OUT");
+  });
+
+  test("returns 'OVER' for OVER-terminated bodies", () => {
+    expect(classifySuffix("your turn. OVER")).toBe("OVER");
+    expect(classifySuffix("your turn. over  ")).toBe("OVER");
+  });
+
+  test("returns 'none' for bodies with no suffix", () => {
+    expect(classifySuffix("plain body")).toBe("none");
+    expect(classifySuffix("")).toBe("none");
+    expect(classifySuffix("OUT of ideas, help me")).toBe("none");
+  });
+
+  test("OUT wins when both appear, mirroring shouldTriggerTurn", () => {
+    // pathological input — body ends with OUT so receiver suppresses turn;
+    // telemetry reflects what the receiver actually does.
+    expect(classifySuffix("OVER OUT")).toBe("OUT");
   });
 });
 

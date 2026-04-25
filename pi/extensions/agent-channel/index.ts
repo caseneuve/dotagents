@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import {
   shouldTriggerTurn,
   isValidMessage,
+  classifySuffix,
   detectOutMisuse,
   previewString,
   safeStringify,
@@ -513,16 +514,21 @@ export default function (pi: ExtensionAPI) {
 
       trackOwnMessage(msg.id);
       await transport.publish(msg);
-      await display.log(
-        `sent [${msg.type}] to ${msg.channel}`,
-        "info",
-        "channel",
-      );
 
-      const isOutMessage = /\bOUT$/i.test(params.body.trimEnd());
+      const suffix = classifySuffix(params.body);
+      const isOutMessage = suffix === "OUT";
       const outMisuse = isOutMessage
         ? detectOutMisuse(params.body, params.type)
         : null;
+
+      // One structured telemetry line per send. Consumed manually today;
+      // will back a future dead-air timer / stall analysis. Keep the
+      // key=value shape stable so grep/awk pipelines don't break.
+      await display.log(
+        `send channel=${msg.channel} from=${msg.from} type=${msg.type} suffix=${suffix}`,
+        "info",
+        "channel-telemetry",
+      );
 
       if (isOutMessage) {
         await display.clearProgress();

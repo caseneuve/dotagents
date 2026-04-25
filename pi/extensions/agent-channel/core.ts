@@ -95,6 +95,26 @@ export function endsWithOut(body: string): boolean {
   return /\bOUT$/i.test(body.trimEnd());
 }
 
+/** Does the trimmed body end with the OVER sign-off? */
+export function endsWithOver(body: string): boolean {
+  return /\bOVER$/i.test(body.trimEnd());
+}
+
+/**
+ * Classify the turn-control suffix on an outgoing body. Used both for the
+ * receiver-side turn decision and for send-side telemetry so one regex
+ * pair is the single source of truth.
+ *
+ * Precedence: OUT wins over OVER when somehow both appear (e.g. "OVER OUT")
+ * because `shouldTriggerTurn` checks OUT and returns false.
+ */
+export type TurnSuffix = "OVER" | "OUT" | "none";
+export function classifySuffix(body: string): TurnSuffix {
+  if (endsWithOut(body)) return "OUT";
+  if (endsWithOver(body)) return "OVER";
+  return "none";
+}
+
 /**
  * Heuristic: an outgoing message that ends with OUT but whose body is
  * phrased as a question / request. Surfacing these at send-time catches the

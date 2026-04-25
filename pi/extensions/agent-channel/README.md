@@ -196,6 +196,27 @@ with high message volume, files may grow large. Current mitigation:
 A future `/channel-prune` command or automatic TTL-based cleanup could
 be added if this becomes a practical problem.
 
+## Observability
+
+Each `channel_send` emits one structured telemetry line via the sidebar
+log source `channel-telemetry`:
+
+```
+send channel=<channel> from=<agent> type=<message-type> suffix=<OVER|OUT|none>
+```
+
+The format is intentionally stable `key=value` so grep / awk pipelines
+keep working. This is the raw material for future stall analysis:
+
+- a burst of `suffix=OUT` on a channel that then goes silent is usually
+  an OUT-misuse that slipped past the send-time heuristic
+- a `send` followed by a quick `channel_unwatch` on the same channel
+  is a pre-reply unwatch
+- long gaps with no `send` on a watched channel are genuine dead-air
+
+Do not remove this line as "redundant" — the short `sent [...]` status
+log it replaced carried the same information less consistently.
+
 ## Handling malformed frames
 
 The extension never crashes on bad input; instead it **drops the bad
