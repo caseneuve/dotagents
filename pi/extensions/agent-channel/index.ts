@@ -373,6 +373,53 @@ export default function (pi: ExtensionAPI) {
     "channel_list",
   ];
 
+  // ── Comms engagement helpers ──
+  //
+  // These keep the transport's actual subscriptions in sync with the comms
+  // state. We NEVER subscribe while muted — otherwise peers see a false
+  // presence ("X is now watching") while onIncoming silently drops every
+  // frame. `watchedChannels` stays populated either way so the engage step
+  // on /comms on can restore subscriptions without needing a reload.
+
+  /** Subscribe the transport to every channel in `watchedChannels`. */
+  function subscribeAllWatched(): void {
+    for (const channel of watchedChannels) {
+      transport.subscribe(channel, onIncoming);
+    }
+  }
+
+  /** Drop every active transport subscription. `watchedChannels` is
+   *  preserved so a later engage can restore them. */
+  function unsubscribeAllWatched(): void {
+    transport.unsubscribeAll();
+  }
+
+  /** Publish a `presence` message on the current session's lobby, if any.
+   *  Non-awaited by design — one flaky channel shouldn't block a comms
+   *  transition, and publish failures shouldn't strand the agent in a
+   *  half-engaged state. Logs to stderr on failure; todo 0018 will route
+   *  this through onTransportError for agent-facing surfacing. */
+  function announceOnLobby(body: string): void {
+    if (!sessionLobbyChannel) return;
+    if (!watchedChannels.has(sessionLobbyChannel)) return;
+    const msg: ChannelMessage = {
+      id: makeId(),
+      channel: sessionLobbyChannel,
+      from: agentName(),
+      type: "presence",
+      body,
+      timestamp: Date.now(),
+    };
+    trackOwnMessage(msg.id);
+    transport.publish(msg).catch((err: unknown) => {
+      console.error(
+        `[agent-channel] lobby presence publish failed: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    });
+  }
+
   // ── lifecycle ──
   pi.on("session_start", async (_event, c) => {
     ctx = c;
@@ -437,7 +484,10 @@ export default function (pi: ExtensionAPI) {
       });
     }
 
-    // Restore watches from session state
+    // Populate watchedChannels from restored session state + auto-add
+    // the lobby. Actual transport subscription + lobby presence
+    // announcement only happens when comms are ON — otherwise we'd be
+    // lying to peers about whether we're listening.
     let latestChannels: string[] = [];
     for (const entry of ctx.sessionManager.getEntries()) {
       if (
@@ -449,7 +499,6 @@ export default function (pi: ExtensionAPI) {
     }
     for (const ch of latestChannels) {
       watchedChannels.add(ch);
-      transport.subscribe(ch, onIncoming);
     }
     if (latestChannels.length > 0) {
       await display.log(
@@ -459,34 +508,28 @@ export default function (pi: ExtensionAPI) {
       );
     }
 
-    // Auto-watch the lobby
     const lobbyChannel = resolveLobby();
-    let lobbyAutoAnnounced = false;
-    if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
-      watchedChannels.add(lobbyChannel);
-      transport.subscribe(lobbyChannel, onIncoming);
-      // Announce presence on the lobby (same as channel_watch tool)
-      const joinMsg: ChannelMessage = {
-        id: makeId(),
-        channel: lobbyChannel,
-        from: agentName(),
-        type: "presence",
-        body: `${agentName()} is now watching this channel.`,
-        timestamp: Date.now(),
-      };
-      trackOwnMessage(joinMsg.id);
-      await transport.publish(joinMsg);
-      lobbyAutoAnnounced = true;
-      await display.log(
-        `auto-watching lobby: ${lobbyChannel}`,
-        "info",
-        "channel",
-      );
-    }
+    if (lobbyChannel) watchedChannels.add(lobbyChannel);
 
     // Capture lobby state so /comms on can rebuild the orientation later.
     sessionLobbyChannel = lobbyChannel ?? undefined;
-    sessionLobbyAutoAnnounced = lobbyAutoAnnounced;
+    sessionLobbyAutoAnnounced = false;
+
+    // Engage the transport only when comms are on. When muted, watchedChannels
+    // is populated but nothing is subscribed and no presence is broadcast.
+    // The /comms on transition later will subscribeAllWatched + announce.
+    if (!commsMuted) {
+      subscribeAllWatched();
+      if (lobbyChannel) {
+        announceOnLobby(`${agentName()} is now watching this channel.`);
+        sessionLobbyAutoAnnounced = true;
+        await display.log(
+          `auto-watching lobby: ${lobbyChannel}`,
+          "info",
+          "channel",
+        );
+      }
+    }
 
     // Orientation: only inject when comms are already on. When comms are
     // muted (the default), stay silent — an agent shouldn't get a
@@ -1014,13 +1057,29 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    // Only inject a conversation message when the state actually
-    // changes. Idempotent toggles (e.g. /comms on while already on)
-    // stay silent.
+    // Only apply transport-level engagement + conversation messages when
+    // the state actually changes. Idempotent toggles (e.g. /comms on while
+    // already on) stay silent and don't re-subscribe / re-announce.
     if (previousMuted !== commsMuted) {
       if (!commsMuted) {
+        // off → on: engage the transport, announce presence, orient.
+        subscribeAllWatched();
+        if (sessionLobbyChannel) {
+          announceOnLobby(`${agentName()} is now watching this channel.`);
+          sessionLobbyAutoAnnounced = true;
+        }
         injectOrientation("comms-on");
       } else {
+        // on → off: announce leaving first so the last thing peers see on
+        // the lobby is an honest "I'm gone", then drop subscriptions so
+        // incoming frames stop landing in the transport buffer.
+        if (sessionLobbyChannel) {
+          announceOnLobby(
+            `${agentName()} is no longer watching this channel (comms off).`,
+          );
+        }
+        unsubscribeAllWatched();
+        sessionLobbyAutoAnnounced = false;
         injectCommsOffNotice();
       }
     }
