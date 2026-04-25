@@ -401,6 +401,10 @@ export default function (pi: ExtensionAPI) {
    *  this through onTransportError for agent-facing surfacing. */
   function announceOnLobby(body: string): void {
     if (!sessionLobbyChannel) return;
+    // User may have explicitly unwatched the lobby via channel_unwatch;
+    // in that case skip — we'd be announcing on a channel we're not
+    // tracking, and the subscribe/unsubscribe round-trip is already
+    // handled by that tool.
     if (!watchedChannels.has(sessionLobbyChannel)) return;
     const msg: ChannelMessage = {
       id: makeId(),
@@ -1178,18 +1182,26 @@ export default function (pi: ExtensionAPI) {
           return;
       }
 
-      // Migrate subscriptions to new transport
-      const channels = [...watchedChannels];
+      // Migrate subscriptions to new transport. Commands aren't routed
+      // through the channel_toolNames tool_call block, so /transport can
+      // execute while comms are muted — meaning the re-subscribe below
+      // would otherwise bypass the invariant 'transport subscribed ↔
+      // comms on' that session_start and applyCommsState enforce. Route
+      // through subscribeAllWatched() so the gate stays in one place.
       transport.unsubscribeAll();
       transport = newTransport;
-
-      for (const ch of channels) {
-        transport.subscribe(ch, onIncoming);
-      }
+      wireParseErrorHook(transport);
+      if (!commsMuted) subscribeAllWatched();
 
       ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
       ctx.ui.notify(
-        `Transport switched to: ${transport.name}${channels.length > 0 ? ` (${channels.length} channels migrated)` : ""}`,
+        `Transport switched to: ${transport.name}${
+          !commsMuted && watchedChannels.size > 0
+            ? ` (${watchedChannels.size} channels migrated)`
+            : commsMuted
+              ? " (comms muted — subscriptions deferred until /comms on)"
+              : ""
+        }`,
         "info",
       );
     },
