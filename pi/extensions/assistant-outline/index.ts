@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AutocompleteItem } from "@mariozechner/pi-tui";
 import {
   ASSISTANT_OUTLINE_COMMENTS_TYPE,
   buildCommentState,
@@ -21,16 +22,60 @@ import {
   MIN_TERMINAL_COLUMNS,
   OVERLAY_OPTIONS,
 } from "./overlay";
-import { getLatestAssistantResponse } from "./session";
-import type { ParsedAssistantOutline, SectionComments } from "./types";
+import { pickAssistantMessage } from "./picker";
+import {
+  getAssistantResponseById,
+  getLatestAssistantResponse,
+} from "./session";
+import type {
+  AssistantResponseSelection,
+  ParsedAssistantOutline,
+  SectionComments,
+} from "./types";
 
 const COMMAND_NAME = "assistant-outline";
+
+// Argument options — surfaced via getArgumentCompletions for tab-complete.
+const ARG_OPTIONS: AutocompleteItem[] = [
+  {
+    value: "latest",
+    label: "latest",
+    description:
+      "open the outline for the latest assistant message on the current branch (default)",
+  },
+  {
+    value: "pick",
+    label: "pick",
+    description:
+      "open a tree picker to select any assistant message from the session history",
+  },
+];
+
+type Mode = { kind: "latest" } | { kind: "pick" };
+
+function parseMode(args: string): { mode: Mode } | { error: string } {
+  const trimmed = args.trim().toLowerCase();
+  if (trimmed === "" || trimmed === "latest")
+    return { mode: { kind: "latest" } };
+  if (trimmed === "pick" || trimmed === "tree")
+    return { mode: { kind: "pick" } };
+  return {
+    error: `Unknown argument: "${args.trim()}". Try "latest" or "pick".`,
+  };
+}
 
 export default function assistantOutlineExtension(pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description:
-      "Browse the latest assistant response as a markdown outline with section preview/comments",
-    handler: async (_args, ctx) => {
+      'Browse an assistant response as a markdown outline with section preview/comments. Pass "pick" to choose any message from the session tree.',
+    getArgumentCompletions: (prefix) => {
+      const lowered = prefix.toLowerCase();
+      const filtered = ARG_OPTIONS.filter((opt) =>
+        opt.value.startsWith(lowered),
+      );
+      return filtered.length > 0 ? filtered : null;
+    },
+    handler: async (args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
         return;
@@ -45,22 +90,52 @@ export default function assistantOutlineExtension(pi: ExtensionAPI) {
         return;
       }
 
-      const branch = ctx.sessionManager.getBranch();
-      const latest = getLatestAssistantResponse(branch);
-      if (!latest.selection) {
-        ctx.ui.notify(latest.error ?? "No assistant response found", "warning");
+      const parsed = parseMode(args);
+      if ("error" in parsed) {
+        ctx.ui.notify(parsed.error, "warning");
         return;
       }
 
-      let currentDocument: ParsedAssistantOutline | undefined =
-        parseAssistantOutline(
-          latest.selection.text,
-          latest.selection.messageEntryId,
+      // Resolve which assistant response to open. `pinnedEntryId` is set when
+      // the user picked a specific message via the tree selector — reload
+      // re-fetches that id instead of the latest on the active branch.
+      let selection: AssistantResponseSelection | undefined;
+      let pinnedEntryId: string | undefined;
+      let notFoundMessage: string | undefined;
+
+      if (parsed.mode.kind === "pick") {
+        const pickedId = await pickAssistantMessage(ctx);
+        if (!pickedId) return; // user cancelled
+        pinnedEntryId = pickedId;
+        const picked = getAssistantResponseById(
+          ctx.sessionManager.getEntries(),
+          pickedId,
         );
-      let currentTimestamp = latest.selection.timestamp;
+        selection = picked.selection;
+        notFoundMessage = picked.error;
+      } else {
+        const latest = getLatestAssistantResponse(
+          ctx.sessionManager.getBranch(),
+        );
+        selection = latest.selection;
+        notFoundMessage = latest.error;
+      }
+
+      if (!selection) {
+        ctx.ui.notify(
+          notFoundMessage ?? "No assistant response found",
+          "warning",
+        );
+        return;
+      }
+
+      const branch = ctx.sessionManager.getBranch();
+      let currentDocument: ParsedAssistantOutline | undefined =
+        parseAssistantOutline(selection.text, selection.messageEntryId);
+      let currentTimestamp = selection.timestamp;
       let comments: SectionComments = getStoredCommentsForMessage(
         branch,
-        latest.selection.messageEntryId,
+        selection.messageEntryId,
       );
       let commandSnippets: CommandSnippet[] =
         extractCommandSnippets(currentDocument);
@@ -68,23 +143,28 @@ export default function assistantOutlineExtension(pi: ExtensionAPI) {
       const exportedSections = await ctx.ui.custom(
         (tui, theme, _kb, done) => {
           const reloadDocument = async () => {
-            const nextLatest = getLatestAssistantResponse(
-              ctx.sessionManager.getBranch(),
-            );
-            if (!nextLatest.selection) {
+            // When pinned to a specific entry (picker path), re-fetch THAT
+            // entry by id. Otherwise fall back to the latest-on-branch flow.
+            const next = pinnedEntryId
+              ? getAssistantResponseById(
+                  ctx.sessionManager.getEntries(),
+                  pinnedEntryId,
+                )
+              : getLatestAssistantResponse(ctx.sessionManager.getBranch());
+            if (!next.selection) {
               return {
-                error: nextLatest.error ?? "No assistant response found",
+                error: next.error ?? "No assistant response found",
               };
             }
 
             currentDocument = parseAssistantOutline(
-              nextLatest.selection.text,
-              nextLatest.selection.messageEntryId,
+              next.selection.text,
+              next.selection.messageEntryId,
             );
-            currentTimestamp = nextLatest.selection.timestamp;
+            currentTimestamp = next.selection.timestamp;
             comments = getStoredCommentsForMessage(
               ctx.sessionManager.getBranch(),
-              nextLatest.selection.messageEntryId,
+              next.selection.messageEntryId,
             );
             commandSnippets = extractCommandSnippets(currentDocument);
 
