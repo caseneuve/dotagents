@@ -137,24 +137,85 @@ longer watching the old task channel after mutual close. Never send to a
 closed channel; create a new one and announce it on the lobby so the other
 agent knows to watch it.
 
-## Acting on messages
+## Acting on messages — ack-first protocol
 
-When a message arrives, **act on it**. Do not just acknowledge receipt — do the work,
-then respond with the result.
+When a message arrives that expects a follow-up, **acknowledge
+immediately before doing the work**. Silence between receiving a
+request and sending results makes the sender think their message got
+dropped or you stalled. The channel should show continuous motion.
 
-Examples:
+Standard three-step loop for any request-shaped message:
 
-- `ping` arrives → respond with `pong`
-- `review-request` arrives → do the review, send the review back
-- `review-response` arrives → read findings, fix issues, send `task-complete` when done
-- `task-complete` arrives → verify the work, respond with result or approval
-- `request` arrives → do what's asked, send the result
+1. **ACK** — send a short acknowledgement the moment you receive the
+   request, before doing any work. Use `type: "ack"` or `type:
+   "status"`, name the task, sign with OVER.
 
-Messages received via `channel_watch` are **auto-acknowledged** when injected
-into your conversation. You do not need to call `channel_ack` manually for
-watched channels.
+   ```
+   channel_send(
+     channel: "agentic-stuff/review-0042",
+     type: "ack",
+     body: "got the review request, starting now. Will send findings shortly. OVER"
+   )
+   ```
 
-For messages read via `channel_read` (manual polling), ack them after processing:
+2. **DO THE WORK** — run the review / fix the bug / read the files /
+   whatever was asked. This is the only step that's allowed to take
+   time without the peer seeing anything.
+
+3. **REPLY WITH RESULTS** — send the real answer with the appropriate
+   type (`review-response`, `task-complete`, `pong`, etc.), sign with
+   OVER so the peer can confirm.
+
+   ```
+   channel_send(
+     channel: "agentic-stuff/review-0042",
+     type: "review-response",
+     body: "3 issues found: ...\nFull review at .reviews/2026-04-25.md. OVER"
+   )
+   ```
+
+4. **PEER CONFIRMS** — peer replies with `approved` / `task-complete` /
+   next request (OVER). If they close with `approved` you reply with a
+   short `ack. OUT` per §1 above. Otherwise the loop continues.
+
+When an ack is NOT needed (message does not expect follow-up):
+- `presence` — informational only.
+- `status` updates from the peer that are just FYI.
+- Any message that ended with OUT — the peer explicitly doesn't want a
+  reply, and `shouldTriggerTurn` has already suppressed your turn
+  anyway.
+
+### Why the ack matters
+
+- The sender learns their message landed. No silent-dropped-message
+  guessing.
+- The sender can set `channel_status("waiting for findings from
+  reviewer")` and move on to other work.
+- If something goes wrong mid-work the ack is already on the channel,
+  so a human investigator sees the receiver *was* engaged and can pin
+  down where the stall happened.
+- Works even when your work takes 10 minutes — the channel shows
+  step-by-step progress instead of a 10-minute void.
+
+### Examples by incoming type
+
+- `ping` arrives → immediate `pong` with OVER (the ack IS the result).
+- `request` arrives → ack ("on it"), do it, send result with OVER.
+- `review-request` arrives → ack ("reviewing now"), run review, send
+  `review-response` with OVER.
+- `review-response` arrives → ack ("applying fixes"), apply fixes, send
+  `task-complete` with OVER.
+- `task-complete` arrives → ack ("verifying"), verify, reply `approved`
+  with OVER.
+- `approved` arrives → reply `ack. OUT` (the mutual-close from §1).
+
+Messages received via `channel_watch` are **auto-acknowledged** at the
+transport level (internal bookkeeping). That's separate from the
+conversational ack described here — you still need to `channel_send`
+an ack message so the *peer* knows you got it.
+
+For messages read via `channel_read` (manual polling), also call
+`channel_ack` after processing to clear the unacked queue:
 
 ```
 channel_ack(channel: "...", message_id: "...")
@@ -163,20 +224,30 @@ channel_ack(channel: "...", message_id: "...")
 ## Code review workflow example
 
 **Reviewer agent:**
-1. Watches lobby → sees "review my changes on `myproject/review-0042`"
-2. Watches `myproject/review-0042`
-3. Receives `review-request` with diff summary
-4. Runs review, writes review file
-5. Sends `review-response` with review file path and summary of findings
-6. Waits for fixes
+1. Watches lobby → sees "review my changes on `myproject/review-0042`".
+2. Watches `myproject/review-0042`.
+3. Receives `review-request` with diff summary.
+4. **Immediately acks** on `myproject/review-0042`:
+   `type: "ack", body: "got it, reviewing now. OVER"`.
+5. Runs review, writes review file.
+6. Sends `review-response` with review file path and summary (OVER).
+7. Waits for fixes.
 
 **Dev agent:**
-1. Announces on lobby: "Sending review request on `myproject/review-0042`"
-2. Sends `review-request` on `myproject/review-0042`
-3. Watches `myproject/review-0042` for response
-4. Receives `review-response` — reads the review file, applies fixes
-5. Sends `task-complete` with summary of what was fixed
-6. Reviewer verifies, sends `approved` or another `review-response`
+1. Announces on lobby: "Sending review request on `myproject/review-0042`".
+2. Sends `review-request` on `myproject/review-0042` (OVER).
+3. Watches `myproject/review-0042` for response.
+4. Sees reviewer's `ack` — notes that review is in progress, can update
+   own `channel_status` to "waiting for reviewer" and continue on
+   other work.
+5. Receives `review-response` — acks with
+   `type: "ack", body: "reading review, starting fixes. OVER"`, then
+   applies fixes.
+6. Sends `task-complete` with summary of what was fixed (OVER).
+7. Reviewer acks, verifies, sends `approved` (OVER) or another
+   `review-response` (OVER).
+8. If `approved`: dev replies `ack. OUT`. Channel is now mutually
+   closed.
 
 ## Message type conventions
 

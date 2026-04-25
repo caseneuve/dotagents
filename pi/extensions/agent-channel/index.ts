@@ -422,6 +422,7 @@ export default function (pi: ExtensionAPI) {
           }.`
         : "• No lobby channel could be resolved for this session.",
       `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
+      `• When you receive a request-shaped message (request, review-request, ping, etc.) send a short ack (type="ack" body="got it, working on X. OVER") FIRST, then do the work, then send results. Silence between receipt and result looks like a dropped message.`,
       `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
       `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
       commsMuted
@@ -475,6 +476,7 @@ export default function (pi: ExtensionAPI) {
       "Use channel_send to deliver results, reviews, or status updates to other agents without blocking.",
       "Channel names should be descriptive, e.g. 'myproject/code-review' or 'myproject/task-status'.",
       "Include enough context in the body for the receiver to act independently.",
+      "When you receive a request-shaped message (request, review-request, ping, code-review, etc.) send a short ack FIRST (type='ack' or 'status', body='got it, working on X. OVER'), THEN do the work, THEN send the real results. Silence between receipt and result looks like a dropped message.",
       "Default sign-off is OVER (or no suffix). OUT is only correct after BOTH sides have confirmed completion — e.g. peer sent 'approved' or 'task-complete', you reply with a short 'ack. OUT'. If you are the first to say 'done', use OVER so the peer can confirm.",
       "When you change state without sending (e.g. channel_status) the other agent sees nothing. If you need them to react, channel_send something.",
     ],
