@@ -96,7 +96,7 @@
                (println "relay pid:" pid)
                (shell "ps" "-o" "pid,etime,rss,command" "-p" pid)
                (println)
-               (shell "ls" "-la" relay-socket)
+               (shell {:continue true} "ls" "-la" relay-socket)
                (println)
                (println "--- last 10 log lines (" relay-log ") ---")
                (shell {:continue true} "tail" "-n" "10" relay-log))

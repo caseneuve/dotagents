@@ -3,10 +3,16 @@
 import { RelayServer } from "./server";
 import * as fs from "node:fs";
 
-const socketPath = process.argv[2] || "/tmp/agent-channels.sock";
+const argv = process.argv.slice(2);
+const quiet = argv.includes("--quiet");
+// Socket path is the first positional (non-flag) argument; falls back to
+// the well-known default. Filtering flags prevents bugs like
+// `bun shared/relay/main.ts --quiet` binding to a file literally named
+// `--quiet` in the cwd.
+const socketPath =
+  argv.find((a) => !a.startsWith("--")) || "/tmp/agent-channels.sock";
 const httpPort = parseInt(process.env.RELAY_HTTP_PORT || "7700", 10);
 const httpHost = process.env.RELAY_HTTP_HOST || "0.0.0.0";
-const quiet = process.argv.includes("--quiet");
 
 // Clean up stale socket
 try {
