@@ -422,7 +422,7 @@ export default function (pi: ExtensionAPI) {
           }.`
         : "• No lobby channel could be resolved for this session.",
       `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
-      `• End messages with OVER when you expect a reply, OUT only when the conversation is done.`,
+      `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
       `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
       commsMuted
         ? `• Comms are currently OFF — channel_* tools are blocked until you /comms on.`
@@ -475,7 +475,7 @@ export default function (pi: ExtensionAPI) {
       "Use channel_send to deliver results, reviews, or status updates to other agents without blocking.",
       "Channel names should be descriptive, e.g. 'myproject/code-review' or 'myproject/task-status'.",
       "Include enough context in the body for the receiver to act independently.",
-      "End the body with OVER (or no suffix) when you expect a reply. End with OUT only when the conversation is done and no reply is expected — OUT suppresses the turn on the receiving agent.",
+      "Default sign-off is OVER (or no suffix). OUT is only correct after BOTH sides have confirmed completion — e.g. peer sent 'approved' or 'task-complete', you reply with a short 'ack. OUT'. If you are the first to say 'done', use OVER so the peer can confirm.",
       "When you change state without sending (e.g. channel_status) the other agent sees nothing. If you need them to react, channel_send something.",
     ],
     parameters: Type.Object({
@@ -772,7 +772,7 @@ export default function (pi: ExtensionAPI) {
       "Do not unwatch a channel where you are still expecting a reply.",
     promptSnippet: "Stop background polling on a channel",
     promptGuidelines: [
-      "Only unwatch a channel after the exchange on it is completely finished (both sides have sent OUT or one side has sent approved / task-complete).",
+      "Only unwatch a channel after BOTH sides have confirmed completion (peer sent 'approved' or 'task-complete', you acked with OUT). When in doubt, leave it watched — watches are cheap.",
       "If you unwatch while another agent still owes you a reply, that reply will be lost to your session until you channel_watch again with catch_up=true.",
     ],
     parameters: Type.Object({

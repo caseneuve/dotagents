@@ -13,23 +13,48 @@ Status, progress, and notifications adapt to whatever is available.
 
 These are the real failure modes we see in production. Do not repeat them.
 
-### 1. OUT is not "end of turn" — it is "end of conversation"
+### 1. OUT means "BOTH sides confirmed done" — not "I'm done"
 
-- **OVER** (or no suffix) — your turn is done, the other agent replies.
-- **OUT** — the entire exchange is finished. The other agent will NOT be
-  woken up. Their `channel_watch` delivery suppresses the turn.
+The single most important rule. Read twice.
 
-If you end a message with OUT and you were actually expecting a reply, the
-receiver sees the message but is never prompted to act on it. The channel
-then goes dead.
+- **OVER** (or no suffix) — default. Your turn is done, the other agent
+  should reply. Use this for almost every message.
+- **OUT** — the conversation is over. The receiver's turn is suppressed
+  (`shouldTriggerTurn` returns false), so they will NOT be woken up.
 
-The `channel_send` tool returns an OUT-misuse warning when your body ends
-with OUT but contains `?`, `please`, `can you`, `review this`, `let me
-know`, `your turn`, `waiting for`, etc. If you see that warning, resend
-the message ending with OVER.
+**"Conversation is done" means both sides have confirmed completion.**
+One side saying "I think we're done" is not enough. The exchange closes
+only after a two-step handshake:
 
-Legitimate OUT uses: `approved`, `task-complete`, final `pong`, any other
-definitive closer where no reply is required.
+1. Peer sends a definitive closer (`approved`, `task-complete`, etc.) —
+   typically with OVER so you can confirm.
+2. You reply with a short acknowledgement + OUT (e.g. `ack. OUT` or
+   `thanks, confirmed. OUT`).
+
+Only in step 2 is OUT correct. **If you are the first to say "done",
+use OVER so the peer can confirm.** If in doubt, use OVER — worst case
+the peer answers with a quick ack; using OUT prematurely silently kills
+the channel.
+
+If you end a message with OUT and you were actually expecting a reply,
+the receiver sees the message but is never prompted to act on it. The
+channel then goes dead.
+
+The `channel_send` tool returns an OUT-misuse warning when your body
+ends with OUT but contains `?`, `please`, `can you`, `review this`,
+`let me know`, `your turn`, `waiting for`, etc. If you see that
+warning, resend the message ending with OVER.
+
+Legitimate OUT uses — **only after peer already said they were done**:
+- `ack. OUT` after a peer `approved`
+- `thanks, confirmed. OUT` after a peer `task-complete`
+- final `pong` after a `ping`/`pong` round where both have spoken
+
+Illegitimate OUT — every other case, including:
+- Delivering a summary of work you did (use OVER, wait for review)
+- “Status update” style messages (use OVER or no suffix)
+- First message on a new task channel (use OVER or no suffix)
+- Replying to an open `review-request` (use OVER)
 
 ### 2. Do not `channel_unwatch` while a reply is still owed
 
@@ -37,9 +62,9 @@ definitive closer where no reply is required.
 the other agent publishes after you unwatch will not reach your
 conversation until you watch the channel again.
 
-Only unwatch after the exchange on that channel is fully done (both
-sides sent OUT, or one side sent `approved` / `task-complete`). When in
-doubt, leave it watched — watches are cheap.
+Only unwatch after BOTH sides have confirmed completion (peer sent
+`approved` or `task-complete`, you acked with OUT). When in doubt,
+leave it watched — watches are cheap.
 
 If you realize you unwatched too early, call
 `channel_watch(channel, catch_up=true)` to replay missed messages.
@@ -104,11 +129,13 @@ Task channels **must** be scoped to the specific task, not shared across tasks:
 ```
 
 **Do not** reuse generic names like `<project>/review` — concurrent tasks will
-collide. Once a task is done (OUT), the channel is dead. New task = new channel.
+collide. Once a task is mutually closed (both sides OUT per §1 above), the
+channel is dead. New task = new channel.
 
 Follow-up work **must** be announced on the lobby first — the other agent is no
-longer watching the old task channel after OUT. Never send to a closed channel;
-create a new one and announce it on the lobby so the other agent knows to watch it.
+longer watching the old task channel after mutual close. Never send to a
+closed channel; create a new one and announce it on the lobby so the other
+agent knows to watch it.
 
 ## Acting on messages
 
@@ -155,26 +182,38 @@ channel_ack(channel: "...", message_id: "...")
 
 | type | meaning | expected reaction |
 |------|---------|-------------------|
-| `ping` | Are you there? | Reply with `pong` |
-| `pong` | I'm here | Acknowledge |
+| `ping` | Are you there? | Reply with `pong` (use OVER) |
+| `pong` | I'm here | Acknowledge (use OVER unless closing a mutual-handshake exchange) |
 | `presence` | Agent joined channel | Note it (auto-sent by `channel_watch`) |
 | `status` | Progress update / announcement | Note it, act if relevant |
-| `request` | Do this task | Do it, send result |
-| `task-complete` | Work is done | Verify, acknowledge or follow up |
-| `review-request` | Please review these changes | Review and send findings |
-| `review-response` | Here are review findings | Fix issues, send task-complete |
-| `approved` | Looks good | Done, wrap up |
+| `request` | Do this task | Do it, send result with OVER |
+| `task-complete` | Work is done | Verify; reply with `approved` (OVER) or another `review-response` (OVER). The sender of `task-complete` must use OVER, not OUT. |
+| `review-request` | Please review these changes | Review and send findings with OVER |
+| `review-response` | Here are review findings | Fix issues, send `task-complete` with OVER |
+| `approved` | Looks good | Reply with a short `ack. OUT`. This is the only place OUT is normally correct. |
+| `ack` | Confirming a closer | Terminal — ends the exchange. |
 
 ## Sending
 
-End your message with **OVER** or **OUT** to control turn-taking:
+End your message with **OVER** or **OUT** to control turn-taking. Read
+§1 “Common mistakes” above before relying on OUT.
 
-- **OVER** — your turn is done, the other agent should act.
-- **OUT** — conversation finished, no reply expected. Use ONLY when the
-  exchange is complete (e.g. after `approved`, `task-complete`, a final
-  `pong`). OUT suppresses the receiver's turn — misusing it is the
-  number one reason agent conversations silently stall.
+- **OVER** — the default. Your turn is done, the other agent should
+  reply. Use for almost every message, including ones where you think
+  you're wrapping up.
+- **OUT** — the conversation is closed by mutual agreement. Only
+  correct when the peer has already confirmed they are done (e.g. they
+  sent `approved` or `task-complete`) and you are replying with a short
+  acknowledgement. Being the first to say OUT silently kills the
+  channel.
 - No suffix — same as OVER (other agent acts).
+
+OUT suppresses the receiver's turn — misusing it is the number-one
+reason agent conversations silently stall.
+
+### Examples
+
+Keep the loop open — the normal case:
 
 ```
 channel_send(
@@ -184,19 +223,39 @@ channel_send(
 )
 ```
 
-Use **OUT** only when the exchange is done and no response is needed:
+Close the loop — only after the peer already confirmed completion:
 
 ```
+# peer just sent: { type: "approved", body: "All fixes verified. OVER" }
 channel_send(
   channel: "<channel-name>",
-  type: "approved",
-  body: "All fixes verified, looks good. OUT"
+  type: "ack",
+  body: "thanks, confirmed. OUT"
+)
+```
+
+The first “done” message in an exchange uses OVER, not OUT:
+
+```
+# WRONG — silently kills the channel
+channel_send(
+  channel: "<channel-name>",
+  type: "task-complete",
+  body: "All fixes applied, PR pushed. OUT"
+)
+
+# RIGHT — peer gets a turn to confirm
+channel_send(
+  channel: "<channel-name>",
+  type: "task-complete",
+  body: "All fixes applied, PR pushed. OVER"
 )
 ```
 
 `channel_send` returns an OUT-misuse warning when it detects request-like
-phrasing paired with OUT. If you see that warning, resend the message
-ending with OVER.
+phrasing paired with OUT or a reply-expecting message type (`request`,
+`review-request`, `ping`, etc.). If you see that warning, resend the
+message ending with OVER.
 
 ## Receiving
 
@@ -257,9 +316,9 @@ When you have multiple sequential tasks for the same collaborator:
 3. The collaborating agent **stays on the lobby** until all announced work is
    complete.
 
-This prevents the other agent from going idle between steps. `OUT` on a task
-channel means that channel is done — not that all work is done. The lobby is
-where continuity lives.
+This prevents the other agent from going idle between steps. Mutual OUT
+on a task channel means that channel is done — not that all work is
+done. The lobby is where continuity lives.
 
 ## Timeouts and escalation
 
