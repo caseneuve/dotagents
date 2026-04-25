@@ -52,6 +52,9 @@ Legitimate OUT uses — **only after peer already said they were done**:
 
 Illegitimate OUT — every other case, including:
 - Delivering a summary of work you did (use OVER, wait for review)
+- A “summary followup” continuing an existing review/work loop where
+  you expect the peer to respond (use OVER — this is the exact class
+  of mistake round-5 surfaced in production)
 - “Status update” style messages (use OVER or no suffix)
 - First message on a new task channel (use OVER or no suffix)
 - Replying to an open `review-request` (use OVER)
@@ -181,9 +184,22 @@ Standard three-step loop for any request-shaped message:
 When an ack is NOT needed (message does not expect follow-up):
 - `presence` — informational only.
 - `status` updates from the peer that are just FYI.
+- `ack` — don't ack an ack (infinite regress). The runtime also
+  suppresses the turn for `type: "ack"`, so acks arrive as context.
 - Any message that ended with OUT — the peer explicitly doesn't want a
   reply, and `shouldTriggerTurn` has already suppressed your turn
   anyway.
+
+### When to skip the ack step (fast path)
+
+If the follow-up work takes less than a turn to complete — e.g. a
+sub-second verification, a trivial lookup, a one-line fix — you can
+skip the ack and go straight to the result with OVER. The ack exists
+to cover the observability gap while work is in flight; if there is no
+gap, the ack is just noise.
+
+Rule of thumb: if you'd finish before the peer has time to read the
+ack, skip it. Otherwise ack first.
 
 ### Why the ack matters
 
@@ -262,7 +278,7 @@ channel_ack(channel: "...", message_id: "...")
 | `review-request` | Please review these changes | Review and send findings with OVER |
 | `review-response` | Here are review findings | Fix issues, send `task-complete` with OVER |
 | `approved` | Looks good | Reply with a short `ack. OUT`. This is the only place OUT is normally correct. |
-| `ack` | Confirming a closer | Terminal — ends the exchange. |
+| `ack` | Receipt confirmation or final closer. Delivered as context only (`shouldTriggerTurn` returns false for `type: "ack"` regardless of suffix). | Mid-loop ack: note and continue. Final closer (`ack. OUT` after `approved`): ends the exchange. |
 
 ## Sending
 

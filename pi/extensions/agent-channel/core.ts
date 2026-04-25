@@ -140,7 +140,10 @@ export function detectOutMisuse(
 ): string | null {
   if (!endsWithOut(body)) return null;
 
-  // Messages that legitimately close a conversation.
+  const type = messageType?.toLowerCase();
+
+  // Messages that legitimately close a conversation — OUT is appropriate,
+  // skip every further check.
   const closingTypes = new Set([
     "approved",
     "task-complete",
@@ -148,7 +151,24 @@ export function detectOutMisuse(
     "presence",
     "ack",
   ]);
-  if (messageType && closingTypes.has(messageType.toLowerCase())) return null;
+  if (type && closingTypes.has(type)) return null;
+
+  // Messages whose `type` itself encodes an expectation of reply. OUT is
+  // almost certainly a mistake here regardless of body phrasing — this is
+  // the positive complement of `closingTypes` and catches the implicit-ask
+  // class the body-only heuristic missed (e.g. a review-request whose body
+  // reads "diff attached. OUT" with no explicit question words).
+  const replyExpectingTypes = new Set([
+    "ping",
+    "request",
+    "review-request",
+    "review-followup",
+    "code-review",
+    "question",
+  ]);
+  if (type && replyExpectingTypes.has(type)) {
+    return `type "${messageType}" expects a reply — use OVER instead of OUT`;
+  }
 
   const stripped = body
     .trimEnd()

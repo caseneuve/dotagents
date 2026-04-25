@@ -312,6 +312,32 @@ describe("detectOutMisuse", () => {
     expect(detectOutMisuse("looks good. OUT", "task-complete")).toBeNull();
   });
 
+  test("flags OUT on reply-expecting message types regardless of body", () => {
+    // Body has no explicit question/request words but the type itself
+    // encodes an expectation of reply — OUT is wrong.
+    expect(detectOutMisuse("diff attached. OUT", "review-request")).toMatch(
+      /type "review-request" expects a reply/,
+    );
+    expect(detectOutMisuse("here it is. OUT", "request")).toMatch(
+      /type "request" expects a reply/,
+    );
+    expect(detectOutMisuse("anyone there? OUT", "ping")).toMatch(
+      /type "ping" expects a reply/,
+    );
+    expect(detectOutMisuse("code below. OUT", "code-review")).toMatch(
+      /type "code-review" expects a reply/,
+    );
+    expect(detectOutMisuse("details follow. OUT", "review-followup")).toMatch(
+      /type "review-followup" expects a reply/,
+    );
+  });
+
+  test("reply-expecting type check is case-insensitive", () => {
+    expect(detectOutMisuse("anything. OUT", "Review-Request")).toMatch(
+      /expects a reply/,
+    );
+  });
+
   test("flags question marks", () => {
     expect(detectOutMisuse("is the build green? OUT")).toMatch(/question mark/);
   });
