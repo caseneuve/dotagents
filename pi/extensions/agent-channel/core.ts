@@ -81,12 +81,22 @@ export function ackMessages(
 
 /**
  * Determine whether an incoming message should trigger an agent turn.
- * Presence messages and OUT-terminated messages do not trigger.
+ *
+ * Suppressed (delivered as context only, receiver not woken up) for:
+ *   - `type: "presence"` — agent joined channel; informational.
+ *   - `type: "ack"` — peer acknowledges receipt of a prior message; the
+ *     sender already knows what to do next, the ack just confirms
+ *     delivery. Matches the ack-first protocol documented in the
+ *     agent-comms skill.
+ *   - bodies ending with the OUT sign-off — conversation is being
+ *     mutually closed per §1 of the skill.
+ *
+ * Everything else (including `type: "status"`) triggers a turn.
  */
 export function shouldTriggerTurn(msg: ChannelMessage): boolean {
   if (msg.type === "presence") return false;
-  const trimmed = msg.body.trimEnd();
-  if (/\bOUT$/i.test(trimmed)) return false;
+  if (msg.type === "ack") return false;
+  if (endsWithOut(msg.body)) return false;
   return true;
 }
 

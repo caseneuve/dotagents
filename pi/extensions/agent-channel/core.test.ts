@@ -179,6 +179,14 @@ describe("shouldTriggerTurn", () => {
     );
   });
 
+  test("ack messages never trigger (peer-ack confirms delivery, no action owed)", () => {
+    expect(
+      shouldTriggerTurn(msg({ type: "ack", body: "got it, on it. OVER" })),
+    ).toBe(false);
+    // even an ack with no suffix is still suppressed — the type is the signal
+    expect(shouldTriggerTurn(msg({ type: "ack", body: "got it" }))).toBe(false);
+  });
+
   test("body ending with OUT does not trigger", () => {
     expect(shouldTriggerTurn(msg({ body: "Done. OUT" }))).toBe(false);
   });
