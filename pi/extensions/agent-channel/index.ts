@@ -130,6 +130,91 @@ export default function (pi: ExtensionAPI) {
 
   let identityHintSent = false;
 
+  // Lobby metadata captured at session_start so /comms on can rebuild the
+  // orientation message later without re-running resolveLobby().
+  let sessionLobbyChannel: string | undefined;
+  let sessionLobbyAutoAnnounced = false;
+
+  /** Build the orientation body. `header` is the first line. */
+  function buildOrientation(header: string): string {
+    return [
+      header,
+      `• Your agent name is "${agentName()}".`,
+      sessionLobbyChannel
+        ? `• Your lobby channel is "${sessionLobbyChannel}". You are already watching it${
+            sessionLobbyAutoAnnounced ? " and have announced presence" : ""
+          }.`
+        : "• No lobby channel could be resolved for this session.",
+      `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
+      `• When you receive a request-shaped message (request, review-request, ping, etc.) send a short ack (type="ack" body="got it, working on X. OVER") FIRST, then do the work, then send results. Silence between receipt and result looks like a dropped message.`,
+      `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
+      `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
+    ].join("\n");
+  }
+
+  /**
+   * Inject the full orientation into the conversation. Fires from
+   * session_start when comms start on, and from /comms on when
+   * transitioning off → on. Non-triggering.
+   */
+  function injectOrientation(reason: "session-start" | "comms-on"): void {
+    const header =
+      reason === "comms-on"
+        ? "[agent-channel] Comms are now ON."
+        : "[agent-channel]";
+    try {
+      pi.sendMessage(
+        {
+          customType: "agent-channel",
+          content: buildOrientation(header),
+          display: true,
+          details: {
+            kind: "orientation",
+            reason,
+            agentName: agentName(),
+            lobbyChannel: sessionLobbyChannel ?? null,
+            lobbyAutoAnnounced: sessionLobbyAutoAnnounced,
+          },
+        },
+        { triggerTurn: false },
+      );
+      // The orientation message doubles as the identity hint, so the
+      // first incoming message doesn't need to prepend it again.
+      identityHintSent = true;
+    } catch (err) {
+      console.error(
+        `[agent-channel] failed to inject orientation: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+  }
+
+  /**
+   * Inject a short "comms off" note when transitioning on → off so the
+   * agent knows their channel tools just became no-ops.
+   */
+  function injectCommsOffNotice(): void {
+    try {
+      pi.sendMessage(
+        {
+          customType: "agent-channel",
+          content:
+            "[agent-channel] Comms are now OFF. You will not receive incoming messages and channel_* tools are blocked. Run /comms on to re-enable.",
+          display: true,
+          details: { kind: "comms-off" },
+        },
+        { triggerTurn: false },
+      );
+    } catch (err) {
+      console.error(
+        `[agent-channel] failed to inject comms-off notice: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+  }
+
   /** Cap + stringify an arbitrary value for inclusion in session state. */
   function toPreview(value: unknown): string {
     const s = typeof value === "string" ? value : safeStringify(value);
@@ -409,51 +494,16 @@ export default function (pi: ExtensionAPI) {
       );
     }
 
-    // Orientation: tell the agent its name + lobby + presence state, so it
-    // doesn't have to wait for the first incoming message to learn who it
-    // is. Non-triggering. Always fires — this is a local session note, not
-    // traffic on a channel, so comms-muted has no bearing.
-    const orientation = [
-      `[agent-channel]`,
-      `• Your agent name is "${agentName()}".`,
-      lobbyChannel
-        ? `• Your lobby channel is "${lobbyChannel}". You are already watching it${
-            lobbyAutoAnnounced ? " and have announced presence" : ""
-          }.`
-        : "• No lobby channel could be resolved for this session.",
-      `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
-      `• When you receive a request-shaped message (request, review-request, ping, etc.) send a short ack (type="ack" body="got it, working on X. OVER") FIRST, then do the work, then send results. Silence between receipt and result looks like a dropped message.`,
-      `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
-      `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
-      commsMuted
-        ? `• Comms are currently OFF — channel_* tools are blocked until you /comms on.`
-        : `• Comms are ON.`,
-    ].join("\n");
-    try {
-      pi.sendMessage(
-        {
-          customType: "agent-channel",
-          content: orientation,
-          display: true,
-          details: {
-            kind: "orientation",
-            agentName: agentName(),
-            lobbyChannel: lobbyChannel ?? null,
-            lobbyAutoAnnounced,
-            commsMuted,
-          },
-        },
-        { triggerTurn: false },
-      );
-      // The orientation message doubles as the identity hint, so the
-      // first incoming message doesn't need to prepend it again.
-      identityHintSent = true;
-    } catch (err) {
-      console.error(
-        `[agent-channel] failed to inject orientation: ${
-          err instanceof Error ? err.message : err
-        }`,
-      );
+    // Capture lobby state so /comms on can rebuild the orientation later.
+    sessionLobbyChannel = lobbyChannel ?? undefined;
+    sessionLobbyAutoAnnounced = lobbyAutoAnnounced;
+
+    // Orientation: only inject when comms are already on. When comms are
+    // muted (the default), stay silent — an agent shouldn't get a
+    // rulebook for a tool they can't use yet. The orientation fires
+    // later when /comms on is called.
+    if (!commsMuted) {
+      injectOrientation("session-start");
     }
   });
 
@@ -942,14 +992,25 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ── Shared comms toggle logic ──
-  function toggleComms(explicit?: "on" | "off"): boolean {
+  /**
+   * Flip comms state. Returns `{previous, current}` so callers can
+   * detect the transition and inject the appropriate conversation notice.
+   */
+  function toggleComms(explicit?: "on" | "off"): {
+    previous: boolean;
+    current: boolean;
+  } {
+    const previous = commsMuted;
     if (explicit === "on") commsMuted = false;
     else if (explicit === "off") commsMuted = true;
     else commsMuted = !commsMuted;
-    return commsMuted;
+    return { previous, current: commsMuted };
   }
 
-  async function applyCommsState(ctx: ExtensionContext): Promise<void> {
+  async function applyCommsState(
+    ctx: ExtensionContext,
+    previousMuted: boolean,
+  ): Promise<void> {
     const state = commsMuted ? "OFF 🔇" : "ON 📡";
     pi.events.emit("agent-channel:comms", !commsMuted);
     ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
@@ -962,6 +1023,17 @@ export default function (pi: ExtensionAPI) {
         await display.setStatus("agent", "ready", "🟢");
       }
     }
+
+    // Only inject a conversation message when the state actually
+    // changes. Idempotent toggles (e.g. /comms on while already on)
+    // stay silent.
+    if (previousMuted !== commsMuted) {
+      if (!commsMuted) {
+        injectOrientation("comms-on");
+      } else {
+        injectCommsOffNotice();
+      }
+    }
   }
 
   // ── Command: /comms ──
@@ -969,8 +1041,10 @@ export default function (pi: ExtensionAPI) {
     description: "Toggle agent comms on/off (usage: /comms [on|off])",
     handler: async (args, ctx) => {
       const arg = args.trim().toLowerCase();
-      toggleComms(arg === "on" ? "on" : arg === "off" ? "off" : undefined);
-      await applyCommsState(ctx);
+      const { previous } = toggleComms(
+        arg === "on" ? "on" : arg === "off" ? "off" : undefined,
+      );
+      await applyCommsState(ctx, previous);
     },
   });
 
@@ -978,8 +1052,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerShortcut("ctrl+shift+m", {
     description: "Toggle agent comms on/off",
     handler: async (ctx) => {
-      toggleComms();
-      await applyCommsState(ctx);
+      const { previous } = toggleComms();
+      await applyCommsState(ctx, previous);
     },
   });
 
