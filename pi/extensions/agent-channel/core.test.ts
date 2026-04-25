@@ -8,6 +8,7 @@ import {
   endsWithOver,
   classifySuffix,
   detectOutMisuse,
+  buildOrientation,
   isValidMessage,
   parseChannelFile,
   previewString,
@@ -663,5 +664,74 @@ describe("safeStringify", () => {
 
   test("undefined stringifies to the string 'undefined'", () => {
     expect(safeStringify(undefined)).toBe("undefined");
+  });
+});
+
+// ─── buildOrientation ──────────────────────────────────────────────────────
+
+describe("buildOrientation", () => {
+  const baseFields = {
+    header: "[agent-channel] Comms are now ON.",
+    agentName: "reviewer",
+    lobbyAutoAnnounced: false,
+  };
+
+  test("starts with the provided header", () => {
+    const out = buildOrientation(baseFields);
+    expect(out.startsWith("[agent-channel] Comms are now ON.\n")).toBe(true);
+  });
+
+  test("includes the agent name verbatim", () => {
+    const out = buildOrientation({ ...baseFields, agentName: "agent-x" });
+    expect(out).toContain('Your agent name is "agent-x".');
+  });
+
+  test("renders the 'no lobby resolved' line when lobbyChannel is undefined", () => {
+    const out = buildOrientation(baseFields);
+    expect(out).toContain(
+      "No lobby channel could be resolved for this session.",
+    );
+    expect(out).not.toContain("Your lobby channel is");
+  });
+
+  test("renders the lobby line without the announce clause when not announced", () => {
+    const out = buildOrientation({
+      ...baseFields,
+      lobbyChannel: "project/lobby",
+      lobbyAutoAnnounced: false,
+    });
+    expect(out).toContain(
+      'Your lobby channel is "project/lobby". You are already watching it.',
+    );
+    expect(out).not.toContain("announced presence");
+  });
+
+  test("appends 'and have announced presence' when lobby was auto-announced", () => {
+    const out = buildOrientation({
+      ...baseFields,
+      lobbyChannel: "project/lobby",
+      lobbyAutoAnnounced: true,
+    });
+    expect(out).toContain(
+      'Your lobby channel is "project/lobby". You are already watching it and have announced presence.',
+    );
+  });
+
+  test("includes the protocol bullets", () => {
+    const out = buildOrientation(baseFields);
+    // ack-first
+    expect(out).toContain("send a short ack");
+    // OVER/OUT handshake
+    expect(out).toContain("BOTH sides have confirmed");
+    // unwatch caveat
+    expect(out).toContain("channel_unwatch");
+    // status vs send
+    expect(out).toContain("sidebar is NOT a message to others");
+  });
+
+  test("does NOT include the legacy 'Comms are currently OFF' bullet", () => {
+    const out = buildOrientation(baseFields);
+    expect(out).not.toContain("Comms are currently OFF");
+    expect(out).not.toMatch(/\bComms are ON\b/);
   });
 });

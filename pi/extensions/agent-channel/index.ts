@@ -13,6 +13,7 @@ import {
   isValidMessage,
   classifySuffix,
   detectOutMisuse,
+  buildOrientation,
   previewString,
   safeStringify,
   type ChannelMessage,
@@ -135,38 +136,27 @@ export default function (pi: ExtensionAPI) {
   let sessionLobbyChannel: string | undefined;
   let sessionLobbyAutoAnnounced = false;
 
-  /** Build the orientation body. `header` is the first line. */
-  function buildOrientation(header: string): string {
-    return [
-      header,
-      `• Your agent name is "${agentName()}".`,
-      sessionLobbyChannel
-        ? `• Your lobby channel is "${sessionLobbyChannel}". You are already watching it${
-            sessionLobbyAutoAnnounced ? " and have announced presence" : ""
-          }.`
-        : "• No lobby channel could be resolved for this session.",
-      `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
-      `• When you receive a request-shaped message (request, review-request, ping, etc.) send a short ack (type="ack" body="got it, working on X. OVER") FIRST, then do the work, then send results. Silence between receipt and result looks like a dropped message.`,
-      `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
-      `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
-    ].join("\n");
-  }
-
   /**
    * Inject the full orientation into the conversation. Fires from
    * session_start when comms start on, and from /comms on when
    * transitioning off → on. Non-triggering.
+   *
+   * Header is uniform across both call sites — from the agent's POV both
+   * mean "orientation, comms are on, here are the rules." The `reason`
+   * enum lives only in `details` for debug/session-state consumers.
    */
   function injectOrientation(reason: "session-start" | "comms-on"): void {
-    const header =
-      reason === "comms-on"
-        ? "[agent-channel] Comms are now ON."
-        : "[agent-channel]";
+    const content = buildOrientation({
+      header: "[agent-channel] Comms are now ON.",
+      agentName: agentName(),
+      lobbyChannel: sessionLobbyChannel,
+      lobbyAutoAnnounced: sessionLobbyAutoAnnounced,
+    });
     try {
       pi.sendMessage(
         {
           customType: "agent-channel",
-          content: buildOrientation(header),
+          content,
           display: true,
           details: {
             kind: "orientation",
