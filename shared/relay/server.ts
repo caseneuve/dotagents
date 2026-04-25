@@ -1,7 +1,8 @@
 // ─── Relay server: UDS + HTTP/SSE pub/sub broker ────────────────────────
 import { ChannelStore, type ChannelMessage } from "./store";
-import type { Socket, Server as BunServer } from "bun";
+import type { Server as BunServer } from "bun";
 import * as fs from "node:fs";
+import * as net from "node:net";
 
 // ─── Subscriber: abstraction over UDS socket and SSE response ───────────
 
@@ -25,7 +26,8 @@ export interface RelayServerOptions {
 export class RelayServer {
   private store: ChannelStore;
   private subscribers: Map<string, Set<Subscriber>> = new Map();
-  private udsServer: ReturnType<typeof Bun.listen> | null = null;
+  private udsServer: net.Server | null = null;
+  private udsConnections: Set<net.Socket> = new Set();
   private httpServer: BunServer | null = null;
   private nextSubId = 0;
   readonly socketPath: string;
@@ -112,54 +114,81 @@ export class RelayServer {
   private startUds(): void {
     const relay = this;
 
-    // Map UDS sockets to their subscriber wrappers
-    const socketSubs = new WeakMap<Socket<{ buffer: string }>, Subscriber>();
+    // Remove stale socket file if present — Node's net.createServer.listen()
+    // fails with EADDRINUSE if the path already exists, whereas Bun.listen
+    // silently rebound. Match the more conservative Node semantics but
+    // preserve the developer ergonomics the Bun impl had.
+    try {
+      fs.unlinkSync(this.socketPath);
+    } catch (err: any) {
+      if (err && err.code !== "ENOENT") {
+        throw err;
+      }
+    }
 
-    this.udsServer = Bun.listen<{ buffer: string }>({
-      unix: this.socketPath,
-      socket: {
-        open(socket) {
-          socket.data = { buffer: "" };
-          const sub: Subscriber = {
-            id: ++relay.nextSubId,
-            write(data: string) {
-              socket.write(data);
-            },
-          };
-          socketSubs.set(socket, sub);
-          relay.log(`uds client connected (id=${sub.id})`);
-        },
-        data(socket, data) {
-          socket.data.buffer += data.toString();
-          const lines = socket.data.buffer.split("\n");
-          socket.data.buffer = lines.pop() || "";
+    const server = net.createServer((socket) => {
+      // Track active connections so stop() can force-close them — matches
+      // the old Bun.listen `stop(true)` semantics the test suite relies on.
+      // Node's server.close() alone only stops accepting NEW connections
+      // and waits for existing ones to drain.
+      relay.udsConnections.add(socket);
+      socket.once("close", () => {
+        relay.udsConnections.delete(socket);
+      });
 
-          const sub = socketSubs.get(socket)!;
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            try {
-              const req = JSON.parse(trimmed);
-              relay.handleNdjsonRequest(sub, req);
-            } catch (err) {
-              console.error(
-                `[relay] failed to parse: ${err instanceof Error ? err.message : err}`,
-              );
-            }
+      // Per-connection buffer state (replaces the typed socket.data slot
+      // we had with Bun.listen<{buffer: string}>). WeakMap would also work;
+      // the closure is simpler.
+      const state = { buffer: "" };
+      const sub: Subscriber = {
+        id: ++relay.nextSubId,
+        // Node net.Socket.write auto-buffers overflow in userland and
+        // returns false on backpressure; callers may ignore the return
+        // value and bytes still arrive. This is the whole reason for the
+        // switch from Bun.listen (which returned bytes-actually-written
+        // and silently dropped the tail past ~net.local.stream.sendspace,
+        // corrupting kB-scale frames on fan-out — see todos/0020).
+        write(data: string) {
+          socket.write(data);
+        },
+      };
+      relay.log(`uds client connected (id=${sub.id})`);
+
+      socket.setEncoding("utf-8");
+
+      socket.on("data", (chunk: string) => {
+        state.buffer += chunk;
+        const lines = state.buffer.split("\n");
+        state.buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const req = JSON.parse(trimmed);
+            relay.handleNdjsonRequest(sub, req);
+          } catch (err) {
+            console.error(
+              `[relay] failed to parse: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
           }
-        },
-        close(socket) {
-          const sub = socketSubs.get(socket);
-          if (sub) {
-            relay.log(`uds client disconnected (id=${sub.id})`);
-            relay.removeSubscriberFromAll(sub);
-          }
-        },
-        error(_socket, err) {
-          console.error(`[relay] uds socket error: ${err.message}`);
-        },
-      },
+        }
+      });
+
+      socket.on("close", () => {
+        relay.log(`uds client disconnected (id=${sub.id})`);
+        relay.removeSubscriberFromAll(sub);
+      });
+
+      socket.on("error", (err) => {
+        console.error(`[relay] uds socket error: ${err.message}`);
+      });
     });
+
+    server.listen(this.socketPath);
+    this.udsServer = server;
   }
 
   // ─── HTTP/SSE server ─────────────────────────────────────────────────
@@ -386,7 +415,15 @@ export class RelayServer {
   // ─── Lifecycle ────────────────────────────────────────────────────────
 
   stop(): void {
-    this.udsServer?.stop(true);
+    // Force-close all active UDS connections to match the old
+    // Bun.listen stop(true) behavior; net.Server.close() alone would
+    // wait for them to drain, which tests (and process shutdowns) can't
+    // tolerate.
+    for (const conn of this.udsConnections) {
+      conn.destroy();
+    }
+    this.udsConnections.clear();
+    this.udsServer?.close();
     this.udsServer = null;
     this.httpServer?.stop(true);
     this.httpServer = null;

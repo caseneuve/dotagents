@@ -406,3 +406,99 @@ describe("UdsTransport framing + onParseError", () => {
     expect(errors).toEqual([]);
   });
 });
+
+// ─── Large-payload regression (todo 0020) ──────────────────────────────────
+//
+// Prior to commit [this one], the relay's UDS fan-out used
+// `Bun.Socket.write(str)` which returns bytes-actually-written and
+// silently dropped the tail past macOS `net.local.stream.sendspace`
+// (8192 on default macOS). A `review-response` larger than that boundary
+// arrived truncated at the subscriber and failed JSON.parse around
+// position 8127 — exactly the symptom in todos/0020.
+//
+// Switching the relay to `node:net` gave us Node's auto-buffering write
+// semantics, which the client side has used all along. This test pins
+// the fix: two real UDS subscribers, a 16 KiB payload with multi-byte
+// UTF-8, byte-exact round-trip assertion.
+
+describe("UdsTransport + RelayServer: kB-scale payload round-trip (todo 0020)", () => {
+  let socketPath: string;
+  let server: RelayServer;
+  let sender: UdsTransport;
+  let receiver: UdsTransport;
+
+  beforeEach(() => {
+    socketPath = tmpSocket();
+    server = new RelayServer({
+      socketPath,
+      httpPort: nextPort(),
+      httpHost: "127.0.0.1",
+    });
+    server.start();
+    sender = new UdsTransport(socketPath);
+    receiver = new UdsTransport(socketPath);
+  });
+
+  afterEach(() => {
+    sender.unsubscribeAll();
+    receiver.unsubscribeAll();
+    server.stop();
+  });
+
+  test("delivers a 16 KiB multi-byte UTF-8 body byte-exact", async () => {
+    // Build a body well past the 8192 sendspace boundary that also
+    // contains multi-byte UTF-8 (em dash, curly quotes, backticks) so a
+    // naive string.slice-by-UTF-16-code-units fix would also fail this.
+    const chunk =
+      "Reviewed 32038e3. **Approve with one follow-up.** Answering your questions. " +
+      "The `\u2018 em dash\u2014` scenario, \u201cquoted strings\u201d, and other multi-byte " +
+      "characters such as \u2192 \u2194 \u2605 must survive intact. ";
+    let body = "";
+    while (body.length < 16 * 1024) body += chunk;
+    // Cap to exactly 16 KiB-ish; trim mid-character if needed, then add
+    // one terminator char known to be single-byte so the cap point is
+    // deterministic.
+    body = body.slice(0, 16 * 1024) + ".";
+    expect(body.length).toBeGreaterThan(16 * 1024);
+
+    const received: ChannelMessage[] = [];
+    receiver.subscribe("test/0020", (msgs) => received.push(...msgs));
+
+    // Let the subscribe round-trip to the relay.
+    await new Promise((r) => setTimeout(r, 60));
+
+    const sent = msg({ channel: "test/0020", body });
+    await sender.publish(sent);
+
+    // Give fan-out + receiver assembly a moment. The bug triggered in
+    // single-digit ms so 150ms is generous.
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(received.length).toBe(1);
+    expect(received[0].id).toBe(sent.id);
+    // Byte-exact body preservation — the whole point. String equality
+    // suffices because both sides encode in UTF-16 in JS memory; the
+    // corruption would manifest as length mismatch / character loss.
+    expect(received[0].body.length).toBe(body.length);
+    expect(received[0].body).toBe(body);
+  });
+
+  test("delivers a 64 KiB payload byte-exact (stress)", async () => {
+    const filler = "x\u2014y"; // 3 JS chars, 5 UTF-8 bytes (em dash is 3)
+    let body = "";
+    while (body.length < 64 * 1024) body += filler;
+    body = body.slice(0, 64 * 1024);
+
+    const received: ChannelMessage[] = [];
+    receiver.subscribe("test/0020-big", (msgs) => received.push(...msgs));
+    await new Promise((r) => setTimeout(r, 60));
+
+    const sent = msg({ channel: "test/0020-big", body });
+    await sender.publish(sent);
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(received.length).toBe(1);
+    expect(received[0].body.length).toBe(body.length);
+    expect(received[0].body).toBe(body);
+  });
+});
