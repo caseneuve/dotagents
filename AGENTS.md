@@ -122,6 +122,28 @@ When E2E tests need static input files:
 - prefer `test/fixtures/` over giant inline shell blobs
 - avoid escaped JSON in `sh -c` when a fixture file is enough
 
+## Relay management
+
+The agent-channel relay (`bun shared/relay/main.ts`) is a long-running
+per-user daemon. Manage it through `bb` tasks, not by hand-starting
+shells:
+
+```bash
+bb relay:status    # PID, uptime, socket, log tail
+bb relay:start     # start detached; logs to /tmp/agent-relay.log
+bb relay:stop      # SIGTERM, clean shutdown
+bb relay:restart   # stop + 700ms pause + start
+bb relay:logs      # tail -f the log
+```
+
+Use `bb relay:restart` after any change to `shared/relay/server.ts`
+(or anything it imports) — the relay caches modules at startup, so
+edits don't take effect until the process restarts.
+
+Relay state is in-memory only (`ChannelStore`). A restart wipes every
+channel's message history. Active UdsTransport / HttpTransport clients
+auto-reconnect and re-subscribe on the next operation.
+
 ## end2edn usage in this repo
 The E2E suite is intentionally dogfooding-oriented.
 
