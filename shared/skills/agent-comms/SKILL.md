@@ -9,14 +9,68 @@ Agents communicate through named channels backed by shared JSON files.
 The protocol is the same regardless of backend (cmux, tmux, or file-only).
 Status, progress, and notifications adapt to whatever is available.
 
+## Common mistakes (read first)
+
+These are the real failure modes we see in production. Do not repeat them.
+
+### 1. OUT is not "end of turn" — it is "end of conversation"
+
+- **OVER** (or no suffix) — your turn is done, the other agent replies.
+- **OUT** — the entire exchange is finished. The other agent will NOT be
+  woken up. Their `channel_watch` delivery suppresses the turn.
+
+If you end a message with OUT and you were actually expecting a reply, the
+receiver sees the message but is never prompted to act on it. The channel
+then goes dead.
+
+The `channel_send` tool returns an OUT-misuse warning when your body ends
+with OUT but contains `?`, `please`, `can you`, `review this`, `let me
+know`, `your turn`, `waiting for`, etc. If you see that warning, resend
+the message ending with OVER.
+
+Legitimate OUT uses: `approved`, `task-complete`, final `pong`, any other
+definitive closer where no reply is required.
+
+### 2. Do not `channel_unwatch` while a reply is still owed
+
+`channel_unwatch` turns off push delivery for that channel. Any message
+the other agent publishes after you unwatch will not reach your
+conversation until you watch the channel again.
+
+Only unwatch after the exchange on that channel is fully done (both
+sides sent OUT, or one side sent `approved` / `task-complete`). When in
+doubt, leave it watched — watches are cheap.
+
+If you realize you unwatched too early, call
+`channel_watch(channel, catch_up=true)` to replay missed messages.
+
+### 3. `channel_status` is NOT a message to the other agent
+
+`channel_status` updates the human-facing sidebar only. Other agents do
+not see it. If agent A sets `channel_status("reviewing")` and then
+waits, agent B has no way to know A is working — B will sit there
+silently until it times out.
+
+Rule of thumb:
+- Need the human to know? → `channel_status`.
+- Need another agent to know / react? → `channel_send`.
+- Need both? → call both.
+
+### 4. Trust the orientation message
+
+On session start the extension injects an orientation note telling you
+your agent name and your lobby channel. You do not need to guess either.
+Do not re-announce presence manually on the lobby — it happens
+automatically.
+
 ## Setup — automatic
 
 The extension handles setup automatically:
 - The lobby channel is **auto-watched** on session start — you don't need to call `channel_watch` for it.
-- Your **agent name** is delivered with the first incoming message — use it when identifying yourself.
-- A **presence announcement** is automatically sent when you join a channel.
+- Your **agent name** and **lobby channel** are delivered in an orientation message at session start (before the first incoming channel message).
+- A **presence announcement** is automatically sent when you auto-watch the lobby and when you call `channel_watch` on any other channel.
 
-You're ready to communicate as soon as a message arrives.
+You're ready to communicate as soon as the orientation message arrives.
 
 ## Lobby vs task channels
 
@@ -115,9 +169,12 @@ channel_ack(channel: "...", message_id: "...")
 
 End your message with **OVER** or **OUT** to control turn-taking:
 
-- **OVER** — your turn is done, the other agent should act
-- **OUT** — conversation finished, no reply expected
-- No suffix — same as OVER (other agent acts)
+- **OVER** — your turn is done, the other agent should act.
+- **OUT** — conversation finished, no reply expected. Use ONLY when the
+  exchange is complete (e.g. after `approved`, `task-complete`, a final
+  `pong`). OUT suppresses the receiver's turn — misusing it is the
+  number one reason agent conversations silently stall.
+- No suffix — same as OVER (other agent acts).
 
 ```
 channel_send(
@@ -127,7 +184,7 @@ channel_send(
 )
 ```
 
-Use **OUT** when the exchange is done and no response is needed:
+Use **OUT** only when the exchange is done and no response is needed:
 
 ```
 channel_send(
@@ -136,6 +193,10 @@ channel_send(
   body: "All fixes verified, looks good. OUT"
 )
 ```
+
+`channel_send` returns an OUT-misuse warning when it detects request-like
+phrasing paired with OUT. If you see that warning, resend the message
+ending with OVER.
 
 ## Receiving
 
@@ -180,9 +241,10 @@ Use `"last"` when you only care about the latest message.
 
 ## Other useful tools
 
-- `channel_list` — see all channels and their message counts
-- `channel_status` — update sidebar status/progress visible to the human
-- `/agent-name <label>` — set your display name (e.g. `/agent-name reviewer` → `agent-reviewer`)
+- `channel_list` — see all channels and their message counts.
+- `channel_status` — update the sidebar status/progress visible to the **human only**. Does NOT send anything on any channel. If another agent needs to know your state, use `channel_send`.
+- `channel_unwatch` — stop receiving messages on a channel. Only use when the exchange is fully done; otherwise replies will be silently lost.
+- `/agent-name <label>` — set your display name (e.g. `/agent-name reviewer` → `agent-reviewer`). The extension injects a note into your conversation confirming the new name.
 
 ## Multi-step work
 

@@ -90,6 +90,76 @@ export function shouldTriggerTurn(msg: ChannelMessage): boolean {
   return true;
 }
 
+/** Does the trimmed body end with the OUT sign-off? */
+export function endsWithOut(body: string): boolean {
+  return /\bOUT$/i.test(body.trimEnd());
+}
+
+/**
+ * Heuristic: an outgoing message that ends with OUT but whose body is
+ * phrased as a question / request. Surfacing these at send-time catches the
+ * very common "agent meant OVER, typed OUT" mistake before the other side
+ * silently drops the turn.
+ *
+ * Returns `null` when the body is fine (not OUT, or OUT + clearly closing),
+ * otherwise a short human-readable reason.
+ */
+export function detectOutMisuse(
+  body: string,
+  messageType?: string,
+): string | null {
+  if (!endsWithOut(body)) return null;
+
+  // Messages that legitimately close a conversation.
+  const closingTypes = new Set([
+    "approved",
+    "task-complete",
+    "pong",
+    "presence",
+    "ack",
+  ]);
+  if (messageType && closingTypes.has(messageType.toLowerCase())) return null;
+
+  const stripped = body
+    .trimEnd()
+    .replace(/\bOUT$/i, "")
+    .trim();
+  if (!stripped) return null;
+
+  // Direct question mark anywhere in the body — agent almost certainly wants
+  // a reply.
+  if (/\?/.test(stripped)) {
+    return "body contains a question mark — use OVER if you expect a reply";
+  }
+
+  // Common request / reply-expecting phrasings.
+  const requestPatterns: Array<[RegExp, string]> = [
+    [/\b(please|pls)\b/i, '"please" suggests a request'],
+    [
+      /\b(can|could|would|will)\s+you\b/i,
+      "phrased as a request to the other agent",
+    ],
+    [/\b(let me know|lmk)\b/i, "asks the other agent to respond"],
+    [
+      /\b(waiting for|standby for|ready for)\b/i,
+      "signals you are waiting for a reply",
+    ],
+    [
+      /\b(review|check|verify|confirm)\s+(this|that|my|the)\b/i,
+      "asks the other agent to act",
+    ],
+    [
+      /\b(your turn|over to you|back to you)\b/i,
+      "explicit turn-handoff — use OVER",
+    ],
+  ];
+  for (const [re, reason] of requestPatterns) {
+    if (re.test(stripped)) return reason;
+  }
+
+  return null;
+}
+
 // ─── Message validation ────────────────────────────────────────────────
 
 /** Structural type guard. Any field missing / wrong type → not a message. */

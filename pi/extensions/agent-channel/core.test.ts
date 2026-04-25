@@ -4,6 +4,8 @@ import {
   filterMessages,
   ackMessages,
   shouldTriggerTurn,
+  endsWithOut,
+  detectOutMisuse,
   isValidMessage,
   parseChannelFile,
   previewString,
@@ -205,6 +207,96 @@ describe("shouldTriggerTurn", () => {
     expect(shouldTriggerTurn(msg({ type: "status", body: "working" }))).toBe(
       true,
     );
+  });
+});
+
+// ─── endsWithOut ───────────────────────────────────────────────────────────
+
+describe("endsWithOut", () => {
+  test("detects OUT, out, Out at end", () => {
+    expect(endsWithOut("done. OUT")).toBe(true);
+    expect(endsWithOut("done. out")).toBe(true);
+    expect(endsWithOut("done. Out")).toBe(true);
+  });
+
+  test("tolerates trailing whitespace", () => {
+    expect(endsWithOut("done. OUT   \n\t")).toBe(true);
+  });
+
+  test("does not match OUT inside words", () => {
+    expect(endsWithOut("OUTput attached.")).toBe(false);
+  });
+
+  test("returns false for bodies that don't end with OUT", () => {
+    expect(endsWithOut("your turn. OVER")).toBe(false);
+    expect(endsWithOut("a plain body")).toBe(false);
+    expect(endsWithOut("OUT of ideas, help me")).toBe(false);
+  });
+});
+
+// ─── detectOutMisuse ───────────────────────────────────────────────────────
+
+describe("detectOutMisuse", () => {
+  test("returns null when body does not end with OUT", () => {
+    expect(detectOutMisuse("your turn. OVER")).toBeNull();
+    expect(detectOutMisuse("nothing special here")).toBeNull();
+  });
+
+  test("returns null for OUT with a clean closing statement", () => {
+    expect(detectOutMisuse("all fixes verified. OUT")).toBeNull();
+    expect(detectOutMisuse("done, thanks. OUT")).toBeNull();
+  });
+
+  test("returns null for OUT with a closing message type", () => {
+    // type='approved' is a legitimate conversation terminator
+    expect(detectOutMisuse("can you double-check? OUT", "approved")).toBeNull();
+    expect(detectOutMisuse("looks good. OUT", "task-complete")).toBeNull();
+  });
+
+  test("flags question marks", () => {
+    expect(detectOutMisuse("is the build green? OUT")).toMatch(/question mark/);
+  });
+
+  test("flags 'please'", () => {
+    expect(detectOutMisuse("Please review the diff. OUT")).toMatch(/please/);
+  });
+
+  test("flags 'can you' / 'could you' / 'would you' / 'will you'", () => {
+    expect(detectOutMisuse("can you ack this. OUT")).toMatch(/request/);
+    expect(detectOutMisuse("could you confirm. OUT")).toMatch(/request/);
+    expect(detectOutMisuse("would you take a look. OUT")).toMatch(/request/);
+    expect(detectOutMisuse("will you approve. OUT")).toMatch(/request/);
+  });
+
+  test("flags 'let me know' / 'lmk'", () => {
+    expect(detectOutMisuse("let me know what you think. OUT")).toMatch(
+      /respond/,
+    );
+    expect(detectOutMisuse("lmk if ok. OUT")).toMatch(/respond/);
+  });
+
+  test("flags 'waiting for' / 'standby for' / 'ready for'", () => {
+    expect(detectOutMisuse("waiting for your ack. OUT")).toMatch(/waiting/);
+    expect(detectOutMisuse("standby for next batch. OUT")).toMatch(/waiting/);
+  });
+
+  test("flags 'review this' and siblings", () => {
+    expect(detectOutMisuse("review the patch. OUT")).toMatch(/act/);
+    expect(detectOutMisuse("verify my fixes. OUT")).toMatch(/act/);
+  });
+
+  test("flags explicit turn-handoff phrasings", () => {
+    expect(detectOutMisuse("your turn. OUT")).toMatch(/OVER/);
+    expect(detectOutMisuse("over to you. OUT")).toMatch(/OVER/);
+  });
+
+  test("empty body with OUT is not flagged", () => {
+    expect(detectOutMisuse("OUT")).toBeNull();
+    expect(detectOutMisuse("   OUT  ")).toBeNull();
+  });
+
+  test("case-insensitive", () => {
+    expect(detectOutMisuse("PLEASE confirm. out")).toMatch(/please/i);
   });
 });
 

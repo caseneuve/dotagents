@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import {
   shouldTriggerTurn,
   isValidMessage,
+  detectOutMisuse,
   previewString,
   safeStringify,
   type ChannelMessage,
@@ -383,6 +384,7 @@ export default function (pi: ExtensionAPI) {
 
     // Auto-watch the lobby
     const lobbyChannel = resolveLobby();
+    let lobbyAutoAnnounced = false;
     if (lobbyChannel && !watchedChannels.has(lobbyChannel)) {
       watchedChannels.add(lobbyChannel);
       transport.subscribe(lobbyChannel, onIncoming);
@@ -397,10 +399,57 @@ export default function (pi: ExtensionAPI) {
       };
       trackOwnMessage(joinMsg.id);
       await transport.publish(joinMsg);
+      lobbyAutoAnnounced = true;
       await display.log(
         `auto-watching lobby: ${lobbyChannel}`,
         "info",
         "channel",
+      );
+    }
+
+    // Orientation: tell the agent its name + lobby + presence state, so it
+    // doesn't have to wait for the first incoming message to learn who it
+    // is. Non-triggering. Always fires — this is a local session note, not
+    // traffic on a channel, so comms-muted has no bearing.
+    const orientation = [
+      `[agent-channel]`,
+      `• Your agent name is "${agentName()}".`,
+      lobbyChannel
+        ? `• Your lobby channel is "${lobbyChannel}". You are already watching it${
+            lobbyAutoAnnounced ? " and have announced presence" : ""
+          }.`
+        : "• No lobby channel could be resolved for this session.",
+      `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
+      `• End messages with OVER when you expect a reply, OUT only when the conversation is done.`,
+      `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,
+      commsMuted
+        ? `• Comms are currently OFF — channel_* tools are blocked until you /comms on.`
+        : `• Comms are ON.`,
+    ].join("\n");
+    try {
+      pi.sendMessage(
+        {
+          customType: "agent-channel",
+          content: orientation,
+          display: true,
+          details: {
+            kind: "orientation",
+            agentName: agentName(),
+            lobbyChannel: lobbyChannel ?? null,
+            lobbyAutoAnnounced,
+            commsMuted,
+          },
+        },
+        { triggerTurn: false },
+      );
+      // The orientation message doubles as the identity hint, so the
+      // first incoming message doesn't need to prepend it again.
+      identityHintSent = true;
+    } catch (err) {
+      console.error(
+        `[agent-channel] failed to inject orientation: ${
+          err instanceof Error ? err.message : err
+        }`,
       );
     }
   });
@@ -424,6 +473,8 @@ export default function (pi: ExtensionAPI) {
       "Use channel_send to deliver results, reviews, or status updates to other agents without blocking.",
       "Channel names should be descriptive, e.g. 'myproject/code-review' or 'myproject/task-status'.",
       "Include enough context in the body for the receiver to act independently.",
+      "End the body with OVER (or no suffix) when you expect a reply. End with OUT only when the conversation is done and no reply is expected — OUT suppresses the turn on the receiving agent.",
+      "When you change state without sending (e.g. channel_status) the other agent sees nothing. If you need them to react, channel_send something.",
     ],
     parameters: Type.Object({
       channel: Type.String({
@@ -468,6 +519,9 @@ export default function (pi: ExtensionAPI) {
       );
 
       const isOutMessage = /\bOUT$/i.test(params.body.trimEnd());
+      const outMisuse = isOutMessage
+        ? detectOutMisuse(params.body, params.type)
+        : null;
 
       if (isOutMessage) {
         await display.clearProgress();
@@ -487,14 +541,18 @@ export default function (pi: ExtensionAPI) {
         );
       }
 
+      const baseText = `Message sent to channel '${msg.channel}' (id: ${msg.id})`;
+      const text = outMisuse
+        ? `${baseText}.\n⚠️ OUT-misuse warning: ${outMisuse}. OUT tells the receiver not to reply — if you expected a reply, resend ending with OVER instead.`
+        : baseText;
+
+      if (outMisuse) {
+        await display.log(`OUT-misuse: ${outMisuse}`, "warning", "channel");
+      }
+
       return {
-        content: [
-          {
-            type: "text",
-            text: `Message sent to channel '${msg.channel}' (id: ${msg.id})`,
-          },
-        ],
-        details: { message: msg },
+        content: [{ type: "text", text }],
+        details: { message: msg, outMisuse: outMisuse ?? undefined },
       };
     },
   });
@@ -701,14 +759,22 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "channel_unwatch",
     label: "Channel Unwatch",
-    description: "Stop polling a channel.",
+    description:
+      "Stop polling a channel. After this call, messages sent to the channel " +
+      "will NOT be delivered to your conversation until you watch it again. " +
+      "Do not unwatch a channel where you are still expecting a reply.",
     promptSnippet: "Stop background polling on a channel",
+    promptGuidelines: [
+      "Only unwatch a channel after the exchange on it is completely finished (both sides have sent OUT or one side has sent approved / task-complete).",
+      "If you unwatch while another agent still owes you a reply, that reply will be lost to your session until you channel_watch again with catch_up=true.",
+    ],
     parameters: Type.Object({
       channel: Type.String({
         description: "Channel identifier to stop watching",
       }),
     }),
     async execute(_toolCallId, params) {
+      const wasWatching = watchedChannels.has(params.channel);
       transport.unsubscribe(params.channel);
 
       watchedChannels.delete(params.channel);
@@ -718,11 +784,29 @@ export default function (pi: ExtensionAPI) {
 
       await display.setStatus("watching", "idle", "💤");
 
+      if (!wasWatching) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `You were not watching '${params.channel}'. No change.`,
+            },
+          ],
+          details: { wasWatching: false },
+        };
+      }
+
       return {
         content: [
-          { type: "text", text: `Stopped watching '${params.channel}'` },
+          {
+            type: "text",
+            text:
+              `Stopped watching '${params.channel}'. ` +
+              `⚠️ Incoming messages on this channel will NOT be delivered to your conversation anymore. ` +
+              `If you are still expecting a reply here, call channel_watch(channel, catch_up=true) to resume.`,
+          },
         ],
-        details: {},
+        details: { wasWatching: true },
       };
     },
   });
@@ -732,11 +816,17 @@ export default function (pi: ExtensionAPI) {
     name: "channel_status",
     label: "Channel Status",
     description:
-      "Update the sidebar status and progress visible to the human. " +
-      "Use this to communicate your current state (working, waiting, done, error) " +
-      "so the human can monitor multiple agents at a glance.",
+      "Update the sidebar status/progress/log visible to the HUMAN only. " +
+      "This is a local UI update — it does NOT send a message on any channel " +
+      "and no other agent will see it. If you need another agent to know your " +
+      "state, call channel_send instead (optionally with type='status').",
     promptSnippet:
-      "Update sidebar status/progress visible to the human operator",
+      "Update sidebar status/progress visible to the human operator (no message sent)",
+    promptGuidelines: [
+      "channel_status only updates the human-facing sidebar. Other agents do not see it.",
+      "If another agent is waiting for you, use channel_send, not channel_status — a status change alone will leave them silently waiting.",
+      "Pair channel_status (sidebar, for the human) with channel_send (message, for the other agent) whenever both audiences need the update.",
+    ],
     parameters: Type.Object({
       status: Type.Optional(
         Type.String({
@@ -982,11 +1072,38 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`Current name: ${agentName()}`, "info");
         return;
       }
+      const previous = agentName();
       identity = setLabel(identity, name);
       pi.appendEntry("agent-channel-identity", identityToData(identity));
       pi.events.emit("agent-channel:name", agentName());
       ctx.ui.setStatus("agent-name", agentName());
       ctx.ui.notify(`Agent name set to: ${agentName()}`, "info");
+
+      // Tell the agent itself, not just the human. Without this the agent
+      // keeps introducing itself with the old name in outgoing messages.
+      try {
+        pi.sendMessage(
+          {
+            customType: "agent-channel",
+            content:
+              `[agent-channel] Your agent name changed from "${previous}" to "${agentName()}". ` +
+              `Use the new name when identifying yourself in channel_send bodies.`,
+            display: true,
+            details: {
+              kind: "name-change",
+              previous,
+              current: agentName(),
+            },
+          },
+          { triggerTurn: false },
+        );
+      } catch (err) {
+        console.error(
+          `[agent-channel] failed to inject name-change notice: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
     },
   });
 
