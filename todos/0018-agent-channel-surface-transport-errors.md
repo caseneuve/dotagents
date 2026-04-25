@@ -82,23 +82,37 @@ export interface TransportErrorInfo {
 }
 
 export interface MessageTransport {
-  // rename from onParseError (keep old name as type alias for one cycle
-  // to avoid breaking downstream consumers outside this repo).
   onTransportError?: (info: TransportErrorInfo) => void;
   // ...existing members unchanged
 }
 ```
 
+`onParseError` was introduced in `006b80f` on the `macos` branch and
+has not shipped anywhere external — no downstream consumers to
+preserve. Rename cleanly; drop the deprecated-alias dance. Keep
+`ParseErrorInfo = Extract<TransportErrorInfo, {kind: "parse-error"}>`
+only if something internal still references the name.
+
 ### Wiring per transport
 
 - **UdsTransport.subscribe** — attach `.catch` to
   `ensureConnected().then(...)`; fire `kind: "subscribe-failed"`.
+  Note: the `subscriptions` Map entry is set BEFORE
+  `ensureConnected`, so on transport reconnect the subscription
+  auto-resumes. Phrase the diagnostic accordingly (see table below).
 - **UdsTransport `sock.on("close")`** — fire `kind: "disconnected"`
-  when the socket closes with active subscriptions in the map.
+  when the socket closes with active subscriptions in the map. Track
+  a `wasConnected` flag so a subsequent `ensureConnected` success
+  fires `kind: "reconnected"` (and not a duplicate "connected" on the
+  first-ever connect).
 - **UdsTransport `ensureConnected()` retry paths** — fire
-  `kind: "reconnecting"` before each attempt and `kind: "reconnected"`
-  in the success callback when prior state was disconnected.
-- **HttpTransport SSE reconnect loop** — mirror the three events above.
+  `kind: "reconnecting"` once per disconnect episode (rate-limited:
+  do not emit on every retry attempt or the log becomes noise).
+- **HttpTransport SSE reconnect loop** — mirror the three events
+  above. **Scope note:** these events apply ONLY to SSE subscriptions.
+  Publish / read / ack errors on HttpTransport already reject back to
+  the tool caller (fetch throws, tool execute throws, framework
+  surfaces) and must NOT be double-reported via the hook.
 - **FileTransport** — no-op (polling can't really disconnect; file
   read errors already flow through the existing channel-file code
   path).
@@ -111,11 +125,11 @@ Rename `wireParseErrorHook` → `wireTransportErrorHook`. Dispatch on
 | kind                | display.log level | Agent message |
 |---------------------|-------------------|---------------|
 | `parse-error`       | warning           | existing text |
-| `subscribe-failed`  | error             | "⚠️ Subscription to channel X failed (<error>). Your watch is NOT active. Call channel_watch again after the transport recovers." |
-| `disconnected`      | warning           | "⚠️ Lost connection to <transport> transport. Messages published in the last few seconds may not have been delivered. Reconnecting…" |
-| `reconnecting`      | info              | (sidebar log only, no pi.sendMessage — avoid spam) |
-| `reconnected`       | info              | "✅ Reconnected to <transport> transport. Active subscriptions restored." |
-| `publish-failed`    | error             | "⚠️ agent-channel failed to publish on channel X (<error>). The message was NOT delivered." |
+| `subscribe-failed`  | error             | "⚠️ Subscription to channel X could not be established (`<error>`). If the transport reconnects, your watch will resume automatically; otherwise call `channel_watch` again." |
+| `disconnected`      | warning           | "⚠️ Lost connection to `<transport>` transport. Messages published in the last few seconds may not have been delivered. Reconnecting…" |
+| `reconnecting`      | info              | (sidebar log only, no `pi.sendMessage` — rate-limited to one per disconnect episode) |
+| `reconnected`       | info              | "✅ Reconnected to `<transport>` transport. Subscriptions resumed, but messages published while disconnected were NOT buffered. Call `channel_watch(\"<channel>\", catch_up=true)` to replay missed messages." |
+| `publish-failed`    | error             | "⚠️ agent-channel failed to publish on channel X (`<error>`). The message was NOT delivered." |
 | `ack-failed`        | info              | (sidebar log only, low urgency; catch_up replays) |
 
 Each non-silent case wraps `pi.sendMessage` in the same try/catch used
@@ -137,27 +151,42 @@ the session.
 
 - [ ] `MessageTransport.onTransportError` replaces `onParseError` in
       `interfaces.ts`; `ParseErrorInfo` becomes `TransportErrorInfo`
-      with a discriminated `kind` field. `onParseError` kept as a
-      deprecated alias exported from `interfaces.ts` for one release
-      cycle.
+      with a discriminated `kind` field. Clean rename — no deprecated
+      alias kept (nothing external consumes the old name yet).
 - [ ] All six event kinds fire from their respective sites with
       accurate `error` strings and `channel` populated when known.
+- [ ] `publish-failed` fires from BOTH `/agent-name` rename broadcast
+      AND `session_start` lobby auto-announce.
 - [ ] `channel_watch` end-to-end: start with the UDS relay down,
       call the tool, observe the agent receives a
       `subscribe-failed` diagnostic (not a silent success).
 - [ ] Kill the relay mid-session with an active subscription:
       observe a `disconnected` diagnostic appears. Restart the
-      relay: observe `reconnected`. No `reconnecting` diagnostic
-      injected into the conversation (sidebar only).
+      relay: observe `reconnected` with the `catch_up=true` hint.
+      Only one `reconnecting` sidebar line per disconnect episode
+      (not one per retry).
 - [ ] `/agent-name` rename with a down relay produces one
       `publish-failed` diagnostic per watched channel.
 - [ ] `onIncoming` ack failure shows a sidebar log line but no
       conversation injection.
+- [ ] `HttpTransport` publish/read/ack errors continue to throw back
+      to the tool caller and are NOT double-reported via
+      `onTransportError` (test guards against regression).
+- [ ] `wireTransportErrorHook` dispatcher factored so its logic is
+      testable without an `ExtensionAPI` — extract as a pure factory
+      that takes `pi.sendMessage` + `display` as injected deps. One
+      unit test per `kind` asserting the expected
+      (level, injected-message-or-none) pair.
 - [ ] Tests:
-  - unit: the hook dispatch logic in `wireTransportErrorHook` (each
-    `kind` produces the expected message / level).
+  - unit: dispatcher factory (one case per `kind`).
   - uds-framing test file: extend the existing fake-relay pattern
-    to cover `subscribe-failed` and `disconnected` events.
+    to cover:
+    - `subscribe-failed` (start with relay down, call subscribe)
+    - `disconnected` (kill relay mid-stream)
+    - **full state-machine cycle**: subscribe → publish+receive baseline
+      → kill relay → observe `disconnected` → restart relay →
+      observe `reconnected` with catch_up hint → publish again →
+      verify receive still works.
   - regression: existing 159 tests still pass without modification.
 
 ## Affected Files
@@ -212,16 +241,33 @@ THEN the tool returns its usual "Now watching..." result, BUT the
   lost on the relay side (not buffered for offline subscribers). The
   right fix there is either server-side per-subscriber queuing or a
   client-side `catch_up` on reconnect. Out of scope for this todo —
-  once `disconnected` / `reconnected` diagnostics exist, the agent can
-  decide whether to trigger `channel_watch(..., catch_up=true)`
-  themselves.
-- **Deprecation of `onParseError`**: keep as a `type ParseErrorInfo =
-  Extract<TransportErrorInfo, {kind: "parse-error"}>` alias for one
-  release cycle; wire both names to the same function pointer so
-  external consumers (if any) don't break immediately.
-- **Sizing**: all work is in one extension directory, mostly
-  mechanical. Estimate 1-2 hours with the tests and docs. Fits a
-  single commit per the current checkpoint discipline.
+  the `reconnected` diagnostic explicitly tells the agent to call
+  `channel_watch(..., catch_up=true)` themselves.
+- **State-machine gotchas** (from ksu8 review, budget accordingly):
+  - `UdsTransport.ensureConnected` is called concurrently from
+    publish/subscribe/request. `sock.on("close")` fires once; the
+    next `ensureConnected` starts a new connect. Need a
+    `wasConnected` flag so a success fires `reconnected` (diagnostic)
+    vs a fresh `connected` (silent).
+  - `subscribe-failed` triggers on the first `ensureConnected`
+    rejection. Don't suppress waiting for "terminal" — the reconnect
+    loop is by design non-terminal on UDS. If the transport then
+    reconnects, the user will see `reconnected` and can infer the
+    subscription resumed. The diagnostic wording must match this
+    (don't say "call channel_watch again" — the map already holds the
+    entry and auto-resubscribes).
+  - `reconnecting` emit rate: one sidebar-log line per disconnect
+    episode (on first retry), suppress subsequent attempts until
+    success/failure, reset on next disconnect.
+- **HttpTransport scope:** `disconnected`/`reconnecting`/`reconnected`
+  apply only to SSE subscriptions. Publish/read/ack errors are
+  already thrown back to tool callers (fetch rejects, tool execute
+  throws) and must not be double-reported via the hook. Regression
+  test asserts this.
+- **Sizing**: ksu8-adjusted estimate is 2.5–3 h (not the original
+  1–2 h). State-machine logic and the dispatcher-factory extraction
+  are where the time goes. May split across two commits: runtime
+  wiring in one, state-machine polish + tests in a second.
 - Paired with `todos/0017` which addressed the UX layer of the same
   problem (agents confused about protocol). This todo addresses the
   runtime layer (technical errors go unreported).
