@@ -112,7 +112,7 @@ export async function pickAssistantMessage(
   const initialSelectedId = findLatestAssistantIdOnBranch(branch) ?? undefined;
 
   return ctx.ui.custom<string | undefined>(
-    (tui, _theme, _keybindings, done) => {
+    (_tui, _theme, _keybindings, done) => {
       const termHeight = process.stdout.rows ?? 24;
 
       const component = new TreeSelectorComponent(
@@ -127,12 +127,13 @@ export async function pickAssistantMessage(
           if (!entry || !isPickableAssistant(entry)) {
             // After pre-filtering this path should be unreachable, but keep
             // the defensive check so a future tree-mode tweak can't fall
-            // through to a broken overlay state.
+            // through to a broken overlay state. Phrased against the spec
+            // the pre-filter enforces so the message stays useful on its
+            // own if it ever actually fires.
             ctx.ui.notify(
-              "That entry isn't a pickable assistant message",
+              "That entry is not a completed assistant message with text content",
               "warning",
             );
-            tui.requestRender(true);
             return;
           }
           done(entryId);
