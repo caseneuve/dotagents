@@ -1,6 +1,6 @@
 # Babashka Rewrite Plan
 
-**Branch:** `macos`
+**Branch:** `master` (merged; originally developed on `macos`)
 **Goal:** Rewrite all shared shell helper scripts in babashka for cross-platform
 compatibility, testability, and extensibility.
 

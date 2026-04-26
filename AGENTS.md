@@ -201,7 +201,7 @@ Every non-trivial change references an item in `todos/NNNN-*.md` (sub-tasks use 
 
 ## Branches & merges
 
-- The trunk branch is whatever the current default is on this host (today: `macos`). References to "trunk" below mean that branch.
+- The trunk branch is whatever the current default is on this host (today: `master`). References to "trunk" below mean that branch.
 - Single-commit chore-style work lands directly on the trunk branch.
 - Multi-commit scope uses a flat feature branch named `NNNN-slug`; sub-task scope uses `NNNN.M-slug`. Never `trunk/NNNN-slug` — git refuses nested refs when the parent branch exists.
 - Merge feature branches with `git merge --ff-only` to keep history linear; if ff is refused, rebase on trunk first.
