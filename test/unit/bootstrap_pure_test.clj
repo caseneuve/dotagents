@@ -111,7 +111,18 @@
       (is (every? #(= :link (:op %)) ops))
       (is (some #(clojure.string/ends-with? (:target %) ".local/bin/ag-sandbox") ops))
       (is (some #(clojure.string/ends-with? (:target %) ".local/bin/ag-todo") ops))
-      (is (some #(clojure.string/ends-with? (:target %) ".local/bin/ag-tmux") ops)))))
+      (is (some #(clojure.string/ends-with? (:target %) ".local/bin/ag-tmux") ops))))
+  (testing "sources point at skill-dir wrappers, not raw .clj files (#0022)"
+    (let [ops (sut/bin-ops "/repo/shared" "/home/user")
+          by-target (into {} (map (juxt :target :source) ops))]
+      (is (= "/repo/shared/skills/sandbox/ag-sandbox"
+             (by-target "/home/user/.local/bin/ag-sandbox")))
+      (is (= "/repo/shared/skills/add-todo/ag-todo"
+             (by-target "/home/user/.local/bin/ag-todo")))
+      (is (= "/repo/shared/skills/pk-tmux/ag-tmux"
+             (by-target "/home/user/.local/bin/ag-tmux")))
+      (is (not-any? #(clojure.string/ends-with? (:source %) ".clj") ops)
+          "bin-ops must not symlink raw .clj files — they need classpath"))))
 
 (deftest plan-agents-includes-bin-ops
   (testing "plan-agents includes ~/.local/bin CLI links"

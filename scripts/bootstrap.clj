@@ -145,19 +145,24 @@
 
 (defn bin-ops
   "Symlink ops for ~/.local/bin/ CLI entry points.
-   Installed by claude and agents modes, not pi (pi is extensions/themes only)."
+   Installed by claude and agents modes, not pi (pi is extensions/themes only).
+
+   Targets are thin bash wrappers (shared/skills/<skill>/ag-<name>), not raw
+   .clj files. The wrappers resolve the dotagents repo root via `git
+   rev-parse --show-toplevel` and exec bb with the root bb.edn as config,
+   so the CLI classpath is available from any cwd (see todo #0022)."
   [shared-src home]
   (let [bin-dir (str (fs/path home ".local" "bin"))]
     [{:op :link
-      :source (str (fs/path shared-src "skills" "sandbox" "src" "sandbox" "cli.clj"))
+      :source (str (fs/path shared-src "skills" "sandbox" "ag-sandbox"))
       :target (str (fs/path bin-dir "ag-sandbox"))
       :label "~/.local/bin/ag-sandbox"}
      {:op :link
-      :source (str (fs/path shared-src "skills" "add-todo" "src" "todo" "cli.clj"))
+      :source (str (fs/path shared-src "skills" "add-todo" "ag-todo"))
       :target (str (fs/path bin-dir "ag-todo"))
       :label "~/.local/bin/ag-todo"}
      {:op :link
-      :source (str (fs/path shared-src "skills" "pk-tmux" "src" "tmux_agent" "cli.clj"))
+      :source (str (fs/path shared-src "skills" "pk-tmux" "ag-tmux"))
       :target (str (fs/path bin-dir "ag-tmux"))
       :label "~/.local/bin/ag-tmux"}]))
 
