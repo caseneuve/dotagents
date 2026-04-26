@@ -11,7 +11,6 @@
 
 set -euo pipefail
 
-# Resolve BASH_SOURCE through any symlinks.
 src="${BASH_SOURCE[0]}"
 while [ -L "$src" ]; do
   dir="$(cd -P "$(dirname "$src")" && pwd)"
@@ -20,9 +19,6 @@ while [ -L "$src" ]; do
 done
 script_dir="$(cd -P "$(dirname "$src")" && pwd)"
 
-# dotagents is always a git checkout. Use the script's real dir — not the
-# caller's cwd — so the lookup is unambiguous even when invoked from
-# inside an unrelated repo.
 if ! repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"; then
   echo "ag-todo: could not locate dotagents repo root from $script_dir" >&2
   echo "  (expected this wrapper to live inside a git checkout)" >&2
