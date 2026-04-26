@@ -35,7 +35,12 @@
            [:stdout-contains "== Agents =="]
            [:fs-layout {:symlinks [["{home}/.agents/AGENTS.md" "{work}/agents/AGENTS.md"]
                                    ["{home}/.codex/AGENTS.md" "{work}/agents/AGENTS.md"]
-                                   ["{home}/.agents/skills/add-todo/src/todo/cli.clj" "{work}/shared/skills/add-todo/src/todo/cli.clj"]]
+                                   ["{home}/.agents/skills/add-todo/src/todo/cli.clj" "{work}/shared/skills/add-todo/src/todo/cli.clj"]
+                                   ;; #0022: ~/.local/bin/ag-* must link to the bash wrappers,
+                                   ;; NOT the raw .clj files (bb needs cwd-bb.edn for classpath).
+                                   ["{home}/.local/bin/ag-todo"    "{work}/shared/skills/add-todo/ag-todo"]
+                                   ["{home}/.local/bin/ag-tmux"    "{work}/shared/skills/pk-tmux/ag-tmux"]
+                                   ["{home}/.local/bin/ag-sandbox" "{work}/shared/skills/sandbox/ag-sandbox"]]
                         :regular-files ["{home}/.agents/skills/add-todo/SKILL.md"]}]]}
 
    {:scenario :claude-merges-settings
