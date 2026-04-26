@@ -188,6 +188,26 @@ When behavior changes, update the relevant docs:
 
 Docs should describe the canonical current path, not legacy entrypoints or historical behavior.
 
+## Work tracking
+
+Every non-trivial change references an item in `todos/NNNN-*.md` (sub-tasks use `NNNN.M-*.md`).
+
+- `status: open` → `in_progress` when work starts, with a `[chore] mark #NNNN in_progress` commit as the first commit on the branch.
+- `status: in_progress` → `done` in the final commit: `[chore] mark #NNNN done`.
+- Use `blocked-by` / `blocks` frontmatter to model sequencing.
+- Reference the todo ID in every commit subject on the branch (e.g. `[pi(#0018)] …`, `[relay(#0020)] …`).
+
+**Trivial exceptions** (no todo required): typo fixes, removing a committed temp file, trailing-whitespace or import-order cleanup. Use `[chore] ...` with no todo id. If in doubt, file a todo — takes 30 seconds via `bb -cp ~/.agents/skills/add-todo/src -m todo.cli new`.
+
+## Branches & merges
+
+- The trunk branch is whatever the current default is on this host (today: `macos`). References to "trunk" below mean that branch.
+- Single-commit chore-style work lands directly on the trunk branch.
+- Multi-commit scope uses a flat feature branch named `NNNN-slug`; sub-task scope uses `NNNN.M-slug`. Never `trunk/NNNN-slug` — git refuses nested refs when the parent branch exists.
+- Merge feature branches with `git merge --ff-only` to keep history linear; if ff is refused, rebase on trunk first.
+- Delete the feature branch after merge.
+- Never `git push` without explicit human approval. Never `git commit --amend` a commit that has been reviewed or pushed.
+
 ## Commits
 
 Use commit messages in this format:
@@ -211,6 +231,31 @@ Prefer the narrowest useful category for the area changed, such as:
 - `docs`
 - `bootstrap`
 
+### Checkpoint commits
+
+When the RED commit is independently meaningful — e.g. a characterization test for a bug that was already passing, or a failing test written before implementation — keep RED and GREEN in separate commits so `git bisect` can distinguish “was the test there?” from “was it passing?” Refactors after green are their own commits.
+
+For bug fixes where the regression test and the fix are logically one unit (test fails only because the fix isn’t applied yet), one commit is fine. Doc-only and refactor-only changes have no test phase to split.
+
+Never squash unrelated concerns into one commit. One logical change per commit.
+
+## Peer review
+
+Implementation is not complete until another agent has reviewed it. The agent-comms flow (see `~/.agents/skills/agent-comms/SKILL.md` for OVER/OUT sign-off conventions and ack-first protocol):
+
+1. **Announce** on the lobby: `review-request` naming the branch, todo ID, and a sub-channel `<your-agent>/review-<NNNN>`.
+2. **Sub-channel message** carries: problem statement, commit list, acceptance-criteria checklist, test results, any known warts or deferred items.
+3. **Reviewer acks** on the sub-channel (`type: "ack"`), runs tests locally, walks the diff, replies with `code-review` → `APPROVED` or `CHANGES-REQUESTED` with concrete items.
+4. **Implementer addresses findings** in new commits (not `amend`). Re-request review by sending a short `status` message on the same sub-channel listing the new commit shas and which findings each addresses; no need to repeat the full `review-request`.
+5. **Merge only after `APPROVED`** — and only with explicit human merge authorization.
+6. Close the review cycle with mutual OUT: implementer `ack. OUT` once reviewer has approved.
+
+Sub-channels are task-scoped (`pqdw/review-0042`, not `pqdw/review`). A closed channel is dead — new task, new channel.
+
+The protocol mechanics (ack-first, OVER/OUT, turn-suppression for `type: "ack"`) are defined once in `~/.agents/skills/agent-comms/SKILL.md`. If that skill and this section disagree, the skill wins — these AGENTS.md notes are repo-specific overrides, not a second source of truth.
+
+**If the reviewer goes silent**, follow the timeout pattern from the skill: re-ping the sub-channel at ~2 min, notify the human at ~5 min. Do not block the branch indefinitely on an unresponsive reviewer.
+
 ## Final check before finishing a change
 
 Before wrapping up, verify:
@@ -219,3 +264,5 @@ Before wrapping up, verify:
 - tests exercise the canonical entrypoint
 - obsolete paths were not accidentally kept alive
 - runtime parity is still preserved where it should be
+- branch was reviewed and approved before merging; merge was `--ff-only`
+- referenced todo is marked `done` in the final commit
