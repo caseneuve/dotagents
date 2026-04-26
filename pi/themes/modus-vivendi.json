@@ -1,0 +1,95 @@
+{
+  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "name": "modus-vivendi",
+  "vars": {
+    "bg": "#000000",
+    "bgDim": "#1e1e1e",
+    "surface": "#303030",
+    "selection": "#2f447f",
+
+    "fg": "#ffffff",
+    "fgSoft": "#e0e0e0",
+    "fgDim": "#b0b0b0",
+    "fgFaint": "#8f8f8f",
+
+    "blue": "#79a8ff",
+    "cyan": "#00d3d0",
+    "green": "#44bc44",
+    "red": "#ff5f59",
+    "yellow": "#fec43f",
+    "magenta": "#f78fe7",
+    "purple": "#b6a0ff",
+    "warmDark": "#d2b580",
+
+    "selectedBg": "#2f447f",
+    "userMsgBg": "#2f3849",
+    "toolPendingBg": "#381d0f",
+    "toolSuccessBg": "#092f1f",
+    "toolErrorBg": "#3a0c14",
+    "customMsgBg": "#2f0c3f"
+  },
+  "colors": {
+    "accent": "blue",
+    "border": "cyan",
+    "borderAccent": "blue",
+    "borderMuted": "surface",
+    "success": "green",
+    "error": "red",
+    "warning": "yellow",
+    "muted": "fgDim",
+    "dim": "fgFaint",
+    "text": "fg",
+    "thinkingText": "fgSoft",
+
+    "selectedBg": "selectedBg",
+    "userMessageBg": "userMsgBg",
+    "userMessageText": "fg",
+    "customMessageBg": "customMsgBg",
+    "customMessageText": "fg",
+    "customMessageLabel": "purple",
+    "toolPendingBg": "toolPendingBg",
+    "toolSuccessBg": "toolSuccessBg",
+    "toolErrorBg": "toolErrorBg",
+    "toolTitle": "cyan",
+    "toolOutput": "fgSoft",
+
+    "mdHeading": "magenta",
+    "mdLink": "blue",
+    "mdLinkUrl": "fgDim",
+    "mdCode": "cyan",
+    "mdCodeBlock": "fgSoft",
+    "mdCodeBlockBorder": "surface",
+    "mdQuote": "fgSoft",
+    "mdQuoteBorder": "surface",
+    "mdHr": "surface",
+    "mdListBullet": "purple",
+
+    "toolDiffAdded": "green",
+    "toolDiffRemoved": "red",
+    "toolDiffContext": "fgDim",
+
+    "syntaxComment": "#989898",
+    "syntaxKeyword": "#b6a0ff",
+    "syntaxFunction": "#feacd0",
+    "syntaxVariable": "#00d3d0",
+    "syntaxString": "#79a8ff",
+    "syntaxNumber": "#d2b580",
+    "syntaxType": "#6ae4b9",
+    "syntaxOperator": "#ff7f9f",
+    "syntaxPunctuation": "#c6daff",
+
+    "thinkingOff": "surface",
+    "thinkingMinimal": "fgFaint",
+    "thinkingLow": "cyan",
+    "thinkingMedium": "blue",
+    "thinkingHigh": "purple",
+    "thinkingXhigh": "magenta",
+
+    "bashMode": "green"
+  },
+  "export": {
+    "pageBg": "#000000",
+    "cardBg": "#1e1e1e",
+    "infoBg": "#242679"
+  }
+}
