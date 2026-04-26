@@ -1,6 +1,6 @@
 ---
 title: ag-* CLI wrappers fail outside dotagents repo cwd
-status: in_progress
+status: done
 priority: high
 type: bug
 labels: [bootstrap, cross-platform]
