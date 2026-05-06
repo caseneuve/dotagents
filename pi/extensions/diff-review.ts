@@ -147,9 +147,7 @@ function renderCommentsForAgent(comments: ReviewComment[]): string {
     lines.push("");
   });
 
-  lines.push(
-    "Please address the review comments. Do not read the full diff artifact unless explicitly asked.",
-  );
+  lines.push("Please address the review comments.");
   return lines.join("\n").trimEnd();
 }
 
@@ -218,10 +216,9 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
       mkdirSync(REVIEW_DIR, { recursive: true });
       const target =
         parsed.mode === "staged" ? "staged" : (parsed.revspec ?? "worktree");
-      const reviewPath = path.join(
-        REVIEW_DIR,
-        `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}.diff`,
-      );
+      const reviewBase = `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}`;
+      const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.diff`);
+      const commentsPath = path.join(REVIEW_DIR, `${reviewBase}.comments.md`);
       writeFileSync(reviewPath, buildReviewBuffer(diff), "utf8");
 
       ctx.ui.notify(`Opening ${reviewPath}`, "info");
@@ -238,7 +235,10 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         return;
       }
 
-      pi.sendUserMessage(renderCommentsForAgent(comments), {
+      const renderedComments = renderCommentsForAgent(comments);
+      writeFileSync(commentsPath, `${renderedComments}\n`, "utf8");
+
+      pi.sendUserMessage(renderedComments, {
         deliverAs: "followUp",
       });
       ctx.ui.notify(

@@ -59,6 +59,7 @@ What it does:
 - writes the selected diff to `/tmp/pi-diff-reviews/*.diff`
 - opens the artifact in `$VISUAL` or `$EDITOR` with Emacs `diff-mode` file-local settings
 - lets the human add inline `# REVIEW: ...` comments near relevant hunks
+- writes parsed comments to a sibling `/tmp/pi-diff-reviews/*.comments.md` file
 - sends only those parsed comment lines back to the agent as a follow-up message
 
 Supported forms:
