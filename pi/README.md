@@ -56,9 +56,9 @@ Adds `/diff-review` for editor-backed human review of the current git diff.
 
 What it does:
 
-- writes the selected diff to `/tmp/pi-diff-reviews/*.diff`
+- writes paired `/tmp/pi-diff-reviews/*.base.diff` and `*.review.diff` files
 - opens the artifact in `$VISUAL` or `$EDITOR` with Emacs `diff-mode` file-local settings
-- lets the human add inline `REVIEW: ...` or `# REVIEW: ...` comments near relevant hunks
+- lets the human add natural inline comments near relevant hunks, with no marker syntax
 - writes parsed comments to a sibling `/tmp/pi-diff-reviews/*.comments.md` file
 - sends only those parsed comment lines back to the agent as a follow-up message
 

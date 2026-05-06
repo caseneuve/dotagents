@@ -6,7 +6,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const COMMAND_NAME = "diff-review";
 const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
-const INLINE_COMMENT_RE = /^\s*(?:(?:#|;|\/\/)\s*)?REVIEW:\s?(.*)$/i;
 
 type DiffMode = "worktree" | "staged";
 
@@ -82,14 +81,68 @@ function parseHunkStart(hunk: string): { oldLine?: number; newLine?: number } {
   };
 }
 
-function parseReviewComments(buffer: string): ReviewComment[] {
-  const comments: ReviewComment[] = [];
-  const lines = buffer.split(/\r?\n/);
+function diffInsertedGroups(
+  baseLines: string[],
+  reviewLines: string[],
+): Array<{ afterBaseIndex: number; lines: string[] }> {
+  const groups: Array<{ afterBaseIndex: number; lines: string[] }> = [];
+  let baseIndex = 0;
+  let reviewIndex = 0;
+
+  while (reviewIndex < reviewLines.length) {
+    if (
+      baseIndex < baseLines.length &&
+      reviewLines[reviewIndex] === baseLines[baseIndex]
+    ) {
+      baseIndex += 1;
+      reviewIndex += 1;
+      continue;
+    }
+
+    let nextBaseIndex = -1;
+    for (let i = baseIndex + 1; i < baseLines.length; i += 1) {
+      if (baseLines[i] === reviewLines[reviewIndex]) {
+        nextBaseIndex = i;
+        break;
+      }
+    }
+
+    if (nextBaseIndex !== -1) {
+      baseIndex = nextBaseIndex;
+      continue;
+    }
+
+    const inserted: string[] = [];
+    const afterBaseIndex = baseIndex - 1;
+    while (reviewIndex < reviewLines.length) {
+      const nextReviewLine = reviewLines[reviewIndex];
+      if (
+        baseIndex < baseLines.length &&
+        nextReviewLine === baseLines[baseIndex]
+      )
+        break;
+      inserted.push(nextReviewLine);
+      reviewIndex += 1;
+    }
+
+    const bodyLines = inserted.filter((line) => line.trim() !== "");
+    if (bodyLines.length > 0) {
+      groups.push({ afterBaseIndex, lines: bodyLines });
+    }
+  }
+
+  return groups;
+}
+
+function anchorForBaseIndex(
+  baseLines: string[],
+  afterBaseIndex: number,
+): Omit<ReviewComment, "body"> {
   let currentFile: string | undefined;
   let currentHunk: string | undefined;
 
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
+  for (let i = 0; i <= afterBaseIndex && i < baseLines.length; i += 1) {
+    const line = baseLines[i];
     const fileMatch = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
     if (fileMatch) {
       currentFile = fileMatch[2];
@@ -98,31 +151,24 @@ function parseReviewComments(buffer: string): ReviewComment[] {
     }
     if (line.startsWith("@@ ")) {
       currentHunk = line;
-      continue;
     }
-    const inlineComment = INLINE_COMMENT_RE.exec(line);
-    if (!inlineComment) continue;
-
-    const bodyLines: string[] = [inlineComment[1]];
-    while (i + 1 < lines.length) {
-      const nextInlineComment = INLINE_COMMENT_RE.exec(lines[i + 1]);
-      if (!nextInlineComment) break;
-      i += 1;
-      bodyLines.push(nextInlineComment[1]);
-    }
-
-    const body = bodyLines.join("\n").trim();
-    if (!body) continue;
-
-    comments.push({
-      file: currentFile,
-      hunk: currentHunk,
-      ...parseHunkStart(currentHunk ?? ""),
-      body,
-    });
   }
 
-  return comments;
+  return {
+    file: currentFile,
+    hunk: currentHunk,
+    ...parseHunkStart(currentHunk ?? ""),
+  };
+}
+
+function parseReviewComments(base: string, review: string): ReviewComment[] {
+  const baseLines = base.split(/\r?\n/);
+  const reviewLines = review.split(/\r?\n/);
+
+  return diffInsertedGroups(baseLines, reviewLines).map((group) => ({
+    ...anchorForBaseIndex(baseLines, group.afterBaseIndex),
+    body: group.lines.join("\n").trim(),
+  }));
 }
 
 function renderCommentsForAgent(comments: ReviewComment[]): string {
@@ -213,9 +259,12 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
       const target =
         parsed.mode === "staged" ? "staged" : (parsed.revspec ?? "worktree");
       const reviewBase = `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}`;
-      const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.diff`);
+      const basePath = path.join(REVIEW_DIR, `${reviewBase}.base.diff`);
+      const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.review.diff`);
       const commentsPath = path.join(REVIEW_DIR, `${reviewBase}.comments.md`);
-      writeFileSync(reviewPath, buildReviewBuffer(diff), "utf8");
+      const reviewBuffer = buildReviewBuffer(diff);
+      writeFileSync(basePath, reviewBuffer, "utf8");
+      writeFileSync(reviewPath, reviewBuffer, "utf8");
 
       ctx.ui.notify(`Opening ${reviewPath}`, "info");
       const result = openEditor(editorCommand, reviewPath);
@@ -224,10 +273,14 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         return;
       }
 
+      const original = readFileSync(basePath, "utf8");
       const edited = readFileSync(reviewPath, "utf8");
-      const comments = parseReviewComments(edited);
+      const comments = parseReviewComments(original, edited);
       if (comments.length === 0) {
-        ctx.ui.notify("No REVIEW lines found; nothing sent to agent", "info");
+        ctx.ui.notify(
+          "No inline comments found; nothing sent to agent",
+          "info",
+        );
         return;
       }
 
