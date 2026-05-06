@@ -81,56 +81,39 @@ function parseHunkStart(hunk: string): { oldLine?: number; newLine?: number } {
   };
 }
 
-function diffInsertedGroups(
-  baseLines: string[],
-  reviewLines: string[],
+function runDiff(basePath: string, reviewPath: string): string {
+  const result = spawnSync("diff", ["-U0", basePath, reviewPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  return result.stdout ?? "";
+}
+
+function parseInsertedGroupsFromDiff(
+  diff: string,
 ): Array<{ afterBaseIndex: number; lines: string[] }> {
   const groups: Array<{ afterBaseIndex: number; lines: string[] }> = [];
-  let baseIndex = 0;
-  let reviewIndex = 0;
+  const lines = diff.split(/\r?\n/);
+  let current: { afterBaseIndex: number; lines: string[] } | undefined;
 
-  while (reviewIndex < reviewLines.length) {
-    if (
-      baseIndex < baseLines.length &&
-      reviewLines[reviewIndex] === baseLines[baseIndex]
-    ) {
-      baseIndex += 1;
-      reviewIndex += 1;
+  for (const line of lines) {
+    const hunkMatch = /^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@/.exec(line);
+    if (hunkMatch) {
+      if (current && current.lines.length > 0) groups.push(current);
+      const oldStart = Number.parseInt(hunkMatch[1], 10);
+      const oldCount = hunkMatch[2] ? Number.parseInt(hunkMatch[2], 10) : 1;
+      current = { afterBaseIndex: oldStart + oldCount - 2, lines: [] };
       continue;
     }
 
-    let nextBaseIndex = -1;
-    for (let i = baseIndex + 1; i < baseLines.length; i += 1) {
-      if (baseLines[i] === reviewLines[reviewIndex]) {
-        nextBaseIndex = i;
-        break;
-      }
-    }
-
-    if (nextBaseIndex !== -1) {
-      baseIndex = nextBaseIndex;
-      continue;
-    }
-
-    const inserted: string[] = [];
-    const afterBaseIndex = baseIndex - 1;
-    while (reviewIndex < reviewLines.length) {
-      const nextReviewLine = reviewLines[reviewIndex];
-      if (
-        baseIndex < baseLines.length &&
-        nextReviewLine === baseLines[baseIndex]
-      )
-        break;
-      inserted.push(nextReviewLine);
-      reviewIndex += 1;
-    }
-
-    const bodyLines = inserted.filter((line) => line.trim() !== "");
-    if (bodyLines.length > 0) {
-      groups.push({ afterBaseIndex, lines: bodyLines });
+    if (!current || line.startsWith("---") || line.startsWith("+++")) continue;
+    if (line.startsWith("+")) {
+      const inserted = line.slice(1);
+      if (inserted.trim()) current.lines.push(inserted);
     }
   }
 
+  if (current && current.lines.length > 0) groups.push(current);
   return groups;
 }
 
@@ -161,11 +144,10 @@ function anchorForBaseIndex(
   };
 }
 
-function parseReviewComments(base: string, review: string): ReviewComment[] {
+function parseReviewComments(base: string, editDiff: string): ReviewComment[] {
   const baseLines = base.split(/\r?\n/);
-  const reviewLines = review.split(/\r?\n/);
 
-  return diffInsertedGroups(baseLines, reviewLines).map((group) => ({
+  return parseInsertedGroupsFromDiff(editDiff).map((group) => ({
     ...anchorForBaseIndex(baseLines, group.afterBaseIndex),
     body: group.lines.join("\n").trim(),
   }));
@@ -274,8 +256,8 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
       }
 
       const original = readFileSync(basePath, "utf8");
-      const edited = readFileSync(reviewPath, "utf8");
-      const comments = parseReviewComments(original, edited);
+      const editDiff = runDiff(basePath, reviewPath);
+      const comments = parseReviewComments(original, editDiff);
       if (comments.length === 0) {
         ctx.ui.notify(
           "No inline comments found; nothing sent to agent",
