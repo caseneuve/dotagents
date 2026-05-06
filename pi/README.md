@@ -40,7 +40,7 @@ Replaces the default footer with a denser single-line runtime status.
 What it does:
 
 - keeps cwd and git branch on the left side
-- shows compact dirty-worktree stats beside the branch, e.g. `+13/-4 (3, new 1, ?2)`
+- shows compact dirty-worktree stats beside the branch, e.g. `[+13/-4 (3, A1, ?2)]`
 - keeps model, rounded cost, and context percentage on the right side
 - removes the noisier token counters from the default footer
 - keeps the layout on a single line with lightweight color emphasis

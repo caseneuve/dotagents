@@ -171,20 +171,23 @@ function formatGitStats(
 ): string | null {
   if (!stats) return null;
 
-  const fileParts = [String(stats.changedFiles)];
+  const fileParts = [theme.fg("dim", String(stats.changedFiles))];
   if (stats.addedFiles > 0) {
-    fileParts.push(`new ${stats.addedFiles}`);
+    fileParts.push(theme.fg("success", `A${stats.addedFiles}`));
   }
   if (stats.untrackedFiles > 0) {
-    fileParts.push(`?${stats.untrackedFiles}`);
+    fileParts.push(theme.fg("warning", `?${stats.untrackedFiles}`));
   }
 
-  return `${theme.fg("success", `+${stats.addedLines}`)}${theme.fg(
+  return `${theme.fg("dim", "[")}${theme.fg(
+    "success",
+    `+${stats.addedLines}`,
+  )}${theme.fg("dim", "/")}${theme.fg(
+    "error",
+    `-${stats.removedLines}`,
+  )} ${theme.fg("dim", "(")}${fileParts.join(theme.fg("dim", ", "))}${theme.fg(
     "dim",
-    "/",
-  )}${theme.fg("error", `-${stats.removedLines}`)} ${theme.fg(
-    "dim",
-    `(${fileParts.join(", ")})`,
+    ")]",
   )}`;
 }
 
