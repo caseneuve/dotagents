@@ -50,6 +50,23 @@ Why it exists:
 - fit the most useful runtime context into one readable line
 - reduce footer noise while keeping model, cost, and context pressure visible
 
+### `extensions/diff-review.ts`
+
+Adds `/diff-review` for editor-backed human review of the current git diff.
+
+What it does:
+
+- writes the selected diff to `.pi/diff-reviews/*.diffreview`
+- opens the artifact in `$VISUAL` or `$EDITOR`
+- lets the human add comments with `# REVIEW:` / `# /REVIEW` blocks near relevant hunks
+- sends only those parsed comments back to the agent as a follow-up message
+
+Supported forms:
+
+- `/diff-review` — review unstaged worktree changes
+- `/diff-review staged` — review staged changes
+- `/diff-review <revspec>` — review a custom git diff target, such as `master...HEAD`
+
 ### `extensions/bookmark.ts`
 
 Adds a `/bookmark` command for quickly labeling a prompt on the current branch.
