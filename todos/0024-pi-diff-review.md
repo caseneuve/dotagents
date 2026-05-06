@@ -17,7 +17,7 @@ Humans need a lightweight way to inspect an agent's git diff, leave targeted com
 ## Acceptance Criteria
 
 - [ ] Pi exposes a slash command for reviewing the current worktree diff in `$VISUAL`/`$EDITOR`.
-- [ ] The review artifact contains the diff plus clear `REVIEW` comment markers.
+- [ ] The review artifact opens as a diff and supports inline `# REVIEW: ...` comment markers.
 - [ ] Only structured review comments are sent back to the agent as a follow-up message.
 - [ ] Review artifacts are persisted under `.pi/diff-reviews/`.
 
@@ -29,7 +29,7 @@ Humans need a lightweight way to inspect an agent's git diff, leave targeted com
 ## E2E Spec
 
 GIVEN a Pi session in a dirty git repo
-WHEN the human runs `/diff-review`, edits the generated review file, and adds `REVIEW` blocks
+WHEN the human runs `/diff-review`, edits the generated review file, and adds inline `REVIEW` comments
 THEN the agent receives a concise follow-up containing only the review comments and file/hunk anchors.
 
 ## Notes

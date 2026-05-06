@@ -5,8 +5,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const COMMAND_NAME = "diff-review";
 const REVIEW_DIR = ".pi/diff-reviews";
-const COMMENT_START = "# REVIEW:";
-const COMMENT_END = "# /REVIEW";
+const INLINE_COMMENT = "# REVIEW:";
 
 type DiffMode = "worktree" | "staged";
 
@@ -68,15 +67,17 @@ function buildReviewBuffer(diff: string, target: string): string {
     "# Diff Review",
     `# Target: ${target}`,
     "#",
-    "# Browse the diff below. Add comments near the relevant hunk using:",
-    "# REVIEW:",
-    "# Your comment here.",
-    "# /REVIEW",
+    "# Browse the diff below. Add inline comments near the relevant hunk:",
+    "# REVIEW: Your comment here.",
+    "# REVIEW: Use more REVIEW lines for multi-line comments.",
     "#",
-    "# Only REVIEW blocks are sent back to the agent; the diff itself is not.",
+    "# Only REVIEW lines are sent back to the agent; the diff itself is not.",
     "",
     diff.trimEnd(),
     "",
+    "# Local Variables:",
+    "# mode: diff",
+    "# End:",
   ].join("\n");
 }
 
@@ -87,10 +88,6 @@ function parseHunkStart(hunk: string): { oldLine?: number; newLine?: number } {
     oldLine: Number.parseInt(match[1], 10),
     newLine: Number.parseInt(match[2], 10),
   };
-}
-
-function stripCommentPrefix(line: string): string {
-  return line.replace(/^# ?/, "");
 }
 
 function parseReviewComments(buffer: string): ReviewComment[] {
@@ -111,13 +108,19 @@ function parseReviewComments(buffer: string): ReviewComment[] {
       currentHunk = line;
       continue;
     }
-    if (line.trim() !== COMMENT_START) continue;
+    if (!line.trimStart().startsWith(INLINE_COMMENT)) continue;
 
-    const bodyLines: string[] = [];
-    i += 1;
-    while (i < lines.length && lines[i].trim() !== COMMENT_END) {
-      bodyLines.push(stripCommentPrefix(lines[i]));
+    const bodyLines: string[] = [
+      line.trimStart().slice(INLINE_COMMENT.length).trimStart(),
+    ];
+    while (
+      i + 1 < lines.length &&
+      lines[i + 1].trimStart().startsWith(INLINE_COMMENT)
+    ) {
       i += 1;
+      bodyLines.push(
+        lines[i].trimStart().slice(INLINE_COMMENT.length).trimStart(),
+      );
     }
 
     const body = bodyLines.join("\n").trim();
@@ -230,7 +233,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         parsed.mode === "staged" ? "staged" : (parsed.revspec ?? "worktree");
       const reviewPath = path.join(
         reviewDir,
-        `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}.diffreview`,
+        `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}.diff`,
       );
       writeFileSync(reviewPath, buildReviewBuffer(diff, target), "utf8");
 
@@ -244,10 +247,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
       const edited = readFileSync(reviewPath, "utf8");
       const comments = parseReviewComments(edited);
       if (comments.length === 0) {
-        ctx.ui.notify(
-          "No REVIEW comments found; nothing sent to agent",
-          "info",
-        );
+        ctx.ui.notify("No REVIEW lines found; nothing sent to agent", "info");
         return;
       }
 

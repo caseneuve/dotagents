@@ -56,10 +56,10 @@ Adds `/diff-review` for editor-backed human review of the current git diff.
 
 What it does:
 
-- writes the selected diff to `.pi/diff-reviews/*.diffreview`
-- opens the artifact in `$VISUAL` or `$EDITOR`
-- lets the human add comments with `# REVIEW:` / `# /REVIEW` blocks near relevant hunks
-- sends only those parsed comments back to the agent as a follow-up message
+- writes the selected diff to `.pi/diff-reviews/*.diff`
+- opens the artifact in `$VISUAL` or `$EDITOR` with Emacs `diff-mode` file-local settings
+- lets the human add inline `# REVIEW: ...` comments near relevant hunks
+- sends only those parsed comment lines back to the agent as a follow-up message
 
 Supported forms:
 
