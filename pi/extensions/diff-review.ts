@@ -63,17 +63,8 @@ function timestamp(): string {
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
-function buildReviewBuffer(diff: string, target: string): string {
+function buildReviewBuffer(diff: string): string {
   return [
-    "# Diff Review",
-    `# Target: ${target}`,
-    "#",
-    "# Browse the diff below. Add inline comments near the relevant hunk:",
-    "# REVIEW: Your comment here.",
-    "# REVIEW: Use more REVIEW lines for multi-line comments.",
-    "#",
-    "# Only REVIEW lines are sent back to the agent; the diff itself is not.",
-    "",
     diff.trimEnd(),
     "",
     "# Local Variables:",
@@ -138,10 +129,7 @@ function parseReviewComments(buffer: string): ReviewComment[] {
   return comments;
 }
 
-function renderCommentsForAgent(
-  comments: ReviewComment[],
-  reviewPath: string,
-): string {
+function renderCommentsForAgent(comments: ReviewComment[]): string {
   const lines = [
     "Human reviewed the current diff and left these comments.",
     "",
@@ -159,9 +147,8 @@ function renderCommentsForAgent(
     lines.push("");
   });
 
-  lines.push(`Review artifact: \`${reviewPath}\``);
   lines.push(
-    "Please address the review comments without re-reading the full diff unless needed.",
+    "Please address the review comments. Do not read the full diff artifact unless explicitly asked.",
   );
   return lines.join("\n").trimEnd();
 }
@@ -235,7 +222,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         REVIEW_DIR,
         `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}.diff`,
       );
-      writeFileSync(reviewPath, buildReviewBuffer(diff, target), "utf8");
+      writeFileSync(reviewPath, buildReviewBuffer(diff), "utf8");
 
       ctx.ui.notify(`Opening ${reviewPath}`, "info");
       const result = openEditor(editorCommand, reviewPath);
@@ -251,7 +238,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         return;
       }
 
-      pi.sendUserMessage(renderCommentsForAgent(comments, reviewPath), {
+      pi.sendUserMessage(renderCommentsForAgent(comments), {
         deliverAs: "followUp",
       });
       ctx.ui.notify(
