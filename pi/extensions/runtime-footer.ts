@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type {
   ExtensionAPI,
@@ -6,6 +7,21 @@ import type {
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 const MIN_GAP = 2;
+const GIT_STATS_TTL_MS = 2000;
+
+type GitStats = {
+  addedLines: number;
+  removedLines: number;
+  changedFiles: number;
+  addedFiles: number;
+  untrackedFiles: number;
+};
+
+type GitStatsCache = {
+  cwd: string;
+  checkedAt: number;
+  stats: GitStats | null;
+};
 
 function formatCwd(): string {
   const cwd = process.cwd();
@@ -62,6 +78,113 @@ function formatThinking(pi: ExtensionAPI): string {
   return pi.getThinkingLevel();
 }
 
+function runGit(args: string[]): string | null {
+  try {
+    return execFileSync("git", args, {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 500,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function emptyGitStats(): GitStats {
+  return {
+    addedLines: 0,
+    removedLines: 0,
+    changedFiles: 0,
+    addedFiles: 0,
+    untrackedFiles: 0,
+  };
+}
+
+function readGitStats(): GitStats | null {
+  const status = runGit(["status", "--porcelain=v1"]);
+  if (status === null) {
+    return null;
+  }
+
+  const stats = emptyGitStats();
+  for (const line of status.split("\n")) {
+    if (!line) continue;
+
+    const x = line[0];
+    const y = line[1];
+    if (x === "?" && y === "?") {
+      stats.untrackedFiles += 1;
+      continue;
+    }
+
+    stats.changedFiles += 1;
+    if (x === "A" || y === "A") {
+      stats.addedFiles += 1;
+    }
+  }
+
+  const numstat = runGit(["diff", "--numstat", "HEAD", "--"]);
+  if (numstat !== null) {
+    for (const line of numstat.split("\n")) {
+      if (!line) continue;
+      const [added, removed] = line.split("\t");
+      if (added !== "-") {
+        stats.addedLines += Number.parseInt(added, 10) || 0;
+      }
+      if (removed !== "-") {
+        stats.removedLines += Number.parseInt(removed, 10) || 0;
+      }
+    }
+  }
+
+  if (
+    stats.addedLines === 0 &&
+    stats.removedLines === 0 &&
+    stats.changedFiles === 0 &&
+    stats.addedFiles === 0 &&
+    stats.untrackedFiles === 0
+  ) {
+    return null;
+  }
+
+  return stats;
+}
+
+function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
+  const now = Date.now();
+  const cwd = process.cwd();
+  if (cache && cache.cwd === cwd && now - cache.checkedAt < GIT_STATS_TTL_MS) {
+    return cache;
+  }
+
+  return {
+    cwd,
+    checkedAt: now,
+    stats: readGitStats(),
+  };
+}
+
+function formatGitStats(
+  theme: ExtensionContext["ui"]["theme"],
+  stats: GitStats | null,
+): string | null {
+  if (!stats) return null;
+
+  const fileParts = [String(stats.changedFiles)];
+  if (stats.addedFiles > 0) {
+    fileParts.push(`new ${stats.addedFiles}`);
+  }
+  if (stats.untrackedFiles > 0) {
+    fileParts.push(`?${stats.untrackedFiles}`);
+  }
+
+  return `${theme.fg("success", `+${stats.addedLines}`)}/${theme.fg(
+    "error",
+    `-${stats.removedLines}`,
+  )} (${fileParts.join(", ")})`;
+}
+
 function formatCost(ctx: ExtensionContext): string | null {
   let cost = 0;
 
@@ -109,13 +232,15 @@ function formatContextUsage(
 function renderLeft(
   theme: ExtensionContext["ui"]["theme"],
   gitBranch: string | null,
+  gitStats: GitStats | null,
   sessionNotesStatus: string | undefined,
   commsActive: boolean,
 ): string {
   const parts: string[] = [formatCwd()];
 
   if (gitBranch) {
-    parts.push(gitBranch);
+    const stats = formatGitStats(theme, gitStats);
+    parts.push(stats ? `${gitBranch} ${stats}` : gitBranch);
   }
 
   if (sessionNotesStatus) {
@@ -165,6 +290,7 @@ function renderFooterLine(width: number, left: string, right: string): string {
 
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
   let commsActive = false;
+  let gitStatsCache: GitStatsCache | undefined;
 
   pi.events.on("agent-channel:comms", (active: boolean) => {
     commsActive = active;
@@ -193,10 +319,12 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         },
         invalidate() {},
         render(width: number): string[] {
+          gitStatsCache = getGitStats(gitStatsCache);
           const statuses = footerData.getExtensionStatuses();
           const left = renderLeft(
             theme,
             footerData.getGitBranch(),
+            gitStatsCache.stats,
             statuses.get("session-notes"),
             commsActive,
           );
