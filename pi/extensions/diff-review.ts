@@ -89,6 +89,26 @@ function runDiff(basePath: string, reviewPath: string): string {
   return result.stdout ?? "";
 }
 
+function isDiffMetadataLine(line: string): boolean {
+  return (
+    line.startsWith("diff --git ") ||
+    line.startsWith("index ") ||
+    line.startsWith("new file mode ") ||
+    line.startsWith("deleted file mode ") ||
+    line.startsWith("old mode ") ||
+    line.startsWith("new mode ") ||
+    line.startsWith("similarity index ") ||
+    line.startsWith("rename from ") ||
+    line.startsWith("rename to ") ||
+    line.startsWith("--- ") ||
+    line.startsWith("+++ ") ||
+    line.startsWith("@@ ") ||
+    line === "# Local Variables:" ||
+    line === "# mode: diff" ||
+    line === "# End:"
+  );
+}
+
 function parseInsertedGroupsFromDiff(
   diff: string,
 ): Array<{ afterBaseIndex: number; lines: string[] }> {
@@ -109,7 +129,9 @@ function parseInsertedGroupsFromDiff(
     if (!current || line.startsWith("---") || line.startsWith("+++")) continue;
     if (line.startsWith("+")) {
       const inserted = line.slice(1);
-      if (inserted.trim()) current.lines.push(inserted);
+      if (inserted.trim() && !isDiffMetadataLine(inserted)) {
+        current.lines.push(inserted);
+      }
     }
   }
 
