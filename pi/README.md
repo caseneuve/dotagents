@@ -62,10 +62,11 @@ What it does:
 - writes parsed comments to a sibling `/tmp/pi-diff-reviews/*.comments.md` file
 - sends only those parsed comment lines back to the agent as a follow-up message
 
-Supported forms:
+Supported forms (`/diff` is an alias for `/diff-review`):
 
 - `/diff-review` — review unstaged worktree changes
 - `/diff-review staged` — review staged changes
+- `/diff-review latest` — review `HEAD~1..HEAD`
 - `/diff-review <revspec>` — review a custom git diff target, such as `master...HEAD`
 
 ### `extensions/bookmark.ts`

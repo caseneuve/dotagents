@@ -5,6 +5,7 @@ import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const COMMAND_NAME = "diff-review";
+const ALIAS_COMMAND_NAME = "diff";
 const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
 
 type DiffMode = "worktree" | "staged";
@@ -24,6 +25,9 @@ type ParsedArgs =
 function parseArgs(args: string): ParsedArgs {
   const trimmed = args.trim();
   if (!trimmed) return { ok: true, mode: "worktree" };
+  if (trimmed === "latest") {
+    return { ok: true, mode: "worktree", revspec: "HEAD~1..HEAD" };
+  }
   if (trimmed === "staged" || trimmed === "--staged") {
     return { ok: true, mode: "staged" };
   }
@@ -36,16 +40,23 @@ function parseArgs(args: string): ParsedArgs {
   return { ok: true, mode: "worktree", revspec: trimmed };
 }
 
-function git(args: string[]): string | null {
+type GitResult = { ok: true; stdout: string } | { ok: false; message: string };
+
+function git(args: string[]): GitResult {
   try {
-    return execFileSync("git", args, {
+    const stdout = execFileSync("git", args, {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 5000,
     });
-  } catch {
-    return null;
+    return { ok: true, stdout };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : "git diff failed";
+    return { ok: false, message };
   }
 }
 
@@ -222,82 +233,114 @@ function openEditor(
 }
 
 export default function diffReviewExtension(pi: ExtensionAPI) {
-  pi.registerCommand(COMMAND_NAME, {
-    description:
-      "Open the current git diff in $EDITOR and send structured review comments back to the agent",
-    getArgumentCompletions: (prefix) => {
-      const options = ["staged"];
-      return options
-        .filter((value) => value.startsWith(prefix.toLowerCase()))
-        .map((value) => ({ value, description: "review staged changes" }));
-    },
-    handler: async (args, ctx) => {
-      if (!ctx.hasUI) {
-        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
-        return;
-      }
-
-      const parsed = parseArgs(args);
-      if (!parsed.ok) {
-        ctx.ui.notify(parsed.message, "warning");
-        return;
-      }
-
-      const diff = git(diffArgs(parsed));
-      if (diff === null) {
-        ctx.ui.notify("Failed to read git diff", "error");
-        return;
-      }
-      if (!diff.trim()) {
-        ctx.ui.notify("No diff to review", "info");
-        return;
-      }
-
-      const editorCommand = process.env.VISUAL || process.env.EDITOR;
-      if (!editorCommand) {
-        ctx.ui.notify("Set $VISUAL or $EDITOR to review diffs", "warning");
-        return;
-      }
-
-      mkdirSync(REVIEW_DIR, { recursive: true });
-      const target =
-        parsed.mode === "staged" ? "staged" : (parsed.revspec ?? "worktree");
-      const reviewBase = `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}`;
-      const basePath = path.join(REVIEW_DIR, `${reviewBase}.base.diff`);
-      const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.review.diff`);
-      const commentsPath = path.join(REVIEW_DIR, `${reviewBase}.comments.md`);
-      const reviewBuffer = buildReviewBuffer(diff);
-      writeFileSync(basePath, reviewBuffer, "utf8");
-      writeFileSync(reviewPath, reviewBuffer, "utf8");
-
-      ctx.ui.notify(`Opening ${reviewPath}`, "info");
-      const result = openEditor(editorCommand, reviewPath);
-      if (!result.ok) {
-        ctx.ui.notify(`Failed to open editor: ${result.message}`, "error");
-        return;
-      }
-
-      const original = readFileSync(basePath, "utf8");
-      const editDiff = runDiff(basePath, reviewPath);
-      const comments = parseReviewComments(original, editDiff);
-      if (comments.length === 0) {
-        ctx.ui.notify(
-          "No inline comments found; nothing sent to agent",
-          "info",
+  const register = (commandName: string) => {
+    pi.registerCommand(commandName, {
+      description:
+        "Open the current git diff in $EDITOR and send structured review comments back to the agent",
+      getArgumentCompletions: (prefix) => {
+        const options = [
+          {
+            label: "staged",
+            value: "staged",
+            description: "review staged changes",
+          },
+          {
+            label: "latest",
+            value: "latest",
+            description: "review HEAD~1..HEAD",
+          },
+        ];
+        return options.filter((option) =>
+          option.value.startsWith(prefix.toLowerCase()),
         );
-        return;
-      }
+      },
+      handler: async (args, ctx) => {
+        try {
+          if (!ctx.hasUI) {
+            ctx.ui.notify(`/${commandName} requires interactive mode`, "error");
+            return;
+          }
 
-      const renderedComments = renderCommentsForAgent(comments);
-      writeFileSync(commentsPath, `${renderedComments}\n`, "utf8");
+          const parsed = parseArgs(args);
+          if (!parsed.ok) {
+            ctx.ui.notify(parsed.message, "warning");
+            return;
+          }
 
-      pi.sendUserMessage(renderedComments, {
-        deliverAs: "followUp",
-      });
-      ctx.ui.notify(
-        `Sent ${comments.length} diff review comment(s) to the agent`,
-        "success",
-      );
-    },
-  });
+          const diffResult = git(diffArgs(parsed));
+          if (!diffResult.ok) {
+            ctx.ui.notify(
+              `Failed to read git diff: ${diffResult.message}`,
+              "error",
+            );
+            return;
+          }
+          const diff = diffResult.stdout;
+          if (!diff.trim()) {
+            ctx.ui.notify("No diff to review", "info");
+            return;
+          }
+
+          const editorCommand = process.env.VISUAL || process.env.EDITOR;
+          if (!editorCommand) {
+            ctx.ui.notify("Set $VISUAL or $EDITOR to review diffs", "warning");
+            return;
+          }
+
+          mkdirSync(REVIEW_DIR, { recursive: true });
+          const target =
+            parsed.mode === "staged"
+              ? "staged"
+              : (parsed.revspec ?? "worktree");
+          const reviewBase = `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}`;
+          const basePath = path.join(REVIEW_DIR, `${reviewBase}.base.diff`);
+          const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.review.diff`);
+          const commentsPath = path.join(
+            REVIEW_DIR,
+            `${reviewBase}.comments.md`,
+          );
+          const reviewBuffer = buildReviewBuffer(diff);
+          writeFileSync(basePath, reviewBuffer, "utf8");
+          writeFileSync(reviewPath, reviewBuffer, "utf8");
+
+          ctx.ui.notify(`Opening ${reviewPath}`, "info");
+          const result = openEditor(editorCommand, reviewPath);
+          if (!result.ok) {
+            ctx.ui.notify(`Failed to open editor: ${result.message}`, "error");
+            return;
+          }
+
+          const original = readFileSync(basePath, "utf8");
+          const editDiff = runDiff(basePath, reviewPath);
+          const comments = parseReviewComments(original, editDiff);
+          if (comments.length === 0) {
+            ctx.ui.notify(
+              "No inline comments found; nothing sent to agent",
+              "info",
+            );
+            return;
+          }
+
+          const renderedComments = renderCommentsForAgent(comments);
+          writeFileSync(commentsPath, `${renderedComments}\n`, "utf8");
+
+          pi.sendUserMessage(renderedComments, {
+            deliverAs: "followUp",
+          });
+          ctx.ui.notify(
+            `Sent ${comments.length} diff review comment(s) to the agent`,
+            "success",
+          );
+        } catch (error) {
+          ctx.ui.notify(
+            `/${commandName} failed: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+        }
+      },
+    });
+  };
+
+  register(COMMAND_NAME);
+  register(ALIAS_COMMAND_NAME);
 }
