@@ -6,7 +6,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const COMMAND_NAME = "diff-review";
 const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
-const INLINE_COMMENT = "# REVIEW:";
+const INLINE_COMMENT_RE = /^\s*(?:(?:#|;|\/\/)\s*)?REVIEW:\s?(.*)$/i;
 
 type DiffMode = "worktree" | "staged";
 
@@ -100,19 +100,15 @@ function parseReviewComments(buffer: string): ReviewComment[] {
       currentHunk = line;
       continue;
     }
-    if (!line.trimStart().startsWith(INLINE_COMMENT)) continue;
+    const inlineComment = INLINE_COMMENT_RE.exec(line);
+    if (!inlineComment) continue;
 
-    const bodyLines: string[] = [
-      line.trimStart().slice(INLINE_COMMENT.length).trimStart(),
-    ];
-    while (
-      i + 1 < lines.length &&
-      lines[i + 1].trimStart().startsWith(INLINE_COMMENT)
-    ) {
+    const bodyLines: string[] = [inlineComment[1]];
+    while (i + 1 < lines.length) {
+      const nextInlineComment = INLINE_COMMENT_RE.exec(lines[i + 1]);
+      if (!nextInlineComment) break;
       i += 1;
-      bodyLines.push(
-        lines[i].trimStart().slice(INLINE_COMMENT.length).trimStart(),
-      );
+      bodyLines.push(nextInlineComment[1]);
     }
 
     const body = bodyLines.join("\n").trim();
