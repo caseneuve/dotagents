@@ -179,10 +179,13 @@ function formatGitStats(
     fileParts.push(`?${stats.untrackedFiles}`);
   }
 
-  return `${theme.fg("success", `+${stats.addedLines}`)}/${theme.fg(
-    "error",
-    `-${stats.removedLines}`,
-  )} (${fileParts.join(", ")})`;
+  return `${theme.fg("success", `+${stats.addedLines}`)}${theme.fg(
+    "dim",
+    "/",
+  )}${theme.fg("error", `-${stats.removedLines}`)} ${theme.fg(
+    "dim",
+    `(${fileParts.join(", ")})`,
+  )}`;
 }
 
 function formatCost(ctx: ExtensionContext): string | null {
