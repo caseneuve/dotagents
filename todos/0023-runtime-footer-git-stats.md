@@ -1,6 +1,6 @@
 ---
 title: runtime footer git stats
-status: in_progress
+status: closed
 priority: medium
 type: feature
 labels: []
