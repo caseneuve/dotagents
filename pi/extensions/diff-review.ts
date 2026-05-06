@@ -1,10 +1,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const COMMAND_NAME = "diff-review";
-const REVIEW_DIR = ".pi/diff-reviews";
+const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
 const INLINE_COMMENT = "# REVIEW:";
 
 type DiffMode = "worktree" | "staged";
@@ -227,12 +228,11 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
         return;
       }
 
-      const reviewDir = path.join(process.cwd(), REVIEW_DIR);
-      mkdirSync(reviewDir, { recursive: true });
+      mkdirSync(REVIEW_DIR, { recursive: true });
       const target =
         parsed.mode === "staged" ? "staged" : (parsed.revspec ?? "worktree");
       const reviewPath = path.join(
-        reviewDir,
+        REVIEW_DIR,
         `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}.diff`,
       );
       writeFileSync(reviewPath, buildReviewBuffer(diff, target), "utf8");
