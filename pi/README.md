@@ -66,6 +66,7 @@ Supported forms (`/diff` is an alias for `/diff-review`):
 
 - `/diff-review` — review unstaged worktree changes
 - `/diff-review staged` — review staged changes
+- `/diff-review dirty` — review staged plus unstaged tracked changes against `HEAD`
 - `/diff-review latest` — review `HEAD~1..HEAD`
 - `/diff-review master` — review the current branch against `master` with `master...HEAD`
 - `/diff-review N` — review the last N commits, e.g. `/diff-review 3` uses `HEAD~3..HEAD`

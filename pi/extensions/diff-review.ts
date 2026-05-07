@@ -8,7 +8,7 @@ const COMMAND_NAME = "diff-review";
 const ALIAS_COMMAND_NAME = "diff";
 const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
 
-type DiffMode = "worktree" | "staged";
+type DiffMode = "worktree" | "staged" | "dirty";
 
 type ReviewComment = {
   file?: string;
@@ -36,6 +36,9 @@ function parseArgs(args: string): ParsedArgs {
   }
   if (trimmed === "staged" || trimmed === "--staged") {
     return { ok: true, mode: "staged" };
+  }
+  if (trimmed === "dirty") {
+    return { ok: true, mode: "dirty" };
   }
   if (trimmed.includes("\n")) {
     return {
@@ -69,6 +72,7 @@ function git(args: string[]): GitResult {
 function diffArgs(parsed: Extract<ParsedArgs, { ok: true }>): string[] {
   const common = ["diff", "--find-renames", "--find-copies"];
   if (parsed.mode === "staged") return [...common, "--cached"];
+  if (parsed.mode === "dirty") return [...common, "HEAD"];
   if (parsed.revspec) return [...common, parsed.revspec];
   return common;
 }
@@ -251,6 +255,11 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
             description: "review staged changes",
           },
           {
+            label: "dirty",
+            value: "dirty",
+            description: "review staged + unstaged changes against HEAD",
+          },
+          {
             label: "latest",
             value: "latest",
             description: "review HEAD~1..HEAD",
@@ -309,10 +318,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
           }
 
           mkdirSync(REVIEW_DIR, { recursive: true });
-          const target =
-            parsed.mode === "staged"
-              ? "staged"
-              : (parsed.revspec ?? "worktree");
+          const target = parsed.revspec ?? parsed.mode;
           const reviewBase = `${timestamp()}-${target.replace(/[^a-zA-Z0-9._-]+/g, "_")}`;
           const basePath = path.join(REVIEW_DIR, `${reviewBase}.base.diff`);
           const reviewPath = path.join(REVIEW_DIR, `${reviewBase}.review.diff`);
