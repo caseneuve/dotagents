@@ -28,6 +28,12 @@ function parseArgs(args: string): ParsedArgs {
   if (trimmed === "latest") {
     return { ok: true, mode: "worktree", revspec: "HEAD~1..HEAD" };
   }
+  if (trimmed === "master" || trimmed === "branch") {
+    return { ok: true, mode: "worktree", revspec: "master...HEAD" };
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return { ok: true, mode: "worktree", revspec: `HEAD~${trimmed}..HEAD` };
+  }
   if (trimmed === "staged" || trimmed === "--staged") {
     return { ok: true, mode: "staged" };
   }
@@ -248,6 +254,21 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
             label: "latest",
             value: "latest",
             description: "review HEAD~1..HEAD",
+          },
+          {
+            label: "master",
+            value: "master",
+            description: "review current branch against master",
+          },
+          {
+            label: "2",
+            value: "2",
+            description: "review HEAD~2..HEAD",
+          },
+          {
+            label: "3",
+            value: "3",
+            description: "review HEAD~3..HEAD",
           },
         ];
         return options.filter((option) =>

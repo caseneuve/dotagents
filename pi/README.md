@@ -67,6 +67,8 @@ Supported forms (`/diff` is an alias for `/diff-review`):
 - `/diff-review` — review unstaged worktree changes
 - `/diff-review staged` — review staged changes
 - `/diff-review latest` — review `HEAD~1..HEAD`
+- `/diff-review master` — review the current branch against `master` with `master...HEAD`
+- `/diff-review N` — review the last N commits, e.g. `/diff-review 3` uses `HEAD~3..HEAD`
 - `/diff-review <revspec>` — review a custom git diff target, such as `master...HEAD`
 
 ### `extensions/bookmark.ts`
