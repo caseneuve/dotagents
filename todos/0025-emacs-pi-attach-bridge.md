@@ -1,5 +1,5 @@
 ---
-title: emacs on-demand attach bridge for pi editor context
+title: emacs on-demand attach bridge for running pi sessions
 status: done
 priority: medium
 type: feature
@@ -24,10 +24,9 @@ Need Emacs to connect on demand to already-running Pi interactive sessions and i
 
 ## Affected Files
 
-- `.pi/extensions/` or `~/.pi/agent/extensions/` — `emacs-bridge` extension.
-- Emacs integration package/mode files — discovery, pairing, attach, and editor-context send UX.
-- `docs/` — socket protocol, discovery format, and operator workflow documentation.
-- `test/` — protocol framing/discovery and attach-to-editor integration tests.
+- `pi/extensions/emacs-bridge.ts` — local UDS bridge, metadata lifecycle, request methods.
+- `shared/emacs/pi-emacs-bridge.el` — session discovery/attach, context send helpers, prompt/location/error helpers.
+- `docs/pi-emacs-bridge.md` and `pi/README.md` — protocol and operator workflow docs.
 
 ## E2E Spec
 
@@ -38,6 +37,7 @@ AND no new Pi process is launched from Emacs.
 
 ## Notes
 
-- Keep native Pi file editing tools (`read/edit/write`) as the write path; do not proxy file edits through Emacs.
-- Keep bridge protocol/editor-injection semantics separate from `agent-channel`.
+- Implemented bridge methods: `ping`, `get_state`, `insert`, `send_return`, `send_escape`, `clear_editor`.
+- Implemented Emacs UX includes: attach/detach, buffer/region send, position DWIM (`path:line` / `path:start-end`), error-at-point send, minibuffer prompt send (with and without location), return/escape/clear helpers.
+- Bridge remains separate from `agent-channel` semantics.
 - Follow-up item: Pi-side read tools for open buffers and guarded elisp eval support.
