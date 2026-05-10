@@ -52,4 +52,6 @@ Error:
 ## Emacs convenience commands
 
 - `pi-emacs-bridge-send-position-dwim` → sends `path:start-end` when region is active, otherwise `path:line`
+- `pi-emacs-bridge-send-prompt` → append minibuffer prompt to Pi editor
+- `pi-emacs-bridge-send-prompt-with-location-dwim` → append minibuffer prompt + `@path:line` or `@path:start-end`
 - `pi-emacs-bridge-clear-editor` → clears editor text (C-c equivalent)

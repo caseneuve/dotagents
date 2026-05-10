@@ -213,8 +213,16 @@
 
 (defun pi-emacs-bridge--location-ref (&optional beg end)
   (let* ((file (or buffer-file-name (buffer-name)))
-         (start (pi-emacs-bridge--line-at (or beg (point))))
-         (finish (when end (pi-emacs-bridge--line-at end))))
+         (start-pos (or beg (point)))
+         (start (pi-emacs-bridge--line-at start-pos))
+         (end-pos (when end
+                    (if (and (> end start-pos)
+                             (save-excursion
+                               (goto-char end)
+                               (bolp)))
+                        (1- end)
+                      end)))
+         (finish (when end-pos (pi-emacs-bridge--line-at end-pos))))
     (if (and finish (/= finish start))
         (format "%s:%d-%d" file start finish)
       (format "%s:%d" file start))))
@@ -288,6 +296,32 @@ With prefix arg REPLACE, replace Pi editor text instead of appending."
        (region-end)
        replace)
     (pi-emacs-bridge--send-cursor-position replace)))
+
+(defun pi-emacs-bridge-send-prompt (prompt)
+  "Read PROMPT from minibuffer and append it to Pi editor."
+  (interactive (list (read-from-minibuffer "Pi prompt: ")))
+  (unless (string-match-p "[^[:space:]]" prompt)
+    (user-error "Prompt is empty"))
+  (pi-emacs-bridge--insert (concat prompt "\n") "append")
+  (message "Appended minibuffer prompt to Pi editor"))
+
+(defun pi-emacs-bridge-send-prompt-with-location-dwim (prompt)
+  "Read PROMPT and append it with @path:line or @path:start-end.
+Uses region location when region is active, otherwise cursor line location."
+  (interactive (list (read-from-minibuffer "Pi prompt (+location): ")))
+  (unless (string-match-p "[^[:space:]]" prompt)
+    (user-error "Prompt is empty"))
+  (if (use-region-p)
+      (let* ((beg (region-beginning))
+           (end (region-end))
+           (loc (pi-emacs-bridge--location-ref beg end))
+           (text (format "%s\n@%s\n" prompt loc)))
+      (pi-emacs-bridge--insert text "append" beg end)
+      (message "Appended minibuffer prompt with region location (%s)" loc))
+    (let* ((loc (pi-emacs-bridge--location-ref))
+           (text (format "%s\n@%s\n" prompt loc)))
+      (pi-emacs-bridge--insert text "append")
+      (message "Appended minibuffer prompt with cursor location (%s)" loc))))
 
 (defun pi-emacs-bridge--flycheck-errors-at-point ()
   (when (and (featurep 'flycheck) (bound-and-true-p flycheck-mode))
