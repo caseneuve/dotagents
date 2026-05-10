@@ -407,3 +407,20 @@ Environment variables:
 - `CMUX_AGENT_NAME` → agent identity
 
 See `pi/extensions/agent-channel/README.md` for full docs.
+
+### `extensions/emacs-bridge.ts`
+
+Adds a local attach bridge for Emacs to inject context into the Pi editor of an already-running interactive session.
+
+What it does:
+
+- starts a per-session Unix socket at `~/.cache/pi-emacs-bridge/<session-id>.sock`
+- writes per-session metadata at `~/.cache/pi-emacs-bridge/<session-id>.json`
+- accepts newline-delimited JSON requests (`ping`, `get_state`, `insert`)
+- applies `insert` to the editor via `ctx.ui.pasteToEditor` (append) or `ctx.ui.setEditorText` (replace)
+- cleans up socket + metadata on session shutdown
+
+Notes:
+
+- this bridge is intentionally separate from `agent-channel`
+- intended Emacs client lives at `shared/emacs/pi-emacs-bridge.el`
