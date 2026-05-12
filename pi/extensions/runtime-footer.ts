@@ -36,6 +36,7 @@ const PROVIDER_SHORT: Record<string, string> = {
   "amazon-bedrock": "bedrock",
   "azure-openai": "azure",
   "google-vertex": "vertex",
+  "openai-codex": "openai",
 };
 
 function shortenProvider(raw: string): string {
