@@ -41,3 +41,4 @@ AND no new Pi process is launched from Emacs.
 - Implemented Emacs UX includes: attach/detach, buffer/region send, position DWIM (`path:line` / `path:start-end`), error-at-point send, minibuffer prompt send (with and without location), return/escape/clear helpers.
 - Bridge remains separate from `agent-channel` semantics.
 - Follow-up item: Pi-side read tools for open buffers and guarded elisp eval support.
+- Moved out of this repo to dedicated package: `https://github.com/caseneuve/pi-emacs-bridge` (Pi extension + Emacs client monorepo).
