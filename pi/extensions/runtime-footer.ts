@@ -242,18 +242,19 @@ function renderLeft(
   sessionNotesStatus: string | undefined,
   commsActive: boolean,
 ): string {
-  const parts: string[] = [formatCwd()];
+  const parts: string[] = [theme.fg("dim", formatCwd())];
 
   if (gitBranch) {
     const stats = formatGitStats(theme, gitStats);
-    parts.push(stats ? `${gitBranch} ${stats}` : gitBranch);
+    const branch = theme.fg("dim", gitBranch);
+    parts.push(stats ? `${branch} ${stats}` : branch);
   }
 
   if (sessionNotesStatus) {
-    parts.push(sessionNotesStatus);
+    parts.push(theme.fg("dim", sessionNotesStatus));
   }
 
-  const left = theme.fg("dim", parts.join(" · "));
+  const left = parts.join(theme.fg("dim", " · "));
 
   if (commsActive) {
     return `${left} ${theme.fg("accent", "📡")}`;
