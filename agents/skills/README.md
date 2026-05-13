@@ -2,6 +2,7 @@
 
 | Skill | Description |
 |-------|-------------|
+| [cicero](cicero/SKILL.md) | Use the five classical canons as a disciplined, recursive human-agent work protocol before acting. |
 | [code-review](code-review/SKILL.md) | Review uncommitted changes or branches, run automated checks, and save findings to `.reviews/`. |
 | [pk-tmux](pk-tmux/SKILL.md) | Run commands in persistent per-project tmux sessions under `/tmp/agents-*.sock`. |
 | [project-init](project-init/SKILL.md) | Generate a concise project `AGENTS.md` from detected stack and workflow details. |
