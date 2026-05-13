@@ -356,7 +356,7 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
           });
           ctx.ui.notify(
             `Sent ${comments.length} diff review comment(s) to the agent`,
-            "success",
+            "info",
           );
         } catch (error) {
           ctx.ui.notify(

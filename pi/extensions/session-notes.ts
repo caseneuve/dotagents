@@ -795,7 +795,7 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
         updatedAt: now,
       };
       persist([next, ...notes]);
-      ctx.ui.notify("Created quick session note", "success");
+      ctx.ui.notify("Created quick session note", "info");
       return;
     }
 
@@ -867,7 +867,7 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
                 updatedAt: now,
               };
               persist([next, ...notes]);
-              ctx.ui.notify("Created session note", "success");
+              ctx.ui.notify("Created session note", "info");
             });
           },
           async (note) => {
@@ -889,7 +889,7 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
                     : n,
                 ),
               );
-              ctx.ui.notify("Saved session note", "success");
+              ctx.ui.notify("Saved session note", "info");
             });
           },
           async (markedNotes) => {

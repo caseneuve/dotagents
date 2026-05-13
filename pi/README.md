@@ -15,6 +15,26 @@ These resources are intended to be loaded directly from this repo by entries in 
 
 The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/` and `~/.pi/agent/themes/`.
 
+## Type-checking and Pi upgrades
+
+Pi extensions are type-checked against pinned Pi API packages declared in the repo root `package.json`, not against whatever global Pi runtime happens to be installed. This records the Pi version these extensions are known to compile against.
+
+Run the normal check with:
+
+```bash
+bb check:pi-extensions
+```
+
+Before upgrading Pi itself, first try the new API version here:
+
+```bash
+bb check:pi-extensions:upgrade 0.75.0
+```
+
+That task updates the pinned `@earendil-works/pi-*` dev dependencies, refreshes `package-lock.json`, and runs the extension type-check. If it passes, commit the dependency update and any extension compatibility fixes, then upgrade the installed Pi runtime. If it fails, fix the extensions before upgrading runtime Pi.
+
+Current scope: the check covers top-level `pi/extensions/*.ts` files. Nested extension directories and Bun-specific extension tests are intentionally outside this first check.
+
 ## Extensions
 
 ### `extensions/branch-status.ts`

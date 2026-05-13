@@ -71,6 +71,20 @@ bb test:unit
 bb test:e2e
 ```
 
+Pi extension type-checking uses pinned Pi API packages from `package.json` so the repo records which Pi version the extensions are known to compile against:
+
+```bash
+bb check:pi-extensions
+```
+
+Before upgrading the installed Pi runtime, first update the pinned Pi API packages and run the check:
+
+```bash
+bb check:pi-extensions:upgrade 0.75.0
+```
+
+If that passes, commit the dependency/lockfile update and any required extension fixes, then upgrade the actual Pi runtime. The check currently covers top-level `pi/extensions/*.ts` files; nested extension directories and Bun-specific tests are outside this first TypeScript check scope.
+
 E2E tests live in `test/e2e/cases.edn` and use the declarative `end2edn` authoring format:
 
 - suites use `:cases`, not legacy `:tests`

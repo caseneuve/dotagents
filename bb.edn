@@ -61,6 +61,22 @@
                      (when (seq *command-line-args*)
                        (str " " (str/join " " *command-line-args*)))))}
 
+  check:pi-extensions
+  {:doc "Type-check top-level Pi extensions with pinned Pi API packages"
+   :task (shell "npm" "run" "check:pi-extensions")}
+
+  check:pi-extensions:upgrade
+  {:doc "Pin Pi API packages to VERSION, then type-check extensions (usage: bb check:pi-extensions:upgrade 0.75.0)"
+   :task (let [version (first *command-line-args*)]
+           (when-not version
+             (println "Usage: bb check:pi-extensions:upgrade <pi-version>")
+             (System/exit 1))
+           (shell "npm" "install" "--save-dev"
+                  (str "@earendil-works/pi-coding-agent@" version)
+                  (str "@earendil-works/pi-ai@" version)
+                  (str "@earendil-works/pi-tui@" version))
+           (run 'check:pi-extensions))}
+
   bootstrap
   {:doc "Run bootstrap script with forwarded args"
    :task (apply shell "bb" "-m" "bootstrap" *command-line-args*)}

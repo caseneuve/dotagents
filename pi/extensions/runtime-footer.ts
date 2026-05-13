@@ -217,7 +217,7 @@ function formatContextUsage(
   const contextWindow = (ctx.model as { contextWindow?: number } | undefined)
     ?.contextWindow;
 
-  if (!usage || !contextWindow || contextWindow <= 0) {
+  if (!usage || usage.tokens === null || !contextWindow || contextWindow <= 0) {
     return null;
   }
 
@@ -300,8 +300,8 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
   let commsActive = false;
   let gitStatsCache: GitStatsCache | undefined;
 
-  pi.events.on("agent-channel:comms", (active: boolean) => {
-    commsActive = active;
+  pi.events.on("agent-channel:comms", (active: unknown) => {
+    commsActive = active === true;
   });
 
   const installFooter = (ctx: ExtensionContext) => {
