@@ -33,6 +33,30 @@ Proceed in this order by default:
 
 The order is not a waterfall. Later canons may reveal flaws in earlier canons. When that happens, return explicitly, revise, and continue.
 
+## Scope discipline
+
+A Cicero flow is scoped to one explicit task. While inside that flow, do not start Actio for a new task, support task, cleanup, tooling change, or adjacent idea until the scope boundary is made explicit.
+
+When new work appears, stop and classify it before acting:
+
+- **same scope**: it is necessary to complete the current task's success criteria; fold it into the current Dispositio as a slice.
+- **nested scope**: it is a subtask that needs its own Cicero pass; suspend the parent flow, run a slice/full flow for the nested task, then return explicitly.
+- **new scope**: it is a separate task; ask whether to suspend/close the current flow and start a new Cicero flow, or defer the new task.
+- **incidental cleanup**: it is not required for the current task; defer it unless the user explicitly authorizes expanding scope.
+
+Default rule: be strict. If the work would deserve a separate commit, a separate review, a separate test plan, or a separate summary bullet, treat it as a separate scope until proven otherwise.
+
+Use this scope note before switching or nesting:
+
+```markdown
+## Scope Check
+Current scope: [current task]
+New work noticed: [new task]
+Classification: [same scope | nested scope | new scope | incidental cleanup]
+Recommendation: [fold in | suspend and run nested Cicero | start new flow | defer]
+Question: [confirmation needed from user]
+```
+
 Use this revision note:
 
 ```markdown
