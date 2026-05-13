@@ -1101,8 +1101,12 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // ── Shortcut: Ctrl+Shift+M toggles comms ──
-  pi.registerShortcut("ctrl+shift+m", {
+  // ── Shortcut: Alt+M toggles comms ──
+  // Note: Alt+M (not Ctrl+Shift+M) because Ctrl+M is indistinguishable
+  // from Enter on terminals without the Kitty keyboard protocol, and
+  // several Linux terminals (gnome-terminal, konsole) bind Ctrl+Shift+M
+  // to native menubar actions before the chord ever reaches pi.
+  pi.registerShortcut("alt+m", {
     description: "Toggle agent comms on/off",
     handler: async (ctx) => {
       const { previous } = toggleComms();

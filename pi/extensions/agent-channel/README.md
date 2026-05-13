@@ -63,7 +63,7 @@ with macOS `osascript` notifications.
 
 | Shortcut | Purpose |
 |----------|---------|
-| `Ctrl+Shift+M` | Toggle agent comms on/off |
+| `Alt+M` | Toggle agent comms on/off |
 
 ## Scenario: Code Review Loop
 
