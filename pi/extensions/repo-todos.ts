@@ -1,4 +1,8 @@
-import { type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   Input,
   Key,
@@ -1653,89 +1657,98 @@ class RepoTodosComponent {
 }
 
 export default function repoTodosExtension(pi: ExtensionAPI) {
+  const openRepoTodos = async (ctx: ExtensionContext) => {
+    if (!ctx.hasUI) {
+      ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
+      return;
+    }
+
+    const termWidth = process.stdout.columns ?? 0;
+    if (termWidth < MIN_TERMINAL_COLUMNS) {
+      ctx.ui.notify(
+        `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
+        "warning",
+      );
+      return;
+    }
+
+    const markedTodos = await ctx.ui.custom<MarkedTodosPayload | undefined>(
+      (tui, theme, _kb, done) => {
+        const openEditor = async (filePath: string) => {
+          const editorCmd = process.env.VISUAL || process.env.EDITOR;
+          if (!editorCmd) {
+            ctx.ui.notify(
+              "Set $VISUAL or $EDITOR to edit todo files",
+              "warning",
+            );
+            return;
+          }
+
+          const [editor, ...editorArgs] = editorCmd.split(" ");
+          tui.stop();
+          try {
+            const result = spawnSync(editor, [...editorArgs, filePath], {
+              stdio: "inherit",
+              shell: process.platform === "win32",
+            });
+            if (result.status && result.status !== 0) {
+              ctx.ui.notify(
+                `Editor exited with code ${result.status}`,
+                "warning",
+              );
+            }
+          } catch (error) {
+            ctx.ui.notify(
+              `Failed to open editor: ${error instanceof Error ? error.message : String(error)}`,
+              "error",
+            );
+          } finally {
+            tui.start();
+            tui.requestRender(true);
+            void component.reload();
+          }
+        };
+
+        const component = new RepoTodosComponent(
+          ctx.cwd,
+          theme,
+          (full) => tui.requestRender(Boolean(full)),
+          (payload) => done(payload),
+          openEditor,
+        );
+        void component.init();
+        return component;
+      },
+      {
+        overlay: true,
+        overlayOptions: {
+          anchor: "center",
+          width: "78%",
+          minWidth: OVERLAY_MIN_WIDTH,
+          maxHeight: OVERLAY_MAX_HEIGHT,
+          margin: OVERLAY_MARGIN,
+        },
+      },
+    );
+
+    if (markedTodos) {
+      ctx.ui.setEditorText(markedTodos.text);
+      ctx.ui.notify(
+        `Loaded ${markedTodos.count} marked todo${markedTodos.count === 1 ? "" : "s"} into the editor`,
+        "info",
+      );
+    }
+  };
+
   pi.registerCommand(COMMAND_NAME, {
     description: "Browse repo todos in a read-only tree with preview",
     handler: async (_args, ctx) => {
-      if (!ctx.hasUI) {
-        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
-        return;
-      }
-
-      const termWidth = process.stdout.columns ?? 0;
-      if (termWidth < MIN_TERMINAL_COLUMNS) {
-        ctx.ui.notify(
-          `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
-          "warning",
-        );
-        return;
-      }
-
-      const markedTodos = await ctx.ui.custom<MarkedTodosPayload | undefined>(
-        (tui, theme, _kb, done) => {
-          const openEditor = async (filePath: string) => {
-            const editorCmd = process.env.VISUAL || process.env.EDITOR;
-            if (!editorCmd) {
-              ctx.ui.notify(
-                "Set $VISUAL or $EDITOR to edit todo files",
-                "warning",
-              );
-              return;
-            }
-
-            const [editor, ...editorArgs] = editorCmd.split(" ");
-            tui.stop();
-            try {
-              const result = spawnSync(editor, [...editorArgs, filePath], {
-                stdio: "inherit",
-                shell: process.platform === "win32",
-              });
-              if (result.status && result.status !== 0) {
-                ctx.ui.notify(
-                  `Editor exited with code ${result.status}`,
-                  "warning",
-                );
-              }
-            } catch (error) {
-              ctx.ui.notify(
-                `Failed to open editor: ${error instanceof Error ? error.message : String(error)}`,
-                "error",
-              );
-            } finally {
-              tui.start();
-              tui.requestRender(true);
-              void component.reload();
-            }
-          };
-
-          const component = new RepoTodosComponent(
-            ctx.cwd,
-            theme,
-            (full) => tui.requestRender(Boolean(full)),
-            (payload) => done(payload),
-            openEditor,
-          );
-          void component.init();
-          return component;
-        },
-        {
-          overlay: true,
-          overlayOptions: {
-            anchor: "center",
-            width: "78%",
-            minWidth: OVERLAY_MIN_WIDTH,
-            maxHeight: OVERLAY_MAX_HEIGHT,
-            margin: OVERLAY_MARGIN,
-          },
-        },
-      );
-
-      if (markedTodos) {
-        ctx.ui.setEditorText(markedTodos.text);
-        ctx.ui.notify(
-          `Loaded ${markedTodos.count} marked todo${markedTodos.count === 1 ? "" : "s"} into the editor`,
-          "info",
-        );
-      }
+      await openRepoTodos(ctx);
     },
+  });
+
+  pi.registerShortcut("alt+t", {
+    description: "Open repo todos",
+    handler: openRepoTodos,
   });
 }

@@ -771,173 +771,182 @@ export default function sessionNotesExtension(pi: ExtensionAPI) {
     refreshStatus(ctx);
   });
 
+  const openSessionNotes = async (args: string, ctx: ExtensionContext) => {
+    let notes = getStoredSessionNotes(ctx.sessionManager.getBranch());
+
+    const persist = (nextNotes: SessionNote[]) => {
+      notes = normalizeNotes(nextNotes);
+      pi.appendEntry(SESSION_NOTES_TYPE, {
+        notes,
+      } satisfies SessionNotesState);
+      applyStatus(ctx, notes);
+    };
+
+    const inlineText = normalizeText(args ?? "");
+    if (inlineText) {
+      const now = Date.now();
+      const title = truncateToWidth(inlineText, 50) || "Quick note";
+      const next: SessionNote = {
+        id: randomUUID(),
+        title,
+        body: inlineText,
+        status: "TODO",
+        createdAt: now,
+        updatedAt: now,
+      };
+      persist([next, ...notes]);
+      ctx.ui.notify("Created quick session note", "success");
+      return;
+    }
+
+    if (!ctx.hasUI) {
+      ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
+      return;
+    }
+
+    const termWidth = process.stdout.columns ?? 0;
+    if (termWidth < MIN_TERMINAL_COLUMNS) {
+      ctx.ui.notify(
+        `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
+        "warning",
+      );
+      return;
+    }
+
+    const marked = await ctx.ui.custom<MarkedNotesPayload | undefined>(
+      (tui, theme, _kb, done) => {
+        const withEditor = async (
+          existing: SessionNote | undefined,
+          onSave: (draft: NoteDraft | undefined) => void,
+        ) => {
+          const editorCmd = process.env.VISUAL || process.env.EDITOR;
+          if (!editorCmd) {
+            ctx.ui.notify(
+              "Set $VISUAL or $EDITOR to edit session notes",
+              "warning",
+            );
+            return;
+          }
+
+          tui.stop();
+          const result = await editNoteInExternalEditor(editorCmd, existing);
+          tui.start();
+
+          if (!result.ok) {
+            ctx.ui.notify(
+              `Failed to edit session note: ${result.message}`,
+              "error",
+            );
+            tui.requestRender(true);
+            return;
+          }
+
+          onSave(result.draft);
+          component.setNotes(notes);
+          tui.requestRender(true);
+        };
+
+        const component = new SessionNotesComponent(
+          notes,
+          theme,
+          (full) => tui.requestRender(Boolean(full)),
+          (payload) => done(payload),
+          async () => {
+            await withEditor(undefined, (draft) => {
+              if (!draft) {
+                ctx.ui.notify("New note discarded (empty)", "info");
+                return;
+              }
+              const now = Date.now();
+              const next: SessionNote = {
+                id: randomUUID(),
+                title: draft.title,
+                body: draft.body,
+                status: "TODO",
+                createdAt: now,
+                updatedAt: now,
+              };
+              persist([next, ...notes]);
+              ctx.ui.notify("Created session note", "success");
+            });
+          },
+          async (note) => {
+            await withEditor(note, (draft) => {
+              if (!draft) {
+                ctx.ui.notify("Edit discarded (empty)", "info");
+                return;
+              }
+
+              persist(
+                notes.map((n) =>
+                  n.id === note.id
+                    ? {
+                        ...n,
+                        title: draft.title,
+                        body: draft.body,
+                        updatedAt: Date.now(),
+                      }
+                    : n,
+                ),
+              );
+              ctx.ui.notify("Saved session note", "success");
+            });
+          },
+          async (markedNotes) => {
+            const idsToDelete = new Set(markedNotes.map((n) => n.id));
+            persist(notes.filter((n) => !idsToDelete.has(n.id)));
+            component.setNotes(notes);
+            ctx.ui.notify(
+              `Deleted ${markedNotes.length} session note${markedNotes.length === 1 ? "" : "s"}`,
+              "info",
+            );
+            tui.requestRender(true);
+          },
+          (note) => {
+            const nextStatus: NoteStatus =
+              note.status === "DONE" ? "TODO" : "DONE";
+            persist(
+              notes.map((n) =>
+                n.id === note.id ? { ...n, status: nextStatus } : n,
+              ),
+            );
+            component.setNotes(notes);
+          },
+        );
+
+        return component;
+      },
+      {
+        overlay: true,
+        overlayOptions: {
+          anchor: "center",
+          width: "78%",
+          minWidth: OVERLAY_MIN_WIDTH,
+          maxHeight: OVERLAY_MAX_HEIGHT,
+          margin: OVERLAY_MARGIN,
+        },
+      },
+    );
+
+    if (marked) {
+      ctx.ui.setEditorText(marked.text);
+      ctx.ui.notify(
+        `Loaded ${marked.count} marked note${marked.count === 1 ? "" : "s"} into the editor`,
+        "info",
+      );
+    }
+  };
+
   pi.registerCommand(COMMAND_NAME, {
     description:
       "Manage transient per-session notes and load marked notes into the editor",
-    handler: async (args, ctx) => {
-      let notes = getStoredSessionNotes(ctx.sessionManager.getBranch());
+    handler: openSessionNotes,
+  });
 
-      const persist = (nextNotes: SessionNote[]) => {
-        notes = normalizeNotes(nextNotes);
-        pi.appendEntry(SESSION_NOTES_TYPE, {
-          notes,
-        } satisfies SessionNotesState);
-        applyStatus(ctx, notes);
-      };
-
-      const inlineText = normalizeText(args ?? "");
-      if (inlineText) {
-        const now = Date.now();
-        const title = truncateToWidth(inlineText, 50) || "Quick note";
-        const next: SessionNote = {
-          id: randomUUID(),
-          title,
-          body: inlineText,
-          status: "TODO",
-          createdAt: now,
-          updatedAt: now,
-        };
-        persist([next, ...notes]);
-        ctx.ui.notify("Created quick session note", "success");
-        return;
-      }
-
-      if (!ctx.hasUI) {
-        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
-        return;
-      }
-
-      const termWidth = process.stdout.columns ?? 0;
-      if (termWidth < MIN_TERMINAL_COLUMNS) {
-        ctx.ui.notify(
-          `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
-          "warning",
-        );
-        return;
-      }
-
-      const marked = await ctx.ui.custom<MarkedNotesPayload | undefined>(
-        (tui, theme, _kb, done) => {
-          const withEditor = async (
-            existing: SessionNote | undefined,
-            onSave: (draft: NoteDraft | undefined) => void,
-          ) => {
-            const editorCmd = process.env.VISUAL || process.env.EDITOR;
-            if (!editorCmd) {
-              ctx.ui.notify(
-                "Set $VISUAL or $EDITOR to edit session notes",
-                "warning",
-              );
-              return;
-            }
-
-            tui.stop();
-            const result = await editNoteInExternalEditor(editorCmd, existing);
-            tui.start();
-
-            if (!result.ok) {
-              ctx.ui.notify(
-                `Failed to edit session note: ${result.message}`,
-                "error",
-              );
-              tui.requestRender(true);
-              return;
-            }
-
-            onSave(result.draft);
-            component.setNotes(notes);
-            tui.requestRender(true);
-          };
-
-          const component = new SessionNotesComponent(
-            notes,
-            theme,
-            (full) => tui.requestRender(Boolean(full)),
-            (payload) => done(payload),
-            async () => {
-              await withEditor(undefined, (draft) => {
-                if (!draft) {
-                  ctx.ui.notify("New note discarded (empty)", "info");
-                  return;
-                }
-                const now = Date.now();
-                const next: SessionNote = {
-                  id: randomUUID(),
-                  title: draft.title,
-                  body: draft.body,
-                  status: "TODO",
-                  createdAt: now,
-                  updatedAt: now,
-                };
-                persist([next, ...notes]);
-                ctx.ui.notify("Created session note", "success");
-              });
-            },
-            async (note) => {
-              await withEditor(note, (draft) => {
-                if (!draft) {
-                  ctx.ui.notify("Edit discarded (empty)", "info");
-                  return;
-                }
-
-                persist(
-                  notes.map((n) =>
-                    n.id === note.id
-                      ? {
-                          ...n,
-                          title: draft.title,
-                          body: draft.body,
-                          updatedAt: Date.now(),
-                        }
-                      : n,
-                  ),
-                );
-                ctx.ui.notify("Saved session note", "success");
-              });
-            },
-            async (markedNotes) => {
-              const idsToDelete = new Set(markedNotes.map((n) => n.id));
-              persist(notes.filter((n) => !idsToDelete.has(n.id)));
-              component.setNotes(notes);
-              ctx.ui.notify(
-                `Deleted ${markedNotes.length} session note${markedNotes.length === 1 ? "" : "s"}`,
-                "info",
-              );
-              tui.requestRender(true);
-            },
-            (note) => {
-              const nextStatus: NoteStatus =
-                note.status === "DONE" ? "TODO" : "DONE";
-              persist(
-                notes.map((n) =>
-                  n.id === note.id ? { ...n, status: nextStatus } : n,
-                ),
-              );
-              component.setNotes(notes);
-            },
-          );
-
-          return component;
-        },
-        {
-          overlay: true,
-          overlayOptions: {
-            anchor: "center",
-            width: "78%",
-            minWidth: OVERLAY_MIN_WIDTH,
-            maxHeight: OVERLAY_MAX_HEIGHT,
-            margin: OVERLAY_MARGIN,
-          },
-        },
-      );
-
-      if (marked) {
-        ctx.ui.setEditorText(marked.text);
-        ctx.ui.notify(
-          `Loaded ${marked.count} marked note${marked.count === 1 ? "" : "s"} into the editor`,
-          "info",
-        );
-      }
+  pi.registerShortcut("alt+n", {
+    description: "Open session notes",
+    handler: async (ctx) => {
+      await openSessionNotes("", ctx);
     },
   });
 }

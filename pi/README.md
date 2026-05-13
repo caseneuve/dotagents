@@ -158,6 +158,7 @@ What it does:
 Usage:
 
 - `/repo-todos`
+- `Alt+T` — open repo todos
 
 Keybindings:
 
@@ -239,6 +240,7 @@ Usage:
 
 - `/session-notes`
 - `/session-notes remember to verify migration rollback path`
+- `Alt+N` — open session notes
 
 Keybindings (overlay):
 
@@ -304,6 +306,7 @@ What it does:
 Usage:
 
 - `/assistant-outline`
+- `Alt+O` — open assistant outline
 
 Keybindings:
 
