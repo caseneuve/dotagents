@@ -2,7 +2,7 @@ import {
   DynamicBorder,
   type ExtensionAPI,
   type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   Container,
   matchesKey,
@@ -10,7 +10,7 @@ import {
   SelectList,
   Spacer,
   Text,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import {
   COMMAND_NAMES,
   POLICY_FILE_RELATIVE_PATH,

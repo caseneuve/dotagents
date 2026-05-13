@@ -1,4 +1,4 @@
-import type { SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AssistantResponseSelection } from "./types";
 
 type AssistantMessageEntry = SessionEntry & {

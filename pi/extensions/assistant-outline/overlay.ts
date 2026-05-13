@@ -1,11 +1,11 @@
-import { getMarkdownTheme, type Theme } from "@mariozechner/pi-coding-agent";
+import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   Key,
   Markdown,
   matchesKey,
   truncateToWidth,
   visibleWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { buildExportedSectionsPayload } from "./comments";
 import { formatMarkedCommandsForPiEditor } from "./command-editor-export";
 import type { CommandSnippet } from "./command-extract";

@@ -2,8 +2,8 @@ import type {
   ExtensionCommandContext,
   SessionEntry,
   SessionManager,
-} from "@mariozechner/pi-coding-agent";
-import { TreeSelectorComponent } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { TreeSelectorComponent } from "@earendil-works/pi-coding-agent";
 
 type SessionTreeNode = ReturnType<SessionManager["getTree"]>[number];
 

@@ -14,7 +14,7 @@ blocks: []
 
 Three friction points hit while building the `assistant-outline` picker
 (commits `2b3d5d3`, `66d73af`) that would be cleaner to fix upstream in
-`@mariozechner/pi-coding-agent` than to keep working around in every
+`@earendil-works/pi-coding-agent` than to keep working around in every
 extension that consumes the session tree.
 
 None are blocking for us today. File these with pi's maintainer when
@@ -23,7 +23,7 @@ we next have a reason to touch upstream, or leave parked.
 ## Ask 1 — re-export `SessionTreeNode` from the top-level package
 
 `SessionTreeNode` is only exported from the deep path
-`@mariozechner/pi-coding-agent/core/session-manager`, which extensions
+`@earendil-works/pi-coding-agent/core/session-manager`, which extensions
 should not reach into. Today we derive it via
 `ReturnType<SessionManager["getTree"]>[number]` — works, but clumsy.
 
@@ -31,7 +31,7 @@ Any extension that constructs or filters tree nodes needs this type.
 One-line upstream fix:
 
 ```ts
-// @mariozechner/pi-coding-agent/dist/index.d.ts
+// @earendil-works/pi-coding-agent/dist/index.d.ts
 export type { SessionTreeNode } from "./core/session-manager.js";
 ```
 
@@ -98,7 +98,7 @@ Positional signature can be kept as a wrapper for backward compat.
 
 ## Affected Files
 
-- `@mariozechner/pi-coding-agent` (upstream) — not this repo.
+- `@earendil-works/pi-coding-agent` (upstream) — not this repo.
 - `pi/extensions/assistant-outline/picker.ts` — the downstream consumer
   that would simplify if upstream lands.
 

@@ -21,7 +21,7 @@ Scope is intentionally selective:
 - move runtime status family to a new repo and redesign there (not in dotagents)
 
 Constraints:
-- use `@earendil-works/*` deps (not legacy `@mariozechner/*`)
+- use `@earendil-works/*` deps (not legacy `@earendil-works/*`)
 - align with latest Pi API/docs during extraction to avoid carrying tech debt
 - keep idiosyncratic/local-only extensions out of v1 extraction
 
