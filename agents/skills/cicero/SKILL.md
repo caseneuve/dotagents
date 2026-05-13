@@ -66,13 +66,17 @@ Ask and answer:
 
 Guidelines:
 
-- For code work, inspect relevant files before planning unless the user asks for pure brainstorming.
+- Investigate the human before investigating the codebase, database, docs, or other artifacts. First make sure you understand what the user is trying to accomplish, not just the first solution or symptom they named.
+- Do not start artifact investigation until the user's desired outcome, scope, and success criteria are clear enough for the task size, unless the user explicitly asks for exploratory investigation.
+- Guard against X/Y problems: distinguish the user's underlying goal (X) from their proposed fix or framing (Y), and ask about the goal when they may diverge.
+- For code work, inspect relevant files before planning only after the human-alignment check is clear enough, unless the user asks for pure brainstorming.
 - Separate facts from assumptions.
 - Ask concise clarifying questions when unknowns block useful arrangement.
 
 Gate:
 
-- Task restated.
+- Task restated in terms of the user's desired outcome, not only the proposed mechanism.
+- Human alignment is clear enough: desired outcome, scope, and success criteria are known or explicitly deferred by the user.
 - Relevant evidence gathered or evidence-gathering explicitly deferred.
 - Blocking unknowns/questions listed.
 
