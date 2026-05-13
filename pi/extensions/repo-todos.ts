@@ -59,7 +59,7 @@ type MarkedTodosPayload = {
 };
 
 const COMMAND_NAME = "repo-todos";
-const TODO_DIRECTORIES = ["todos", "todo", "tasks"] as const;
+const TODO_DIRECTORY_NAME = "todos";
 const TODO_IGNORED_FILENAMES = new Set(["template.md", "readme.md"]);
 const TODO_FILENAME_RE = /^(\d+(?:\.\d+)*)-([^.].*)\.md$/i;
 const OVERLAY_MAX_HEIGHT = "90%";
@@ -134,11 +134,6 @@ type TodoFile = {
   name: string;
   id: string;
   slug: string;
-};
-
-type TodoDirectoryScan = {
-  dir: string;
-  entries: string[];
 };
 
 function stripQuotes(value: string): string {
@@ -223,49 +218,69 @@ function parseFrontmatter(content: string): {
   return { raw, body };
 }
 
+function findGitRoot(cwd: string): string | null {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return null;
+  const root = (result.stdout ?? "").trim();
+  return root.length > 0 ? root : null;
+}
+
+async function readTodoDir(
+  dir: string,
+): Promise<{ entries: string[]; exists: boolean }> {
+  try {
+    const entries = await fs.readdir(dir);
+    return { entries, exists: true };
+  } catch {
+    return { entries: [], exists: false };
+  }
+}
+
 async function discoverTodoDirectory(cwd: string): Promise<{
   todosDir: string;
   entries: string[];
   issues: string[];
+  isFallback: boolean;
 }> {
-  const scans: TodoDirectoryScan[] = [];
-
-  for (const dirName of TODO_DIRECTORIES) {
-    const dir = path.join(cwd, dirName);
-    try {
-      const entries = await fs.readdir(dir);
-      scans.push({ dir, entries });
-    } catch {
-      // ignore missing directory
-    }
-  }
-
-  if (scans.length === 0) {
-    const searched = TODO_DIRECTORIES.map((dirName) => path.join(cwd, dirName));
+  const cwdTodosDir = path.join(cwd, TODO_DIRECTORY_NAME);
+  const cwdScan = await readTodoDir(cwdTodosDir);
+  if (cwdScan.exists) {
     return {
-      todosDir: path.join(cwd, TODO_DIRECTORIES[0]),
-      entries: [],
-      issues: [`No todo directory found. Searched: ${searched.join(", ")}`],
+      todosDir: cwdTodosDir,
+      entries: cwdScan.entries,
+      issues: [],
+      isFallback: false,
     };
   }
 
-  const selected =
-    scans.find((scan) =>
-      scan.entries.some((entry) => entry.toLowerCase().endsWith(".md")),
-    ) ?? scans[0];
-
-  const issues: string[] = [];
-  if (scans.length > 1) {
-    const others = scans
-      .map((scan) => scan.dir)
-      .filter((dir) => dir !== selected.dir)
-      .map((dir) => path.basename(dir));
-    issues.push(
-      `Multiple todo directories found; using ${path.basename(selected.dir)} (also found: ${others.join(", ")})`,
-    );
+  const gitRoot = findGitRoot(cwd);
+  if (gitRoot && gitRoot !== cwd) {
+    const rootTodosDir = path.join(gitRoot, TODO_DIRECTORY_NAME);
+    const rootScan = await readTodoDir(rootTodosDir);
+    if (rootScan.exists) {
+      return {
+        todosDir: rootTodosDir,
+        entries: rootScan.entries,
+        issues: [],
+        isFallback: true,
+      };
+    }
   }
 
-  return { todosDir: selected.dir, entries: selected.entries, issues };
+  return {
+    todosDir: cwdTodosDir,
+    entries: [],
+    issues: [
+      gitRoot && gitRoot !== cwd
+        ? `No todos directory found at ${cwdTodosDir} or ${path.join(gitRoot, TODO_DIRECTORY_NAME)}`
+        : `No todos directory found at ${cwdTodosDir}`,
+    ],
+    isFallback: false,
+  };
 }
 
 function parseSections(body: string): Map<string, string> {
@@ -547,9 +562,12 @@ function formatMarkedTodosEditorText(todoPaths: string[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-async function scanTodos(
-  cwd: string,
-): Promise<{ todosDir: string; roots: TodoRecord[]; issues: string[] }> {
+async function scanTodos(cwd: string): Promise<{
+  todosDir: string;
+  roots: TodoRecord[];
+  issues: string[];
+  isFallback: boolean;
+}> {
   const discovered = await discoverTodoDirectory(cwd);
   const todosDir = discovered.todosDir;
   const issues = [...discovered.issues];
@@ -561,6 +579,8 @@ async function scanTodos(
     .filter((entry): entry is TodoFile => Boolean(entry))
     .sort((a, b) => compareIds(a.id, b.id));
 
+  // When falling back to the git root's todos dir, the contents are still a
+  // dedicated todos folder, so the same warnings apply as the cwd case.
   const unmatchedMarkdownFiles = discovered.entries
     .filter((name) => name.toLowerCase().endsWith(".md"))
     .filter((name) => !isIgnoredTodoFilename(name))
@@ -689,11 +709,13 @@ async function scanTodos(
     roots.push(todo);
   }
 
-  return { todosDir, roots, issues };
+  return { todosDir, roots, issues, isFallback: discovered.isFallback };
 }
 
 class RepoTodosComponent {
   private roots: TodoRecord[] = [];
+  private todosDir: string;
+  private todosDirIsFallback = false;
   private sortMode: SortMode = "number";
   private focusPane: FocusPane = "list";
   private queryFocus: QueryFocus = "none";
@@ -720,6 +742,7 @@ class RepoTodosComponent {
     private onClose: (payload?: MarkedTodosPayload) => void,
     private onEdit: (path: string) => Promise<void>,
   ) {
+    this.todosDir = path.join(cwd, TODO_DIRECTORY_NAME);
     const termWidth = process.stdout.columns ?? 0;
     if (
       termWidth > 0 &&
@@ -754,7 +777,9 @@ class RepoTodosComponent {
 
     try {
       const previousSelection = this.selectedId;
-      const { roots, issues } = await scanTodos(this.cwd);
+      const { todosDir, roots, issues, isFallback } = await scanTodos(this.cwd);
+      this.todosDir = todosDir;
+      this.todosDirIsFallback = isFallback;
       this.roots = roots;
       this.issues = issues;
       this.pruneMarkedIds();
@@ -1096,9 +1121,7 @@ class RepoTodosComponent {
   }
 
   private getTodoDisplayPath(todo: TodoRecord): string {
-    return (
-      path.relative(path.join(this.cwd, "todos"), todo.path) || todo.filename
-    );
+    return path.relative(this.todosDir, todo.path) || todo.filename;
   }
 
   private collectTodosById(): Map<string, TodoRecord> {
@@ -1529,9 +1552,12 @@ class RepoTodosComponent {
       this.focusPane === "list"
         ? this.theme.fg("accent", "[list]")
         : this.theme.fg("accent", "[preview]");
+    const todosDirLabel = this.todosDirIsFallback
+      ? `${formatHomePath(this.todosDir)} (fallback)`
+      : formatHomePath(this.todosDir);
     const subTitle = this.theme.fg(
       "dim",
-      `${formatHomePath(this.cwd)}/todos • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
+      `${todosDirLabel} • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
     );
     const queryValue = this.getQuery();
     const queryDisplay = queryValue || FILTER_INPUT_HINT;
@@ -1628,7 +1654,7 @@ class RepoTodosComponent {
 
 export default function repoTodosExtension(pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
-    description: "Browse ./todos in a read-only tree with preview",
+    description: "Browse repo todos in a read-only tree with preview",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
