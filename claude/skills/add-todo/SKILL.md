@@ -25,7 +25,27 @@ Items stored in `./todos/`. All commands print `key=value` on stdout.
 | `ag-todo next-id [--dir DIR] [PARENT]` | `ag-todo next-id` → `0005`, `ag-todo next-id 0001` → `0001.4` |
 | `ag-todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]` | Scaffold from template |
 | `ag-todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]` | List/filter todos |
-| `ag-todo status ID STATUS [--dir DIR]` | Update status (`open`, `in_progress`, `closed`, `blocked`) |
+| `ag-todo status ID STATUS [--dir DIR]` | Update status (`open`, `in_progress`, `blocked`, `done`, `closed`) |
+
+## Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `open` | not started |
+| `in_progress` | active work |
+| `blocked` | paused on an external dependency (non-terminal) |
+| `done` | implemented, work shipped (terminal success) |
+| `closed` | dropped / superseded / no longer relevant (terminal failure) |
+
+`done` and `closed` are both terminal but **not** interchangeable. Use
+`done` when the work shipped and the ticket carries useful context
+(decisions, acceptance criteria, links to commits) future agents may
+cite as precedent. Use `closed` when the ticket was abandoned and
+should stop appearing as active work but should not be cited as
+delivered.
+
+The `repo-todos` Pi extension renders `done` in success-green and
+`closed` in muted grey, and the `d` toggle hides both terminal states.
 
 ## Item Types
 

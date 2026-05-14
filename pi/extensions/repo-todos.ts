@@ -2,6 +2,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   type Theme,
+  type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import {
   Input,
@@ -99,12 +100,17 @@ const RECOMMENDED_FIELDS = [
   "blocked-by",
   "blocks",
 ] as const;
+// Sort order. `closed` ranks before `done` so the linear progression
+// (open → in_progress → maybe-closed → reopen → done) reads top-down
+// in `sort:state` views; closed items pile above shipped ones, but
+// below active work which is what matters when scanning a long list.
 const STATUS_ORDER = new Map<string, number>([
   ["in_progress", 0],
   ["open", 1],
   ["blocked", 2],
-  ["done", 3],
-  ["unknown", 4],
+  ["closed", 3],
+  ["done", 4],
+  ["unknown", 5],
 ]);
 const STATUS_ALIASES = new Map<string, TodoFrontmatter["status"]>([
   ["todo", "open"],
@@ -115,8 +121,18 @@ const STATUS_ALIASES = new Map<string, TodoFrontmatter["status"]>([
   ["doing", "in_progress"],
   ["blocked", "blocked"],
   ["done", "done"],
-  ["closed", "done"],
   ["completed", "done"],
+  ["closed", "closed"],
+  ["dropped", "closed"],
+  ["wontfix", "closed"],
+]);
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["done", "closed"]);
+const STATUS_COLORS = new Map<string, ThemeColor>([
+  ["in_progress", "accent"],
+  ["open", "warning"],
+  ["blocked", "error"],
+  ["done", "success"],
+  ["closed", "dim"],
 ]);
 const PRIORITY_ORDER = new Map<string, number>([
   ["high", 0],
@@ -443,7 +459,7 @@ function compareTodos(
 }
 
 function hasActiveDescendant(todo: TodoRecord): boolean {
-  if (todo.frontmatter.status !== "done") return true;
+  if (!TERMINAL_STATUSES.has(todo.frontmatter.status)) return true;
   return todo.children.some((child) => hasActiveDescendant(child));
 }
 
@@ -456,16 +472,7 @@ function collectDescendantIds(todo: TodoRecord): string[] {
 }
 
 function renderState(theme: Theme, status: string): string {
-  const color =
-    status === "in_progress"
-      ? "accent"
-      : status === "open"
-        ? "warning"
-        : status === "blocked"
-          ? "error"
-          : status === "done"
-            ? "success"
-            : "muted";
+  const color = STATUS_COLORS.get(status) ?? "muted";
   return theme.fg(color, `[${status}]`);
 }
 
@@ -725,7 +732,7 @@ class RepoTodosComponent {
   private queryFocus: QueryFocus = "none";
   private splitMode: SplitMode = "horizontal";
   private previewVisibleInList = true;
-  private hideDone = true;
+  private hideTerminal = true;
   private selectedId?: string;
   private expanded = new Set<string>();
   private listScroll = 0;
@@ -863,8 +870,8 @@ class RepoTodosComponent {
     return Math.max(minListHeight, candidate);
   }
 
-  private isDone(todo: TodoRecord): boolean {
-    return todo.frontmatter.status === "done";
+  private isTerminal(todo: TodoRecord): boolean {
+    return TERMINAL_STATUSES.has(todo.frontmatter.status);
   }
 
   private getQuery(): string {
@@ -880,13 +887,13 @@ class RepoTodosComponent {
       this.shouldShow(child, parsedQuery),
     );
     const includeViaChildMatch = !parsedQuery.strict && visibleChildren;
-    const visibleByDoneState =
-      !this.hideDone || !this.isDone(todo) || includeViaChildMatch;
-    return visibleByDoneState && (matchesSelf || includeViaChildMatch);
+    const visibleByTerminalState =
+      !this.hideTerminal || !this.isTerminal(todo) || includeViaChildMatch;
+    return visibleByTerminalState && (matchesSelf || includeViaChildMatch);
   }
 
   private getVisibleTree(): VisibleTreeCache {
-    const cacheKey = `${this.dataVersion}|${this.sortMode}|${this.hideDone}|${[...this.expanded].sort().join(",")}`;
+    const cacheKey = `${this.dataVersion}|${this.sortMode}|${this.hideTerminal}|${[...this.expanded].sort().join(",")}`;
     if (this.visibleTreeCache?.key === cacheKey) {
       return this.visibleTreeCache;
     }
@@ -899,8 +906,9 @@ class RepoTodosComponent {
       todoMatchesParsedQuery(todo, parsedQuery);
 
     const hasStrictMatchInSubtree = (todo: TodoRecord): boolean => {
-      const visibleByDoneState = !this.hideDone || !this.isDone(todo);
-      if (visibleByDoneState && matchesSelf(todo)) {
+      const visibleByTerminalState =
+        !this.hideTerminal || !this.isTerminal(todo);
+      if (visibleByTerminalState && matchesSelf(todo)) {
         return true;
       }
       return todo.children.some((child) => hasStrictMatchInSubtree(child));
@@ -1097,8 +1105,8 @@ class RepoTodosComponent {
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
   }
 
-  private toggleHideDone(): void {
-    this.hideDone = !this.hideDone;
+  private toggleHideTerminal(): void {
+    this.hideTerminal = !this.hideTerminal;
     this.invalidateTreeCache();
     this.clampSelectionIntoView(this.getListPaneHeight(this.getBodyHeight()));
     this.previewScroll = 0;
@@ -1435,7 +1443,7 @@ class RepoTodosComponent {
       return;
     }
     if (data === "d") {
-      this.toggleHideDone();
+      this.toggleHideTerminal();
       this.requestRender();
       return;
     }
@@ -1561,7 +1569,7 @@ class RepoTodosComponent {
       : formatHomePath(this.todosDir);
     const subTitle = this.theme.fg(
       "dim",
-      `${todosDirLabel} • ${visibleRows.length} visible • sort:${this.sortMode} • completed:${this.hideDone ? "hidden" : "shown"} • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
+      `${todosDirLabel} • ${visibleRows.length} visible • sort:${this.sortMode} • done/closed:${this.hideTerminal ? "hidden" : "shown"} • preview:${this.previewVisibleInList ? "shown" : "hidden"} • layout:${effectiveSplitMode}${effectiveSplitMode !== this.splitMode ? " (auto)" : ""}`,
     );
     const queryValue = this.getQuery();
     const queryDisplay = queryValue || FILTER_INPUT_HINT;
@@ -1637,7 +1645,7 @@ class RepoTodosComponent {
     }
 
     const footerText =
-      "/ or ctrl-f filter • tab fold • enter focus/unfocus • v preview • t layout • s/S sort • d hide done • m mark • e edit • r rescan • q/esc close";
+      "/ or ctrl-f filter • tab fold • enter focus/unfocus • v preview • t layout • s/S sort • d hide done/closed • m mark • e edit • r rescan • q/esc close";
     const footerExtra =
       this.issues.length > 0
         ? ` • ${this.issues[0]}`

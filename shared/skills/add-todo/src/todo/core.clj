@@ -7,7 +7,7 @@
    Todo (parsed from frontmatter + filename):
      {:id       \"0001\"
       :title    \"My task\"
-      :status   \"open\"          ; open | in_progress | closed | blocked
+      :status   \"open\"          ; open | in_progress | blocked | done | closed
       :priority \"high\"          ; high | medium | low
       :type     \"feature\"       ; feature | bug | refactor | chore
       :labels   [\"MVP\"]         ; vector of strings, may be nil or []

@@ -8,7 +8,14 @@
      todo list [--status S] [--type T] [--priority P] [--parent ID] [--label L] [--dir DIR]
      todo new --type TYPE --slug SLUG [--title T] [--priority P] [--parent ID] [--labels L] [--dir DIR]
      todo next-id [--dir DIR] [PARENT]
-     todo status ID STATUS [--dir DIR]"
+     todo status ID STATUS [--dir DIR]
+
+   Status values:
+     open         not started
+     in_progress  active work
+     blocked      paused on external dependency (non-terminal)
+     done         shipped (terminal success)
+     closed       dropped / superseded / no longer relevant (terminal failure)"
   (:require [babashka.cli :as cli]
             [babashka.fs :as fs]
             [clojure.string :as str]
@@ -43,7 +50,7 @@
 ;; ---------------------------------------------------------------------------
 
 (def list-spec
-  {:spec {:status   {:desc "Filter by status (open|in_progress|closed|blocked)"}
+  {:spec {:status   {:desc "Filter by status (open|in_progress|blocked|done|closed)"}
           :type     {:desc "Filter by type (feature|bug|refactor|chore)"}
           :priority {:desc "Filter by priority (high|medium|low)"}
           :parent   {:desc "Show only sub-tasks of PARENT ID"}
@@ -144,7 +151,7 @@
           :dir        {:desc "Todos directory" :default "./todos"}}
    :args->opts [:id :new-status]})
 
-(def valid-statuses #{"open" "in_progress" "closed" "blocked"})
+(def valid-statuses #{"open" "in_progress" "blocked" "done" "closed"})
 
 (defn cmd-status [{:keys [opts]}]
   (let [{:keys [id new-status dir]} opts]
@@ -154,7 +161,7 @@
       (System/exit 1))
     (when-not (valid-statuses new-status)
       (binding [*out* *err*]
-        (println "error: status must be open|in_progress|closed|blocked"))
+        (println "error: status must be open|in_progress|blocked|done|closed"))
       (System/exit 1))
 
     (let [matches (->> (fs/glob dir (str id "-*.md")) (sort) (first))]

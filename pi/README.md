@@ -170,7 +170,8 @@ What it does:
 
 - scans the current repo `./todos` directory for todo markdown files
 - groups parent items and sub-tasks into a navigable tree
-- treats `done`, `closed`, and `completed` as completed state for filtering
+- treats `done` as terminal-success and `closed` as terminal-failure; both can be hidden together via the `d` toggle
+- accepts `completed` and `dropped`/`wontfix` as legacy aliases for `done` and `closed`
 - shows a responsive list/preview overlay that switches to a stacked vertical split in narrow terminals
 - supports summary and markdown preview modes
 - stays read-only in this first iteration
@@ -192,7 +193,7 @@ Keybindings:
 - `v` — show/hide the preview pane while staying in list view
 - `t` — toggle horizontal/vertical split
 - `s` / `S` — next/previous sort mode
-- `d` — hide/show completed items
+- `d` — hide/show `done` + `closed` items
 - `m` — mark/unmark the selected todo (from list or preview focus)
 - `r` — rescan todos
 - `q` / `esc` — close

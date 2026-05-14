@@ -1,6 +1,6 @@
 ---
 title: ag-todo: support `done` status separately from `closed`
-status: open
+status: done
 priority: low
 type: chore
 labels: []

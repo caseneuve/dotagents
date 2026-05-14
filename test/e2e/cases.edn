@@ -151,6 +151,35 @@
            [:stdout-contains "new_status=closed"]
            [:fs-layout {:contains [["{root}/todos/0001-labeled.md" "status: closed"]]}]]}
 
+   {:scenario :bb-todo-status-accepts-done
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-status-done"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "status" "0001" "done"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 0]
+           [:stdout-contains "old_status=open"]
+           [:stdout-contains "new_status=done"]
+           [:fs-layout {:contains [["{root}/todos/0001-labeled.md" "status: done"]]}]]}
+
+   {:scenario :bb-todo-status-rejects-unknown
+    :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-status-bad"}
+             :fixtures [[:remove "{root}"]
+                        [:dir "{root}/todos"]
+                        [:copy "{fixtures-dir}/todos/0001-labeled.md" "{root}/todos/0001-labeled.md"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}"
+           :run ["bb" "-cp" "{cli}" "-m" "todo.cli"
+                 "status" "0001" "finished"
+                 "--dir" "{root}/todos"]}
+    :then [[:exit-code 1]
+           [:stderr-contains "error: status must be"]
+           [:fs-layout {:contains [["{root}/todos/0001-labeled.md" "status: open"]]}]]}
+
    {:scenario :bb-todo-next-id-increments
     :given {:vars {:root "/tmp/dotagents-e2e-bb-todo-nextid"}
              :fixtures [[:remove "{root}"]

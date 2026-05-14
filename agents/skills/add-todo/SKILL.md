@@ -27,6 +27,26 @@ All commands print parseable `key=value` output on stdout.
 - `refactor`: structural change without intended behavior change, E2E spec optional
 - `chore`: tooling, infra, cleanup, or maintenance, E2E spec optional
 
+## Status values
+
+`status:` is one of:
+
+- `open` — not started
+- `in_progress` — active work
+- `blocked` — paused on an external dependency (non-terminal)
+- `done` — implemented, work shipped (terminal success)
+- `closed` — dropped / superseded / no longer relevant (terminal failure)
+
+`done` and `closed` are both terminal but not interchangeable. Use
+`done` when the work shipped and the ticket carries useful context
+(decisions, acceptance criteria, links to commits) future agents may
+cite as precedent. Use `closed` when the ticket was abandoned and
+should stop appearing as active work but should not be cited as
+delivered.
+
+The `repo-todos` Pi extension renders `done` in success-green and
+`closed` in muted grey, and the `d` toggle hides both terminal states.
+
 ## Sizing rules
 
 Prefer tasks that are small and reviewable: roughly 1-2 hours, a small number of files, and clear acceptance criteria.
