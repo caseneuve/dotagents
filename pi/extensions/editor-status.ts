@@ -130,14 +130,15 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
 
         gitStatsCache = getGitStats(gitStatsCache);
         const rightLabel =
-          formatGitStatsPlainCompact(gitStatsCache.stats) ?? "";
+          formatGitStatsPlainCompact(gitStatsCache.stats) ?? "✓";
         lines[0] = renderTopBorder(
           width,
           this.borderColor.bind(this),
           (text) => fullTheme.fg("accent", text),
           buildLeftLabel(state),
           rightLabel,
-          formatGitStatsStyledCompact(fullTheme, gitStatsCache.stats) ?? "",
+          formatGitStatsStyledCompact(fullTheme, gitStatsCache.stats) ??
+            fullTheme.fg("dim", "✓"),
         );
         return lines;
       }
