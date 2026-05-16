@@ -1096,6 +1096,37 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("transport", {
     description:
       "Switch transport (usage: /transport [file|uds|http <url>|auto])",
+    getArgumentCompletions: (prefix) => {
+      const p = prefix.toLowerCase();
+      const options = [
+        {
+          label: "file",
+          value: "file",
+          description: "use local file transport",
+        },
+        {
+          label: "uds",
+          value: "uds",
+          description:
+            "use unix socket transport (arg optional: socket path)",
+        },
+        {
+          label: "http",
+          value: "http ",
+          description: "use HTTP relay transport (requires URL)",
+        },
+        {
+          label: "auto",
+          value: "auto",
+          description: "auto-detect best available transport",
+        },
+      ];
+      return options.filter(
+        (option) =>
+          option.value.toLowerCase().startsWith(p) ||
+          option.label.toLowerCase().startsWith(p),
+      );
+    },
     handler: async (args, ctx) => {
       const parts = args.trim().split(/\s+/);
       const mode = parts[0]?.toLowerCase();
