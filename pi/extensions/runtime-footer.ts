@@ -962,8 +962,11 @@ function renderSide(
         : block.styled;
 
     if (parts.length > 0) {
-      if (pendingSeparator) parts.push(renderedSeparator);
-      parts.push(" ");
+      if (pendingSeparator) {
+        parts.push(renderedSeparator);
+      } else {
+        parts.push(" ");
+      }
     }
 
     parts.push(renderedBlock);
