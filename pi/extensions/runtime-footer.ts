@@ -854,8 +854,8 @@ function shouldTruncateBlock(
   blockId: string,
   truncateBlocks: string[] | null,
 ): boolean {
-  if (!truncateBlocks || truncateBlocks.length === 0) return true;
   if (blockId === "sep" || blockId === "S") return false;
+  if (!truncateBlocks || truncateBlocks.length === 0) return true;
 
   if (truncateBlocks.includes(blockId)) return true;
   if (blockId === "git-branch" || blockId === "git-diff" || blockId === "git") {
