@@ -1,6 +1,6 @@
 ---
 title: runtime footer inline text block
-status: in_progress
+status: done
 priority: medium
 type: feature
 labels: []
