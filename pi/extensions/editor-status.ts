@@ -44,7 +44,8 @@ function buildLeftLabel(state: EditorStatusState): string {
 function renderTopBorder(
   width: number,
   borderColor: (text: string) => string,
-  theme: ExtensionContext["ui"]["theme"],
+  colorAccent: (text: string) => string,
+  colorDim: (text: string) => string,
   leftLabel: string,
   rightLabel: string,
 ): string {
@@ -65,14 +66,14 @@ function renderTopBorder(
   const rightWidth = right ? visibleWidth(right) : 0;
 
   if (!right || leftWidth + MIN_GAP + rightWidth > width) {
-    const leftRendered = borderColor("─") + theme.fg("accent", plainLeft);
+    const leftRendered = borderColor("─") + colorAccent(plainLeft);
     return truncateToWidth(`${leftRendered}${borderColor(full)}`, width);
   }
 
   const gap = Math.max(MIN_GAP, width - leftWidth - rightWidth);
-  const leftRendered = borderColor("─") + theme.fg("accent", plainLeft);
+  const leftRendered = borderColor("─") + colorAccent(plainLeft);
   const mid = borderColor("─".repeat(Math.max(0, gap - 1)));
-  const rightRendered = theme.fg("dim", right);
+  const rightRendered = colorDim(right);
   return truncateToWidth(`${leftRendered}${mid}${rightRendered}`, width);
 }
 
@@ -80,7 +81,9 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
   let state = readInitialState(ctx);
   let gitStatsCache: GitStatsCache | undefined;
 
-  ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+  const fullTheme = ctx.ui.theme;
+
+  ctx.ui.setEditorComponent((tui, _theme, keybindings) => {
     const disposeName = pi.events.on("agent-channel:name", (value: unknown) => {
       if (typeof value === "string" && value.trim().length > 0) {
         state = { ...state, name: value.trim() };
@@ -106,7 +109,8 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
         lines[0] = renderTopBorder(
           width,
           this.borderColor.bind(this),
-          theme,
+          (text) => fullTheme.fg("accent", text),
+          (text) => fullTheme.fg("dim", text),
           buildLeftLabel(state),
           rightLabel,
         );
