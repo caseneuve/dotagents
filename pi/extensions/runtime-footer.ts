@@ -110,6 +110,7 @@ const KNOWN_BLOCKS = new Set<FooterBlockId>([
   "project",
   "git",
 ]);
+const SEPARATOR_BLOCKS = new Set(["sep", "S"]);
 
 const THINKING_BLOCK_CHARS = new Set(["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]);
 const CONTEXT_BLOCK_GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
@@ -865,6 +866,10 @@ function shouldTruncateBlock(
   return false;
 }
 
+function isSeparatorToken(token: string): boolean {
+  return SEPARATOR_BLOCKS.has(token);
+}
+
 function renderSide(
   blockIds: string[],
   separator: string,
@@ -880,13 +885,58 @@ function renderSide(
   statuses: Map<string, string | undefined>,
   commsActive: boolean,
 ): string {
-  const parts: string[] = [];
+  const explicitSeparators = blockIds.some(isSeparatorToken);
+  const renderedSeparator = theme.fg("dim", normalizeTabs(separator));
 
-  for (const rawBlockId of blockIds) {
-    if (!KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)) continue;
+  if (!explicitSeparators) {
+    const parts: string[] = [];
+
+    for (const rawBlockId of blockIds) {
+      if (!KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)) continue;
+
+      const block = renderBlock({
+        blockId: rawBlockId as FooterBlockId,
+        theme,
+        ctx,
+        pi,
+        config,
+        gitBranch,
+        gitStats,
+        projectName,
+        statuses,
+        commsActive,
+      });
+
+      if (block) {
+        if (
+          truncate &&
+          shouldTruncateBlock(rawBlockId, truncateBlocks) &&
+          visibleWidth(block.plain) > truncate
+        ) {
+          const shortened = clipPlainTextToWidth(block.plain, truncate);
+          parts.push(theme.fg(block.tone, `${shortened}… `));
+        } else {
+          parts.push(block.styled);
+        }
+      }
+    }
+
+    return parts.join(renderedSeparator);
+  }
+
+  const parts: string[] = [];
+  let pendingSeparator = false;
+
+  for (const token of blockIds) {
+    if (isSeparatorToken(token)) {
+      if (parts.length > 0) pendingSeparator = true;
+      continue;
+    }
+
+    if (!KNOWN_BLOCKS.has(token as FooterBlockId)) continue;
 
     const block = renderBlock({
-      blockId: rawBlockId as FooterBlockId,
+      blockId: token as FooterBlockId,
       theme,
       ctx,
       pi,
@@ -897,22 +947,28 @@ function renderSide(
       statuses,
       commsActive,
     });
+    if (!block) continue;
 
-    if (block) {
-      if (
-        truncate &&
-        shouldTruncateBlock(rawBlockId, truncateBlocks) &&
-        visibleWidth(block.plain) > truncate
-      ) {
-        const shortened = clipPlainTextToWidth(block.plain, truncate);
-        parts.push(theme.fg(block.tone, `${shortened}… `));
-      } else {
-        parts.push(block.styled);
-      }
+    const renderedBlock =
+      truncate &&
+      shouldTruncateBlock(token, truncateBlocks) &&
+      visibleWidth(block.plain) > truncate
+        ? theme.fg(
+            block.tone,
+            `${clipPlainTextToWidth(block.plain, truncate)}… `,
+          )
+        : block.styled;
+
+    if (parts.length > 0) {
+      if (pendingSeparator) parts.push(renderedSeparator);
+      parts.push(" ");
     }
+
+    parts.push(renderedBlock);
+    pendingSeparator = false;
   }
 
-  return parts.join(theme.fg("dim", normalizeTabs(separator)));
+  return parts.join("");
 }
 
 function clipPlainTextToWidth(text: string, maxWidth: number): string {

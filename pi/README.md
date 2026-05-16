@@ -75,7 +75,10 @@ Configuration:
 - when both local and global exist, local takes precedence
 - open/create config via `/runtime-footer-config` (global default) or `/runtime-footer-config local`
 - command-created config includes inline comments and all available options
-- `separator` controls the delimiter between blocks (default: `·`)
+- `separator` controls the delimiter token (default: `·`)
+- explicit separator pseudo-blocks `sep` (and alias `S`) can be placed in `left`/`right` for precise separator placement
+- backward compatibility: when no `sep`/`S` tokens are present on a side, separators are inserted implicitly between rendered blocks (legacy behavior)
+- when explicit separator tokens are used, blocks still keep baseline spacing for readability
 - `truncate` (number or `null`) crops eligible blocks to visible width and appends `… ` (default: `null`, disabled)
 - `truncateBlocks` (optional string array) limits truncation to selected block ids; when omitted or empty, all blocks remain truncation-eligible
 - special truncation matching: `git` in `truncateBlocks` applies to `git-branch` and `git-diff`
@@ -95,7 +98,8 @@ Config shape:
   // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
 
-  // Separator inserted between rendered blocks.
+  // Separator token text (used implicitly between blocks,
+  // or explicitly via `sep` / `S` pseudo-blocks).
   "separator": " · ",
 
   // Optional per-block truncation (visible width). Use null to disable.
@@ -138,6 +142,9 @@ Config shape:
 
 Available block ids:
 
+- `sep` (explicit separator pseudo-block)
+- `S` (alias for `sep`)
+
 - `cwd`
 - `project` (git root dir name when available, otherwise current dir name)
 - `git-branch`
@@ -150,6 +157,17 @@ Available block ids:
 - `thinking`
 - `cost`
 - `context`
+
+Explicit separator example:
+
+```jsonc
+{
+  "left": ["cwd", "sep", "project", "session-notes"],
+  "separator": " · ",
+}
+```
+
+This renders the configured separator token only where `sep`/`S` appears, while preserving at least one baseline space between non-separator blocks.
 
 Why it exists:
 
