@@ -675,6 +675,18 @@ function contextHeatTone(
   return "error";
 }
 
+function thinkingBlockTone(
+  level: string,
+): "dim" | "success" | "accent" | "warning" | "error" {
+  const normalized = level.trim().toLowerCase();
+  if (normalized === "off" || normalized === "minimal") return "dim";
+  if (normalized === "low") return "success";
+  if (normalized === "medium") return "accent";
+  if (normalized === "high") return "warning";
+  if (normalized === "xhigh") return "error";
+  return "dim";
+}
+
 function contextBarText(percent: number, width: number): string {
   const fill = Math.max(
     0,
@@ -784,7 +796,8 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
           config.thinking.mapping[level.toLowerCase()] ??
           config.thinking.mapping[level] ??
           "▁";
-        return { plain: glyph, styled: theme.fg("dim", glyph), tone: "dim" };
+        const tone = thinkingBlockTone(level);
+        return { plain: glyph, styled: theme.fg(tone, glyph), tone };
       }
       return { plain: level, styled: theme.fg("dim", level), tone: "dim" };
     }
