@@ -1,6 +1,6 @@
 ---
 title: runtime footer selective truncation blocks
-status: open
+status: in_progress
 priority: medium
 type: feature
 labels: []
