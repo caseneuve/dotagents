@@ -78,7 +78,7 @@ function renderTopBorder(
   const leftWidth = visibleWidth(plainLeft);
   const leftSegmentWidth = 1 + leftWidth;
   const rightWidth = right ? visibleWidth(right) : 0;
-  const rightSegmentWidth = rightWidth > 0 ? rightWidth + 1 : 0;
+  const rightSegmentWidth = rightWidth > 0 ? rightWidth + 3 : 0;
 
   if (!right || width - leftSegmentWidth - rightSegmentWidth < MIN_GAP) {
     const tailWidth = Math.max(0, width - leftSegmentWidth);
@@ -94,7 +94,9 @@ function renderTopBorder(
     borderColor("─") +
     colorAccent(plainLeft) +
     borderColor("─".repeat(gapWidth)) +
+    " " +
     rightStyled +
+    " " +
     borderColor("─")
   );
 }
