@@ -73,6 +73,7 @@ Configuration:
 - global config path: `~/.pi/agent/runtime-footer.json`
 - when both exist, project-local config takes precedence over global
 - open/create config via `/runtime-footer-config` (global default) or `/runtime-footer-config local`
+- `separator` controls the delimiter between blocks (default: `·`)
 - unknown block ids are ignored safely
 
 Config shape:
@@ -81,6 +82,7 @@ Config shape:
 {
   "left": ["cwd", "git", "session-notes", "comms"],
   "right": ["provider", "model", "thinking", "cost", "context"],
+  "separator": " · ",
   "branchStatusLine": true
 }
 ```

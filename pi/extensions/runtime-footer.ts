@@ -57,6 +57,7 @@ type FooterBlockId =
 type RuntimeFooterConfig = {
   left: string[];
   right: string[];
+  separator: string;
   branchStatusLine: boolean;
 };
 
@@ -93,6 +94,7 @@ function defaultConfig(): RuntimeFooterConfig {
   return {
     left: [...DEFAULT_LEFT_BLOCKS],
     right: [...DEFAULT_RIGHT_BLOCKS],
+    separator: " · ",
     branchStatusLine: true,
   };
 }
@@ -110,6 +112,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
   const data = value as {
     left?: unknown;
     right?: unknown;
+    separator?: unknown;
     branchStatusLine?: unknown;
   };
 
@@ -121,6 +124,8 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
   return {
     left: parseSide(data.left, base.left),
     right: parseSide(data.right, base.right),
+    separator:
+      typeof data.separator === "string" ? data.separator : base.separator,
     branchStatusLine:
       typeof data.branchStatusLine === "boolean"
         ? data.branchStatusLine
@@ -479,6 +484,7 @@ function renderBlock(params: RenderBlockParams): string | undefined {
 
 function renderSide(
   blockIds: string[],
+  separator: string,
   theme: ExtensionContext["ui"]["theme"],
   ctx: ExtensionContext,
   pi: ExtensionAPI,
@@ -508,7 +514,7 @@ function renderSide(
     }
   }
 
-  return parts.join(theme.fg("dim", " · "));
+  return parts.join(theme.fg("dim", separator));
 }
 
 function renderFooterLine(width: number, left: string, right: string): string {
@@ -669,6 +675,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
 
           const left = renderSide(
             configCache.config.left,
+            configCache.config.separator,
             theme,
             ctx,
             pi,
@@ -679,6 +686,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
           );
           const right = renderSide(
             configCache.config.right,
+            configCache.config.separator,
             theme,
             ctx,
             pi,
