@@ -8,7 +8,7 @@ const COMMAND_NAME = "diff-review";
 const ALIAS_COMMAND_NAME = "diff";
 const REVIEW_DIR = path.join(os.tmpdir(), "pi-diff-reviews");
 
-type DiffMode = "worktree" | "staged" | "dirty";
+type DiffMode = "worktree" | "staged" | "dirty" | "dirty-all";
 
 type ReviewComment = {
   file?: string;
@@ -39,6 +39,9 @@ function parseArgs(args: string): ParsedArgs {
   }
   if (trimmed === "dirty") {
     return { ok: true, mode: "dirty" };
+  }
+  if (trimmed === "dirty-all") {
+    return { ok: true, mode: "dirty-all" };
   }
   if (trimmed.includes("\n")) {
     return {
@@ -72,9 +75,50 @@ function git(args: string[]): GitResult {
 function diffArgs(parsed: Extract<ParsedArgs, { ok: true }>): string[] {
   const common = ["diff", "--find-renames", "--find-copies"];
   if (parsed.mode === "staged") return [...common, "--cached"];
-  if (parsed.mode === "dirty") return [...common, "HEAD"];
+  if (parsed.mode === "dirty" || parsed.mode === "dirty-all")
+    return [...common, "HEAD"];
   if (parsed.revspec) return [...common, parsed.revspec];
   return common;
+}
+
+function gitOutputAllowingDiffExit(args: string[]): GitResult {
+  const result = spawnSync("git", args, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 5000,
+  });
+
+  if (result.error) {
+    return { ok: false, message: result.error.message };
+  }
+
+  if (result.status === 0 || result.status === 1) {
+    return { ok: true, stdout: result.stdout ?? "" };
+  }
+
+  return { ok: false, message: (result.stderr || "git command failed").trim() };
+}
+
+function buildUntrackedDiff(): GitResult {
+  const list = git(["ls-files", "--others", "--exclude-standard"]);
+  if (!list.ok) return list;
+
+  const files = list.stdout
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (files.length === 0) return { ok: true, stdout: "" };
+
+  const chunks: string[] = [];
+  for (const file of files) {
+    const patch = gitOutputAllowingDiffExit(["diff", "--no-index", "--", "/dev/null", file]);
+    if (!patch.ok) return patch;
+    if (patch.stdout.trim()) chunks.push(patch.stdout.trimEnd());
+  }
+
+  return { ok: true, stdout: chunks.join("\n\n") + (chunks.length ? "\n" : "") };
 }
 
 function timestamp(): string {
@@ -257,7 +301,12 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
           {
             label: "dirty",
             value: "dirty",
-            description: "review staged + unstaged changes against HEAD",
+            description: "review staged + unstaged tracked changes against HEAD",
+          },
+          {
+            label: "dirty-all",
+            value: "dirty-all",
+            description: "dirty + include untracked file patches",
           },
           {
             label: "latest",
@@ -305,7 +354,23 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
             );
             return;
           }
-          const diff = diffResult.stdout;
+
+          let diff = diffResult.stdout;
+          if (parsed.mode === "dirty-all") {
+            const untracked = buildUntrackedDiff();
+            if (!untracked.ok) {
+              ctx.ui.notify(
+                `Failed to read untracked file diffs: ${untracked.message}`,
+                "error",
+              );
+              return;
+            }
+            if (untracked.stdout.trim()) {
+              diff = diff.trim()
+                ? `${diff.trimEnd()}\n\n${untracked.stdout.trimEnd()}\n`
+                : `${untracked.stdout.trimEnd()}\n`;
+            }
+          }
           if (!diff.trim()) {
             ctx.ui.notify("No diff to review", "info");
             return;
