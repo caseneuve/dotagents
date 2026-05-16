@@ -1,6 +1,5 @@
 .clj-kondo/
 .lsp/
-.pi/playwright-policy.json
-.pi/playwright/screenshots/
+.pi/
 .reviews/
 node_modules/
