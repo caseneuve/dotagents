@@ -83,7 +83,7 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
 
   const fullTheme = ctx.ui.theme;
 
-  ctx.ui.setEditorComponent((tui, _theme, keybindings) => {
+  ctx.ui.setEditorComponent((tui, theme, keybindings) => {
     const disposeName = pi.events.on("agent-channel:name", (value: unknown) => {
       if (typeof value === "string" && value.trim().length > 0) {
         state = { ...state, name: value.trim() };
