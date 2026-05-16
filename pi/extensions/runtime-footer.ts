@@ -14,9 +14,15 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  formatGitStatsPlain,
+  formatGitStatsStyled,
+  getGitStats,
+  type GitStats,
+  type GitStatsCache,
+} from "./runtime-status-git";
 
 const MIN_GAP = 2;
-const GIT_STATS_TTL_MS = 2000;
 const PROJECT_NAME_TTL_MS = 2000;
 const CONFIG_CHECK_TTL_MS = 1000;
 
@@ -29,20 +35,6 @@ const GLOBAL_CONFIG_PATH_JSONC = path.join(
   "runtime-footer.jsonc",
 );
 const GLOBAL_CONFIG_PATH_JSON = path.join(getAgentDir(), "runtime-footer.json");
-
-type GitStats = {
-  addedLines: number;
-  removedLines: number;
-  changedFiles: number;
-  addedFiles: number;
-  untrackedFiles: number;
-};
-
-type GitStatsCache = {
-  cwd: string;
-  checkedAt: number;
-  stats: GitStats | null;
-};
 
 type ProjectNameCache = {
   cwd: string;
@@ -100,9 +92,7 @@ type FooterConfigCache = {
 const DEFAULT_LEFT_BLOCKS: FooterBlockId[] = [
   "cwd",
   "git-branch",
-  "git-diff",
   "session-notes",
-  "comms",
 ];
 
 const DEFAULT_RIGHT_BLOCKS: FooterBlockId[] = [
@@ -156,7 +146,7 @@ function defaultConfig(): RuntimeFooterConfig {
 function defaultConfigText(): string {
   return `{
   // Ordered block ids rendered on the left side.
-  "left": ["cwd", "git-branch", "git-diff", "session-notes", "comms"],
+  "left": ["cwd", "git-branch", "session-notes"],
 
   // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
@@ -620,80 +610,6 @@ function runGit(args: string[]): string | null {
   }
 }
 
-function emptyGitStats(): GitStats {
-  return {
-    addedLines: 0,
-    removedLines: 0,
-    changedFiles: 0,
-    addedFiles: 0,
-    untrackedFiles: 0,
-  };
-}
-
-function readGitStats(): GitStats | null {
-  const status = runGit(["status", "--porcelain=v1"]);
-  if (status === null) {
-    return null;
-  }
-
-  const stats = emptyGitStats();
-  for (const line of status.split("\n")) {
-    if (!line) continue;
-
-    const x = line[0];
-    const y = line[1];
-    if (x === "?" && y === "?") {
-      stats.untrackedFiles += 1;
-      continue;
-    }
-
-    stats.changedFiles += 1;
-    if (x === "A" || y === "A") {
-      stats.addedFiles += 1;
-    }
-  }
-
-  const numstat = runGit(["diff", "--numstat", "HEAD", "--"]);
-  if (numstat !== null) {
-    for (const line of numstat.split("\n")) {
-      if (!line) continue;
-      const [added, removed] = line.split("\t");
-      if (added !== "-") {
-        stats.addedLines += Number.parseInt(added, 10) || 0;
-      }
-      if (removed !== "-") {
-        stats.removedLines += Number.parseInt(removed, 10) || 0;
-      }
-    }
-  }
-
-  if (
-    stats.addedLines === 0 &&
-    stats.removedLines === 0 &&
-    stats.changedFiles === 0 &&
-    stats.addedFiles === 0 &&
-    stats.untrackedFiles === 0
-  ) {
-    return null;
-  }
-
-  return stats;
-}
-
-function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
-  const now = Date.now();
-  const cwd = process.cwd();
-  if (cache && cache.cwd === cwd && now - cache.checkedAt < GIT_STATS_TTL_MS) {
-    return cache;
-  }
-
-  return {
-    cwd,
-    checkedAt: now,
-    stats: readGitStats(),
-  };
-}
-
 function getProjectName(cache: ProjectNameCache | undefined): ProjectNameCache {
   const now = Date.now();
   const cwd = process.cwd();
@@ -710,50 +626,6 @@ function getProjectName(cache: ProjectNameCache | undefined): ProjectNameCache {
     checkedAt: now,
     name: computeProjectName(),
   };
-}
-
-/**
- * Plain-text git stats used for per-block truncation decisions.
- * Styling is applied separately in formatGitStats().
- */
-function formatGitStatsPlain(stats: GitStats | null): string | null {
-  if (!stats) return null;
-
-  const fileParts = [String(stats.changedFiles)];
-  if (stats.addedFiles > 0) {
-    fileParts.push(`A${stats.addedFiles}`);
-  }
-  if (stats.untrackedFiles > 0) {
-    fileParts.push(`?${stats.untrackedFiles}`);
-  }
-
-  return `[+${stats.addedLines}/-${stats.removedLines} (${fileParts.join(", ")})]`;
-}
-
-function formatGitStats(
-  theme: ExtensionContext["ui"]["theme"],
-  stats: GitStats | null,
-): string | null {
-  if (!stats) return null;
-
-  const fileParts = [theme.fg("dim", String(stats.changedFiles))];
-  if (stats.addedFiles > 0) {
-    fileParts.push(theme.fg("success", `A${stats.addedFiles}`));
-  }
-  if (stats.untrackedFiles > 0) {
-    fileParts.push(theme.fg("warning", `?${stats.untrackedFiles}`));
-  }
-
-  return `${theme.fg("dim", "[")}${theme.fg(
-    "success",
-    `+${stats.addedLines}`,
-  )}${theme.fg("dim", "/")}${theme.fg(
-    "error",
-    `-${stats.removedLines}`,
-  )} ${theme.fg("dim", "(")}${fileParts.join(theme.fg("dim", ", "))}${theme.fg(
-    "dim",
-    ")]",
-  )}`;
 }
 
 function formatCost(ctx: ExtensionContext): string | null {
@@ -868,7 +740,7 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
     case "git": {
       if (!gitBranch) return undefined;
       const statsPlain = formatGitStatsPlain(gitStats);
-      const statsStyled = formatGitStats(theme, gitStats);
+      const statsStyled = formatGitStatsStyled(theme, gitStats);
       const plain = statsPlain ? `${gitBranch} ${statsPlain}` : gitBranch;
       const branch = theme.fg("dim", gitBranch);
       const styled = statsStyled ? `${branch} ${statsStyled}` : branch;
@@ -884,7 +756,7 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
     }
     case "git-diff": {
       const statsPlain = formatGitStatsPlain(gitStats);
-      const statsStyled = formatGitStats(theme, gitStats);
+      const statsStyled = formatGitStatsStyled(theme, gitStats);
       if (!statsPlain || !statsStyled) return undefined;
       return { plain: statsPlain, styled: statsStyled, tone: "dim" };
     }

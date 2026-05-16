@@ -2,8 +2,6 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { CustomEditor } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -461,31 +459,10 @@ export default function (pi: ExtensionAPI) {
       pi.appendEntry("agent-channel-identity", identityToData(identity));
     }
     pi.events.emit("agent-channel:name", agentName());
+    pi.events.emit("agent-channel:comms", !commsMuted);
+    pi.appendEntry("agent-channel-comms", { active: !commsMuted });
     if (ctx.hasUI) {
       ctx.ui.setStatus("agent-name", agentName());
-      const fullTheme = ctx.ui.theme;
-      ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-        const editor = new (class extends CustomEditor {
-          render(width: number): string[] {
-            const lines = super.render(width);
-            if (lines.length > 0 && width > 0) {
-              const label = ` ${agentName()} `;
-              const labelWidth = visibleWidth(label);
-              if (labelWidth + 2 <= width) {
-                const styledLabel = fullTheme.fg("accent", label);
-                const b = "─";
-                const afterLabel = width - 1 - labelWidth;
-                lines[0] =
-                  this.borderColor(b) +
-                  styledLabel +
-                  this.borderColor(b.repeat(afterLabel));
-              }
-            }
-            return lines;
-          }
-        })(tui, theme, keybindings);
-        return editor;
-      });
     }
 
     // Populate watchedChannels from restored session state + auto-add
@@ -1050,6 +1027,7 @@ export default function (pi: ExtensionAPI) {
   ): Promise<void> {
     const state = commsMuted ? "OFF 🔇" : "ON 📡";
     pi.events.emit("agent-channel:comms", !commsMuted);
+    pi.appendEntry("agent-channel-comms", { active: !commsMuted });
     ctx.ui.setStatus("agent-comms", commsMuted ? "🔇 comms off" : "");
     ctx.ui.notify(`Comms ${state}`, "info");
     if (display instanceof TmuxDisplay) {

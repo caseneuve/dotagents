@@ -60,7 +60,7 @@ Replaces the default footer with a denser single-line runtime status.
 What it does:
 
 - renders an ordered left/right footer from configurable blocks
-- defaults to cwd + git-branch + git-diff + session-notes + comms on the left
+- defaults to cwd + git-branch + session-notes on the left
 - defaults to provider + model + thinking + cost + context on the right
 - shows compact dirty-worktree stats beside git, e.g. `[+13/-4 (3, A1, ?2)]`
 - removes the noisier token counters from the default footer
@@ -88,7 +88,7 @@ Config shape:
 ```jsonc
 {
   // Ordered block ids rendered on the left side.
-  "left": ["cwd", "git-branch", "git-diff", "session-notes", "comms"],
+  "left": ["cwd", "git-branch", "session-notes"],
 
   // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
@@ -148,6 +148,23 @@ Why it exists:
 
 - fit the most useful runtime context into one readable line
 - reduce footer noise while keeping model, cost, and context pressure visible
+
+### `extensions/editor-status.ts`
+
+Owns editor top-border status rendering (single owner for `setEditorComponent`).
+
+What it does:
+
+- renders agent status in the editor upper border
+- left side: agent name plus optional comms icon (`📡`) when comms are on
+- right side: git diff summary using shared runtime git status formatting
+- degrades gracefully when outside git repos or when git calls fail
+
+Why it exists:
+
+- prevent extension overwrite races on `setEditorComponent`
+- move high-signal comms/diff context closer to the editor
+- keep footer less crowded by default
 
 ### `extensions/diff-review.ts`
 
@@ -489,6 +506,7 @@ with pluggable backends for status and notifications.
 What it does:
 
 - registers channel\_\* tools for file-based inter-agent messaging via `~/.agent-channels/`
+- publishes agent-name/comms state events consumed by `editor-status`
 - auto-detects the best available backend: cmux (macOS sidebar), tmux (pane titles + status-right), or file-only fallback
 - injects incoming messages into the conversation with turn-control (OVER/OUT protocol)
 - persists agent identity and watch list across session reloads
