@@ -1,4 +1,13 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -8,6 +17,17 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const MIN_GAP = 2;
 const GIT_STATS_TTL_MS = 2000;
+const CONFIG_CHECK_TTL_MS = 1000;
+
+const COMMAND_NAME = "runtime-footer-config";
+const CONFIG_CHANGED_EVENT = "runtime-footer:config-changed";
+const PROJECT_CONFIG_RELATIVE_PATH = ".pi/runtime-footer.json";
+const GLOBAL_CONFIG_PATH = path.join(
+  os.homedir(),
+  ".pi",
+  "agent",
+  "runtime-footer.json",
+);
 
 type GitStats = {
   addedLines: number;
@@ -22,6 +42,172 @@ type GitStatsCache = {
   checkedAt: number;
   stats: GitStats | null;
 };
+
+type FooterBlockId =
+  | "cwd"
+  | "git"
+  | "session-notes"
+  | "comms"
+  | "provider"
+  | "model"
+  | "thinking"
+  | "cost"
+  | "context";
+
+type RuntimeFooterConfig = {
+  left: string[];
+  right: string[];
+  branchStatusLine: boolean;
+};
+
+type FooterConfigCache = {
+  cwd: string;
+  checkedAt: number;
+  sourcePath: string | null;
+  sourceMtimeMs: number | null;
+  config: RuntimeFooterConfig;
+  error?: string;
+};
+
+const DEFAULT_LEFT_BLOCKS: FooterBlockId[] = [
+  "cwd",
+  "git",
+  "session-notes",
+  "comms",
+];
+
+const DEFAULT_RIGHT_BLOCKS: FooterBlockId[] = [
+  "provider",
+  "model",
+  "thinking",
+  "cost",
+  "context",
+];
+
+const KNOWN_BLOCKS = new Set<FooterBlockId>([
+  ...DEFAULT_LEFT_BLOCKS,
+  ...DEFAULT_RIGHT_BLOCKS,
+]);
+
+function defaultConfig(): RuntimeFooterConfig {
+  return {
+    left: [...DEFAULT_LEFT_BLOCKS],
+    right: [...DEFAULT_RIGHT_BLOCKS],
+    branchStatusLine: true,
+  };
+}
+
+function defaultConfigText(): string {
+  return `${JSON.stringify(defaultConfig(), null, 2)}\n`;
+}
+
+function parseConfig(value: unknown): RuntimeFooterConfig | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const base = defaultConfig();
+  const data = value as {
+    left?: unknown;
+    right?: unknown;
+    branchStatusLine?: unknown;
+  };
+
+  const parseSide = (side: unknown, fallback: string[]): string[] => {
+    if (!Array.isArray(side)) return fallback;
+    return side.filter((item): item is string => typeof item === "string");
+  };
+
+  return {
+    left: parseSide(data.left, base.left),
+    right: parseSide(data.right, base.right),
+    branchStatusLine:
+      typeof data.branchStatusLine === "boolean"
+        ? data.branchStatusLine
+        : base.branchStatusLine,
+  };
+}
+
+function projectConfigPath(cwd: string): string {
+  return path.join(cwd, PROJECT_CONFIG_RELATIVE_PATH);
+}
+
+function resolveConfigSourcePath(cwd: string): string | null {
+  const projectPath = projectConfigPath(cwd);
+  if (existsSync(projectPath)) return projectPath;
+  if (existsSync(GLOBAL_CONFIG_PATH)) return GLOBAL_CONFIG_PATH;
+  return null;
+}
+
+function readFooterConfig(
+  cwd: string,
+  previous: FooterConfigCache | undefined,
+): FooterConfigCache {
+  const now = Date.now();
+
+  if (
+    previous &&
+    previous.cwd === cwd &&
+    now - previous.checkedAt < CONFIG_CHECK_TTL_MS
+  ) {
+    return previous;
+  }
+
+  const sourcePath = resolveConfigSourcePath(cwd);
+  const fallback = defaultConfig();
+
+  if (!sourcePath) {
+    return {
+      cwd,
+      checkedAt: now,
+      sourcePath: null,
+      sourceMtimeMs: null,
+      config: fallback,
+    };
+  }
+
+  let sourceMtimeMs: number | null;
+  try {
+    sourceMtimeMs = statSync(sourcePath).mtimeMs;
+  } catch {
+    sourceMtimeMs = null;
+  }
+
+  if (
+    previous &&
+    previous.cwd === cwd &&
+    previous.sourcePath === sourcePath &&
+    previous.sourceMtimeMs === sourceMtimeMs
+  ) {
+    return { ...previous, checkedAt: now };
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(sourcePath, "utf8"));
+    const parsed = parseConfig(raw);
+    if (!parsed) {
+      throw new Error("config root must be an object");
+    }
+
+    return {
+      cwd,
+      checkedAt: now,
+      sourcePath,
+      sourceMtimeMs,
+      config: parsed,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      cwd,
+      checkedAt: now,
+      sourcePath,
+      sourceMtimeMs,
+      config: fallback,
+      error: `${sourcePath}: ${message}`,
+    };
+  }
+}
 
 function formatCwd(): string {
   const cwd = process.cwd();
@@ -236,57 +422,93 @@ function formatContextUsage(
   return theme.fg("dim", text);
 }
 
-function renderLeft(
-  theme: ExtensionContext["ui"]["theme"],
-  gitBranch: string | null,
-  gitStats: GitStats | null,
-  sessionNotesStatus: string | undefined,
-  commsActive: boolean,
-): string {
-  const parts: string[] = [theme.fg("dim", formatCwd())];
+type RenderBlockParams = {
+  blockId: FooterBlockId;
+  theme: ExtensionContext["ui"]["theme"];
+  ctx: ExtensionContext;
+  pi: ExtensionAPI;
+  gitBranch: string | null;
+  gitStats: GitStats | null;
+  statuses: Map<string, string | undefined>;
+  commsActive: boolean;
+};
 
-  if (gitBranch) {
-    const stats = formatGitStats(theme, gitStats);
-    const branch = theme.fg("dim", gitBranch);
-    parts.push(stats ? `${branch} ${stats}` : branch);
+function renderBlock(params: RenderBlockParams): string | undefined {
+  const {
+    blockId,
+    theme,
+    ctx,
+    pi,
+    gitBranch,
+    gitStats,
+    statuses,
+    commsActive,
+  } = params;
+
+  switch (blockId) {
+    case "cwd":
+      return theme.fg("dim", formatCwd());
+    case "git": {
+      if (!gitBranch) return undefined;
+      const branch = theme.fg("dim", gitBranch);
+      const stats = formatGitStats(theme, gitStats);
+      return stats ? `${branch} ${stats}` : branch;
+    }
+    case "session-notes": {
+      const status = statuses.get("session-notes");
+      return status ? theme.fg("dim", status) : undefined;
+    }
+    case "comms":
+      return commsActive ? theme.fg("accent", "📡") : undefined;
+    case "provider":
+      return theme.fg("dim", formatProvider(ctx));
+    case "model":
+      return theme.fg("dim", formatModel(ctx));
+    case "thinking":
+      return theme.fg("dim", formatThinking(pi));
+    case "cost": {
+      const cost = formatCost(ctx);
+      return cost ? theme.fg("dim", cost) : undefined;
+    }
+    case "context":
+      return formatContextUsage(ctx, theme) ?? undefined;
+    default:
+      return undefined;
   }
-
-  if (sessionNotesStatus) {
-    parts.push(theme.fg("dim", sessionNotesStatus));
-  }
-
-  const left = parts.join(theme.fg("dim", " · "));
-
-  if (commsActive) {
-    return `${left} ${theme.fg("accent", "📡")}`;
-  }
-
-  return left;
 }
 
-function renderRight(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
+function renderSide(
+  blockIds: string[],
   theme: ExtensionContext["ui"]["theme"],
+  ctx: ExtensionContext,
+  pi: ExtensionAPI,
+  gitBranch: string | null,
+  gitStats: GitStats | null,
+  statuses: Map<string, string | undefined>,
+  commsActive: boolean,
 ): string {
-  const dimParts: string[] = [
-    formatProvider(ctx),
-    formatModel(ctx),
-    formatThinking(pi),
-  ];
-  const cost = formatCost(ctx);
-  const context = formatContextUsage(ctx, theme);
+  const parts: string[] = [];
 
-  if (cost) {
-    dimParts.push(cost);
+  for (const rawBlockId of blockIds) {
+    if (!KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)) continue;
+
+    const text = renderBlock({
+      blockId: rawBlockId as FooterBlockId,
+      theme,
+      ctx,
+      pi,
+      gitBranch,
+      gitStats,
+      statuses,
+      commsActive,
+    });
+
+    if (text) {
+      parts.push(text);
+    }
   }
 
-  const left = theme.fg("dim", dimParts.join(" · "));
-  if (!context) {
-    return left;
-  }
-
-  return `${left}${theme.fg("dim", " · ")}${context}`;
+  return parts.join(theme.fg("dim", " · "));
 }
 
 function renderFooterLine(width: number, left: string, right: string): string {
@@ -296,12 +518,82 @@ function renderFooterLine(width: number, left: string, right: string): string {
   return truncateToWidth(`${left}${gap}${right}`, width);
 }
 
+function ensureConfigFile(pathname: string): void {
+  mkdirSync(path.dirname(pathname), { recursive: true });
+  if (!existsSync(pathname)) {
+    writeFileSync(pathname, defaultConfigText(), "utf8");
+  }
+}
+
+function openConfigInEditor(pathname: string): {
+  ok: boolean;
+  message: string;
+} {
+  const editorCommand = process.env.VISUAL || process.env.EDITOR;
+  if (!editorCommand) {
+    return {
+      ok: false,
+      message: `Set $VISUAL or $EDITOR. Config path: ${pathname}`,
+    };
+  }
+
+  const [editor, ...editorArgs] = editorCommand.split(" ");
+  if (!editor) {
+    return {
+      ok: false,
+      message: `Invalid editor command. Config path: ${pathname}`,
+    };
+  }
+
+  const result = spawnSync(editor, [...editorArgs, pathname], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+
+  if (result.status && result.status !== 0) {
+    return {
+      ok: false,
+      message: `Editor exited with code ${result.status}`,
+    };
+  }
+
+  return { ok: true, message: `Updated ${pathname}` };
+}
+
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
   let commsActive = false;
   let gitStatsCache: GitStatsCache | undefined;
+  let configCache: FooterConfigCache | undefined;
+  let lastConfigError: string | undefined;
 
   pi.events.on("agent-channel:comms", (active: unknown) => {
     commsActive = active === true;
+  });
+
+  pi.registerCommand(COMMAND_NAME, {
+    description:
+      "Open runtime footer config in $EDITOR. Usage: /runtime-footer-config [project|global]",
+    handler: async (args, ctx) => {
+      const mode = args.trim();
+      if (mode && mode !== "project" && mode !== "global") {
+        ctx.ui.notify(
+          "Usage: /runtime-footer-config [project|global]",
+          "warning",
+        );
+        return;
+      }
+
+      const targetPath =
+        mode === "global" ? GLOBAL_CONFIG_PATH : projectConfigPath(ctx.cwd);
+      ensureConfigFile(targetPath);
+
+      const opened = openConfigInEditor(targetPath);
+      ctx.ui.notify(opened.message, opened.ok ? "success" : "warning");
+
+      configCache = undefined;
+      lastConfigError = undefined;
+      pi.events.emit(CONFIG_CHANGED_EVENT, undefined);
+    },
   });
 
   const installFooter = (ctx: ExtensionContext) => {
@@ -314,8 +606,10 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
       const disposeBranchStatus = pi.events.on("branch-status:changed", () =>
         tui.requestRender(),
       );
-
       const disposeComms = pi.events.on("agent-channel:comms", () =>
+        tui.requestRender(),
+      );
+      const disposeConfig = pi.events.on(CONFIG_CHANGED_EVENT, () =>
         tui.requestRender(),
       );
 
@@ -324,24 +618,63 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
           disposeBranch();
           disposeBranchStatus();
           disposeComms();
+          disposeConfig();
         },
         invalidate() {},
         render(width: number): string[] {
-          gitStatsCache = getGitStats(gitStatsCache);
+          configCache = readFooterConfig(ctx.cwd, configCache);
+          if (configCache.error && configCache.error !== lastConfigError) {
+            lastConfigError = configCache.error;
+            ctx.ui.notify(
+              `runtime-footer config error (${configCache.error}); using defaults`,
+              "warning",
+            );
+          } else if (!configCache.error) {
+            lastConfigError = undefined;
+          }
+
+          const usesGit =
+            configCache.config.left.includes("git") ||
+            configCache.config.right.includes("git");
+          if (usesGit) {
+            gitStatsCache = getGitStats(gitStatsCache);
+          }
+
           const statuses = footerData.getExtensionStatuses();
-          const left = renderLeft(
+          const gitBranch = footerData.getGitBranch();
+          const gitStats = usesGit ? (gitStatsCache?.stats ?? null) : null;
+
+          const left = renderSide(
+            configCache.config.left,
             theme,
-            footerData.getGitBranch(),
-            gitStatsCache.stats,
-            statuses.get("session-notes"),
+            ctx,
+            pi,
+            gitBranch,
+            gitStats,
+            statuses,
             commsActive,
           );
-          const right = renderRight(pi, ctx, theme);
-          const lines = [renderFooterLine(width, left, right)];
-          const branchStatus = statuses.get("branch-status");
+          const right = renderSide(
+            configCache.config.right,
+            theme,
+            ctx,
+            pi,
+            gitBranch,
+            gitStats,
+            statuses,
+            commsActive,
+          );
 
-          if (branchStatus) {
-            lines.push(truncateToWidth(branchStatus, width));
+          const fallbackLeft = theme.fg("dim", formatCwd());
+          const lines = [
+            renderFooterLine(width, left || fallbackLeft, right || ""),
+          ];
+
+          if (configCache.config.branchStatusLine) {
+            const branchStatus = statuses.get("branch-status");
+            if (branchStatus) {
+              lines.push(truncateToWidth(branchStatus, width));
+            }
           }
 
           return lines;

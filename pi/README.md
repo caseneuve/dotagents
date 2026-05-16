@@ -59,11 +59,42 @@ Replaces the default footer with a denser single-line runtime status.
 
 What it does:
 
-- keeps cwd and git branch on the left side
-- shows compact dirty-worktree stats beside the branch, e.g. `[+13/-4 (3, A1, ?2)]`
-- keeps model, rounded cost, and context percentage on the right side
+- renders an ordered left/right footer from configurable blocks
+- defaults to cwd + git(+stats) + session-notes + comms on the left
+- defaults to provider + model + thinking + cost + context on the right
+- shows compact dirty-worktree stats beside git, e.g. `[+13/-4 (3, A1, ?2)]`
 - removes the noisier token counters from the default footer
 - keeps the layout on a single line with lightweight color emphasis
+- optionally renders branch-status on a second line
+
+Configuration:
+
+- project-local config path (preferred): `.pi/runtime-footer.json`
+- global fallback config path: `~/.pi/agent/runtime-footer.json`
+- open/create config via `/runtime-footer-config` (project) or `/runtime-footer-config global`
+- unknown block ids are ignored safely
+
+Config shape:
+
+```json
+{
+  "left": ["cwd", "git", "session-notes", "comms"],
+  "right": ["provider", "model", "thinking", "cost", "context"],
+  "branchStatusLine": true
+}
+```
+
+Available block ids:
+
+- `cwd`
+- `git`
+- `session-notes`
+- `comms`
+- `provider`
+- `model`
+- `thinking`
+- `cost`
+- `context`
 
 Why it exists:
 
