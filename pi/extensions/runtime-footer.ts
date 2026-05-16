@@ -6,12 +6,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
+import {
+  getAgentDir,
+  type ExtensionAPI,
+  type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
@@ -21,13 +21,13 @@ const CONFIG_CHECK_TTL_MS = 1000;
 
 const COMMAND_NAME = "runtime-footer-config";
 const CONFIG_CHANGED_EVENT = "runtime-footer:config-changed";
-const PROJECT_CONFIG_RELATIVE_PATH = ".pi/runtime-footer.json";
-const GLOBAL_CONFIG_PATH = path.join(
-  os.homedir(),
-  ".pi",
-  "agent",
-  "runtime-footer.json",
+const PROJECT_CONFIG_RELATIVE_PATH_JSONC = ".pi/runtime-footer.jsonc";
+const PROJECT_CONFIG_RELATIVE_PATH_JSON = ".pi/runtime-footer.json";
+const GLOBAL_CONFIG_PATH_JSONC = path.join(
+  getAgentDir(),
+  "runtime-footer.jsonc",
 );
+const GLOBAL_CONFIG_PATH_JSON = path.join(getAgentDir(), "runtime-footer.json");
 
 type GitStats = {
   addedLines: number;
@@ -58,6 +58,7 @@ type RuntimeFooterConfig = {
   left: string[];
   right: string[];
   separator: string;
+  truncate: number | null;
   branchStatusLine: boolean;
 };
 
@@ -95,12 +96,32 @@ function defaultConfig(): RuntimeFooterConfig {
     left: [...DEFAULT_LEFT_BLOCKS],
     right: [...DEFAULT_RIGHT_BLOCKS],
     separator: " · ",
+    truncate: null,
     branchStatusLine: true,
   };
 }
 
 function defaultConfigText(): string {
-  return `${JSON.stringify(defaultConfig(), null, 2)}\n`;
+  return `{
+  // Ordered block ids rendered on the left side.
+  "left": ["cwd", "git", "session-notes", "comms"],
+
+  // Ordered block ids rendered on the right side.
+  "right": ["provider", "model", "thinking", "cost", "context"],
+
+  // Separator inserted between rendered blocks.
+  "separator": " · ",
+
+  // Optional per-block truncation (visible width). Use null to disable.
+  "truncate": null,
+
+  // Show branch-status extension line under the main footer.
+  "branchStatusLine": true,
+
+  // Available block ids:
+  // cwd, git, session-notes, comms, provider, model, thinking, cost, context
+}
+`;
 }
 
 function parseConfig(value: unknown): RuntimeFooterConfig | null {
@@ -113,6 +134,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     left?: unknown;
     right?: unknown;
     separator?: unknown;
+    truncate?: unknown;
     branchStatusLine?: unknown;
   };
 
@@ -126,6 +148,12 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     right: parseSide(data.right, base.right),
     separator:
       typeof data.separator === "string" ? data.separator : base.separator,
+    truncate:
+      typeof data.truncate === "number" &&
+      Number.isFinite(data.truncate) &&
+      data.truncate >= 1
+        ? Math.floor(data.truncate)
+        : base.truncate,
     branchStatusLine:
       typeof data.branchStatusLine === "boolean"
         ? data.branchStatusLine
@@ -133,15 +161,160 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
   };
 }
 
-function projectConfigPath(cwd: string): string {
-  return path.join(cwd, PROJECT_CONFIG_RELATIVE_PATH);
+function projectConfigPathJsonc(cwd: string): string {
+  return path.join(cwd, PROJECT_CONFIG_RELATIVE_PATH_JSONC);
+}
+
+function projectConfigPathJson(cwd: string): string {
+  return path.join(cwd, PROJECT_CONFIG_RELATIVE_PATH_JSON);
+}
+
+function resolveLocalConfigPath(cwd: string): string {
+  const jsoncPath = projectConfigPathJsonc(cwd);
+  if (existsSync(jsoncPath)) return jsoncPath;
+
+  const jsonPath = projectConfigPathJson(cwd);
+  if (existsSync(jsonPath)) return jsonPath;
+
+  return jsoncPath;
+}
+
+function resolveGlobalConfigPath(): string {
+  if (existsSync(GLOBAL_CONFIG_PATH_JSONC)) return GLOBAL_CONFIG_PATH_JSONC;
+  if (existsSync(GLOBAL_CONFIG_PATH_JSON)) return GLOBAL_CONFIG_PATH_JSON;
+  return GLOBAL_CONFIG_PATH_JSONC;
 }
 
 function resolveConfigSourcePath(cwd: string): string | null {
-  const projectPath = projectConfigPath(cwd);
-  if (existsSync(projectPath)) return projectPath;
-  if (existsSync(GLOBAL_CONFIG_PATH)) return GLOBAL_CONFIG_PATH;
+  const localJsonc = projectConfigPathJsonc(cwd);
+  if (existsSync(localJsonc)) return localJsonc;
+
+  const localJson = projectConfigPathJson(cwd);
+  if (existsSync(localJson)) return localJson;
+
+  if (existsSync(GLOBAL_CONFIG_PATH_JSONC)) return GLOBAL_CONFIG_PATH_JSONC;
+  if (existsSync(GLOBAL_CONFIG_PATH_JSON)) return GLOBAL_CONFIG_PATH_JSON;
   return null;
+}
+
+/**
+ * Lightweight JSONC support for runtime-footer config.
+ *
+ * Pi currently does not expose a public JSONC parser helper for extensions,
+ * so this local parser keeps scope narrow: remove comments + trailing commas,
+ * then parse as JSON.
+ */
+function stripJsonComments(source: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    const next = source[i + 1];
+
+    if (inLineComment) {
+      if (ch === "\n") {
+        inLineComment = false;
+        out += ch;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (inString) {
+      out += ch;
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+
+    if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+
+    if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
+/** Remove trailing commas outside string literals so JSON.parse can handle JSONC input. */
+function stripTrailingCommas(source: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+
+    if (inString) {
+      out += ch;
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+
+    if (ch === ",") {
+      let j = i + 1;
+      while (j < source.length && /\s/.test(source[j])) {
+        j += 1;
+      }
+      const next = source[j];
+      if (next === "]" || next === "}") {
+        continue;
+      }
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
+function parseJsonOrJsonc(text: string): unknown {
+  const noComments = stripJsonComments(text);
+  const noTrailingCommas = stripTrailingCommas(noComments);
+  return JSON.parse(noTrailingCommas);
 }
 
 function readFooterConfig(
@@ -188,7 +361,7 @@ function readFooterConfig(
   }
 
   try {
-    const raw = JSON.parse(readFileSync(sourcePath, "utf8"));
+    const raw = parseJsonOrJsonc(readFileSync(sourcePath, "utf8"));
     const parsed = parseConfig(raw);
     if (!parsed) {
       throw new Error("config root must be an object");
@@ -357,6 +530,24 @@ function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
   };
 }
 
+/**
+ * Plain-text git stats used for per-block truncation decisions.
+ * Styling is applied separately in formatGitStats().
+ */
+function formatGitStatsPlain(stats: GitStats | null): string | null {
+  if (!stats) return null;
+
+  const fileParts = [String(stats.changedFiles)];
+  if (stats.addedFiles > 0) {
+    fileParts.push(`A${stats.addedFiles}`);
+  }
+  if (stats.untrackedFiles > 0) {
+    fileParts.push(`?${stats.untrackedFiles}`);
+  }
+
+  return `[+${stats.addedLines}/-${stats.removedLines} (${fileParts.join(", ")})]`;
+}
+
 function formatGitStats(
   theme: ExtensionContext["ui"]["theme"],
   stats: GitStats | null,
@@ -400,10 +591,12 @@ function formatCost(ctx: ExtensionContext): string | null {
   return `$${cost.toFixed(cost >= 10 ? 1 : 2)}`;
 }
 
-function formatContextUsage(
-  ctx: ExtensionContext,
-  theme: ExtensionContext["ui"]["theme"],
-): string | null {
+type ContextUsageInfo = {
+  text: string;
+  tone: "dim" | "warning" | "error";
+};
+
+function getContextUsageInfo(ctx: ExtensionContext): ContextUsageInfo | null {
   const usage = ctx.getContextUsage?.();
   const contextWindow = (ctx.model as { contextWindow?: number } | undefined)
     ?.contextWindow;
@@ -419,12 +612,12 @@ function formatContextUsage(
   const text = `${percent}%`;
 
   if (percent >= 90) {
-    return theme.fg("error", text);
+    return { text, tone: "error" };
   }
   if (percent >= 80) {
-    return theme.fg("warning", text);
+    return { text, tone: "warning" };
   }
-  return theme.fg("dim", text);
+  return { text, tone: "dim" };
 }
 
 type RenderBlockParams = {
@@ -438,7 +631,13 @@ type RenderBlockParams = {
   commsActive: boolean;
 };
 
-function renderBlock(params: RenderBlockParams): string | undefined {
+type FooterBlockText = {
+  plain: string;
+  styled: string;
+  tone: "dim" | "accent" | "warning" | "error";
+};
+
+function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
   const {
     blockId,
     theme,
@@ -451,32 +650,56 @@ function renderBlock(params: RenderBlockParams): string | undefined {
   } = params;
 
   switch (blockId) {
-    case "cwd":
-      return theme.fg("dim", formatCwd());
+    case "cwd": {
+      const plain = formatCwd();
+      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+    }
     case "git": {
       if (!gitBranch) return undefined;
+      const statsPlain = formatGitStatsPlain(gitStats);
+      const statsStyled = formatGitStats(theme, gitStats);
+      const plain = statsPlain ? `${gitBranch} ${statsPlain}` : gitBranch;
       const branch = theme.fg("dim", gitBranch);
-      const stats = formatGitStats(theme, gitStats);
-      return stats ? `${branch} ${stats}` : branch;
+      const styled = statsStyled ? `${branch} ${statsStyled}` : branch;
+      return { plain, styled, tone: "dim" };
     }
     case "session-notes": {
       const status = statuses.get("session-notes");
-      return status ? theme.fg("dim", status) : undefined;
+      if (!status) return undefined;
+      return { plain: status, styled: theme.fg("dim", status), tone: "dim" };
     }
-    case "comms":
-      return commsActive ? theme.fg("accent", "📡") : undefined;
-    case "provider":
-      return theme.fg("dim", formatProvider(ctx));
-    case "model":
-      return theme.fg("dim", formatModel(ctx));
-    case "thinking":
-      return theme.fg("dim", formatThinking(pi));
+    case "comms": {
+      if (!commsActive) return undefined;
+      return { plain: "📡", styled: theme.fg("accent", "📡"), tone: "accent" };
+    }
+    case "provider": {
+      const plain = formatProvider(ctx);
+      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+    }
+    case "model": {
+      const plain = formatModel(ctx);
+      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+    }
+    case "thinking": {
+      const plain = formatThinking(pi);
+      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+    }
     case "cost": {
-      const cost = formatCost(ctx);
-      return cost ? theme.fg("dim", cost) : undefined;
+      const plain = formatCost(ctx);
+      return plain
+        ? { plain, styled: theme.fg("dim", plain), tone: "dim" }
+        : undefined;
     }
-    case "context":
-      return formatContextUsage(ctx, theme) ?? undefined;
+    case "context": {
+      const info = getContextUsageInfo(ctx);
+      return info
+        ? {
+            plain: info.text,
+            styled: theme.fg(info.tone, info.text),
+            tone: info.tone,
+          }
+        : undefined;
+    }
     default:
       return undefined;
   }
@@ -485,6 +708,7 @@ function renderBlock(params: RenderBlockParams): string | undefined {
 function renderSide(
   blockIds: string[],
   separator: string,
+  truncate: number | null,
   theme: ExtensionContext["ui"]["theme"],
   ctx: ExtensionContext,
   pi: ExtensionAPI,
@@ -498,7 +722,7 @@ function renderSide(
   for (const rawBlockId of blockIds) {
     if (!KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)) continue;
 
-    const text = renderBlock({
+    const block = renderBlock({
       blockId: rawBlockId as FooterBlockId,
       theme,
       ctx,
@@ -509,12 +733,33 @@ function renderSide(
       commsActive,
     });
 
-    if (text) {
-      parts.push(text);
+    if (block) {
+      if (truncate && visibleWidth(block.plain) > truncate) {
+        const shortened = clipPlainTextToWidth(block.plain, truncate);
+        parts.push(theme.fg(block.tone, `${shortened}… `));
+      } else {
+        parts.push(block.styled);
+      }
     }
   }
 
   return parts.join(theme.fg("dim", separator));
+}
+
+function clipPlainTextToWidth(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+
+  let out = "";
+  let width = 0;
+
+  for (const ch of text) {
+    const chWidth = visibleWidth(ch);
+    if (width + chWidth > maxWidth) break;
+    out += ch;
+    width += chWidth;
+  }
+
+  return out;
 }
 
 function renderFooterLine(width: number, left: string, right: string): string {
@@ -584,12 +829,12 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         {
           label: "global",
           value: "global",
-          description: "edit ~/.pi/agent/runtime-footer.json",
+          description: "edit ~/.pi/agent/runtime-footer.jsonc",
         },
         {
           label: "local",
           value: "local",
-          description: "edit .pi/runtime-footer.json in current repo",
+          description: "edit .pi/runtime-footer.jsonc in current repo",
         },
       ];
 
@@ -613,7 +858,9 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
       }
 
       const targetPath =
-        mode === "local" ? projectConfigPath(ctx.cwd) : GLOBAL_CONFIG_PATH;
+        mode === "local"
+          ? resolveLocalConfigPath(ctx.cwd)
+          : resolveGlobalConfigPath();
       ensureConfigFile(targetPath);
 
       const opened = openConfigInEditor(targetPath);
@@ -676,6 +923,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
           const left = renderSide(
             configCache.config.left,
             configCache.config.separator,
+            configCache.config.truncate,
             theme,
             ctx,
             pi,
@@ -687,6 +935,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
           const right = renderSide(
             configCache.config.right,
             configCache.config.separator,
+            configCache.config.truncate,
             theme,
             ctx,
             pi,

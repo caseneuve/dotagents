@@ -69,21 +69,34 @@ What it does:
 
 Configuration:
 
-- project-local config path: `.pi/runtime-footer.json`
-- global config path: `~/.pi/agent/runtime-footer.json`
-- when both exist, project-local config takes precedence over global
+- project-local config path: `.pi/runtime-footer.jsonc`
+- global config path: `~/.pi/agent/runtime-footer.jsonc`
+- legacy `.json` paths are still read for compatibility
+- when both local and global exist, local takes precedence
 - open/create config via `/runtime-footer-config` (global default) or `/runtime-footer-config local`
+- command-created config includes inline comments and all available options
 - `separator` controls the delimiter between blocks (default: `·`)
+- `truncate` (number or `null`) crops each block to visible width and appends `… ` (default: `null`, disabled)
 - unknown block ids are ignored safely
 
 Config shape:
 
-```json
+```jsonc
 {
+  // Ordered block ids rendered on the left side.
   "left": ["cwd", "git", "session-notes", "comms"],
+
+  // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
+
+  // Separator inserted between rendered blocks.
   "separator": " · ",
-  "branchStatusLine": true
+
+  // Optional per-block truncation (visible width). Use null to disable.
+  "truncate": null,
+
+  // Show branch-status extension line under the main footer.
+  "branchStatusLine": true,
 }
 ```
 
