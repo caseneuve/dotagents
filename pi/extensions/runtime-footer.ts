@@ -572,19 +572,42 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
 
   pi.registerCommand(COMMAND_NAME, {
     description:
-      "Open runtime footer config in $EDITOR. Usage: /runtime-footer-config [project|global]",
+      "Open runtime footer config in $EDITOR. Usage: /runtime-footer-config [global|local] (default: global)",
+    getArgumentCompletions: (prefix) => {
+      const options = [
+        {
+          label: "global",
+          value: "global",
+          description: "edit ~/.pi/agent/runtime-footer.json",
+        },
+        {
+          label: "local",
+          value: "local",
+          description: "edit .pi/runtime-footer.json in current repo",
+        },
+      ];
+
+      const normalized = prefix.trim().toLowerCase();
+      const filtered = options.filter((option) =>
+        option.value.startsWith(normalized),
+      );
+
+      return filtered.length > 0 ? filtered : null;
+    },
     handler: async (args, ctx) => {
-      const mode = args.trim();
-      if (mode && mode !== "project" && mode !== "global") {
+      const modeRaw = args.trim();
+      const mode =
+        modeRaw === "" ? "global" : modeRaw === "project" ? "local" : modeRaw;
+      if (mode !== "global" && mode !== "local") {
         ctx.ui.notify(
-          "Usage: /runtime-footer-config [project|global]",
+          "Usage: /runtime-footer-config [global|local]",
           "warning",
         );
         return;
       }
 
       const targetPath =
-        mode === "global" ? GLOBAL_CONFIG_PATH : projectConfigPath(ctx.cwd);
+        mode === "local" ? projectConfigPath(ctx.cwd) : GLOBAL_CONFIG_PATH;
       ensureConfigFile(targetPath);
 
       const opened = openConfigInEditor(targetPath);
@@ -665,10 +688,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             commsActive,
           );
 
-          const fallbackLeft = theme.fg("dim", formatCwd());
-          const lines = [
-            renderFooterLine(width, left || fallbackLeft, right || ""),
-          ];
+          const lines = [renderFooterLine(width, left, right)];
 
           if (configCache.config.branchStatusLine) {
             const branchStatus = statuses.get("branch-status");

@@ -69,9 +69,10 @@ What it does:
 
 Configuration:
 
-- project-local config path (preferred): `.pi/runtime-footer.json`
-- global fallback config path: `~/.pi/agent/runtime-footer.json`
-- open/create config via `/runtime-footer-config` (project) or `/runtime-footer-config global`
+- project-local config path: `.pi/runtime-footer.json`
+- global config path: `~/.pi/agent/runtime-footer.json`
+- when both exist, project-local config takes precedence over global
+- open/create config via `/runtime-footer-config` (global default) or `/runtime-footer-config local`
 - unknown block ids are ignored safely
 
 Config shape:
@@ -440,7 +441,7 @@ with pluggable backends for status and notifications.
 
 What it does:
 
-- registers channel_* tools for file-based inter-agent messaging via `~/.agent-channels/`
+- registers channel\_\* tools for file-based inter-agent messaging via `~/.agent-channels/`
 - auto-detects the best available backend: cmux (macOS sidebar), tmux (pane titles + status-right), or file-only fallback
 - injects incoming messages into the conversation with turn-control (OVER/OUT protocol)
 - persists agent identity and watch list across session reloads
@@ -448,11 +449,11 @@ What it does:
 
 Backend behaviour:
 
-| Backend | Status display | Notifications | Progress |
-|---------|---------------|---------------|----------|
-| cmux | Sidebar pills | cmux notify + badge | Sidebar bar |
-| tmux | Pane title + `@agent-*` options | `tmux display-message` or `notify-send` | Status-right + optional dunst |
-| file | no-op | `osascript` (macOS) / `notify-send` (Linux) | no-op |
+| Backend | Status display                  | Notifications                               | Progress                      |
+| ------- | ------------------------------- | ------------------------------------------- | ----------------------------- |
+| cmux    | Sidebar pills                   | cmux notify + badge                         | Sidebar bar                   |
+| tmux    | Pane title + `@agent-*` options | `tmux display-message` or `notify-send`     | Status-right + optional dunst |
+| file    | no-op                           | `osascript` (macOS) / `notify-send` (Linux) | no-op                         |
 
 Environment variables:
 
@@ -462,4 +463,3 @@ Environment variables:
 - `CMUX_AGENT_NAME` → agent identity
 
 See `pi/extensions/agent-channel/README.md` for full docs.
-
