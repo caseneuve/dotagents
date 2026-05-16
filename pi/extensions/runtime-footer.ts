@@ -195,6 +195,7 @@ function defaultConfigText(): string {
 
   // Available block ids:
   // cwd, project, git-branch, git-diff, git, session-notes, comms, provider, model, thinking, cost, context
+  // sep, S (explicit separator pseudo-block)
 }
 `;
 }
@@ -884,11 +885,12 @@ function renderSide(
   projectName: string,
   statuses: Map<string, string | undefined>,
   commsActive: boolean,
+  explicitSeparatorMode: boolean,
 ): string {
   const explicitSeparators = blockIds.some(isSeparatorToken);
   const renderedSeparator = theme.fg("dim", normalizeTabs(separator));
 
-  if (!explicitSeparators) {
+  if (!explicitSeparatorMode && !explicitSeparators) {
     const parts: string[] = [];
 
     for (const rawBlockId of blockIds) {
@@ -1165,6 +1167,10 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             ? (projectNameCache?.name ?? computeProjectName())
             : "";
 
+          const explicitSeparatorMode =
+            configCache.config.left.some(isSeparatorToken) ||
+            configCache.config.right.some(isSeparatorToken);
+
           const left = renderSide(
             configCache.config.left,
             configCache.config.separator,
@@ -1179,6 +1185,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             projectName,
             statuses,
             commsActive,
+            explicitSeparatorMode,
           );
           const right = renderSide(
             configCache.config.right,
@@ -1194,6 +1201,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             projectName,
             statuses,
             commsActive,
+            explicitSeparatorMode,
           );
 
           const lines = [renderFooterLine(safeWidth, left, right)];

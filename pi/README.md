@@ -77,7 +77,8 @@ Configuration:
 - command-created config includes inline comments and all available options
 - `separator` controls the delimiter token (default: `·`)
 - explicit separator pseudo-blocks `sep` (and alias `S`) can be placed in `left`/`right` for precise separator placement
-- backward compatibility: when no `sep`/`S` tokens are present on a side, separators are inserted implicitly between rendered blocks (legacy behavior)
+- backward compatibility: when no `sep`/`S` tokens are present anywhere, separators are inserted implicitly between rendered blocks on both sides (legacy behavior)
+- explicit mode activation is global per footer line: if either side contains `sep`/`S`, both sides switch to explicit separator mode (no implicit separators)
 - when explicit separator tokens are used, blocks still keep baseline spacing for readability
 - `truncate` (number or `null`) crops eligible blocks to visible width and appends `… ` (default: `null`, disabled)
 - `truncateBlocks` (optional string array) limits truncation to selected block ids; when omitted or empty, all blocks remain truncation-eligible
@@ -101,6 +102,11 @@ Config shape:
   // Separator token text (used implicitly between blocks,
   // or explicitly via `sep` / `S` pseudo-blocks).
   "separator": " · ",
+
+  // Optional explicit separator pseudo-blocks in left/right arrays:
+  // "sep" (canonical) or "S" (alias).
+  // If either side uses sep/S, both sides stop implicit separators
+  // and render separators only where sep/S appears.
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
