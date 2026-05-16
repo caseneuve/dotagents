@@ -1,6 +1,6 @@
 ---
 title: Add tags or labels support to todo items
-status: open
+status: done
 priority: medium
 type: feature
 created: 2026-03-17
@@ -59,4 +59,4 @@ THEN they preserve the expected stdout/stderr and file-format contracts
 
 ## Notes
 
-Prefer a simple inline array format like `tags: [mvp, beta]` because it is easier to write and parse than multiline YAML lists. If the bash implementation starts accumulating brittle string parsing, prefer extracting pure parsing/filtering/formatting logic into Babashka and keeping shell only at the I/O boundary. Do not treat test coverage as a separate follow-up; it is part of the definition of done.
+Closed as superseded/completed by the current labels implementation. The repo now uses `labels: []`, `todo new --labels`, `todo list --label`, Babashka-backed helpers, and unit/E2E coverage for label behavior. The original `tags`/`.sh` framing is obsolete.

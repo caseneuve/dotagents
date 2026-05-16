@@ -1,6 +1,6 @@
 ---
 title: agent-channel UDS kB-scale frame corruption
-status: closed
+status: done
 priority: high
 type: bug
 labels: []

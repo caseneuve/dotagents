@@ -1,6 +1,6 @@
 ---
 title: pi diff review
-status: closed
+status: done
 priority: medium
 type: feature
 labels: []

@@ -1,6 +1,6 @@
 ---
 title: agent channel protocol ux
-status: closed
+status: done
 priority: high
 type: bug
 labels: []
