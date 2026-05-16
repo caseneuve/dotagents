@@ -1,6 +1,6 @@
 ---
 title: runtime footer config expressiveness v2
-status: open
+status: done
 priority: medium
 type: feature
 labels: []
