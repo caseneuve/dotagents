@@ -17,6 +17,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const MIN_GAP = 2;
 const GIT_STATS_TTL_MS = 2000;
+const PROJECT_NAME_TTL_MS = 2000;
 const CONFIG_CHECK_TTL_MS = 1000;
 
 const COMMAND_NAME = "runtime-footer-config";
@@ -43,8 +44,15 @@ type GitStatsCache = {
   stats: GitStats | null;
 };
 
+type ProjectNameCache = {
+  cwd: string;
+  checkedAt: number;
+  name: string;
+};
+
 type FooterBlockId =
   | "cwd"
+  | "project"
   | "git"
   | "session-notes"
   | "comms"
@@ -89,6 +97,7 @@ const DEFAULT_RIGHT_BLOCKS: FooterBlockId[] = [
 const KNOWN_BLOCKS = new Set<FooterBlockId>([
   ...DEFAULT_LEFT_BLOCKS,
   ...DEFAULT_RIGHT_BLOCKS,
+  "project",
 ]);
 
 function defaultConfig(): RuntimeFooterConfig {
@@ -119,7 +128,7 @@ function defaultConfigText(): string {
   "branchStatusLine": true,
 
   // Available block ids:
-  // cwd, git, session-notes, comms, provider, model, thinking, cost, context
+  // cwd, project, git, session-notes, comms, provider, model, thinking, cost, context
 }
 `;
 }
@@ -396,6 +405,13 @@ function formatCwd(): string {
   return cwd;
 }
 
+function computeProjectName(): string {
+  const gitRoot = runGit(["rev-parse", "--show-toplevel"])?.trim();
+  const source = gitRoot && gitRoot.length > 0 ? gitRoot : process.cwd();
+  const base = path.basename(source);
+  return base || source;
+}
+
 const PROVIDER_SHORT: Record<string, string> = {
   "amazon-bedrock": "bedrock",
   "azure-openai": "azure",
@@ -530,6 +546,24 @@ function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
   };
 }
 
+function getProjectName(cache: ProjectNameCache | undefined): ProjectNameCache {
+  const now = Date.now();
+  const cwd = process.cwd();
+  if (
+    cache &&
+    cache.cwd === cwd &&
+    now - cache.checkedAt < PROJECT_NAME_TTL_MS
+  ) {
+    return cache;
+  }
+
+  return {
+    cwd,
+    checkedAt: now,
+    name: computeProjectName(),
+  };
+}
+
 /**
  * Plain-text git stats used for per-block truncation decisions.
  * Styling is applied separately in formatGitStats().
@@ -627,6 +661,7 @@ type RenderBlockParams = {
   pi: ExtensionAPI;
   gitBranch: string | null;
   gitStats: GitStats | null;
+  projectName: string;
   statuses: Map<string, string | undefined>;
   commsActive: boolean;
 };
@@ -645,6 +680,7 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
     pi,
     gitBranch,
     gitStats,
+    projectName,
     statuses,
     commsActive,
   } = params;
@@ -652,6 +688,10 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
   switch (blockId) {
     case "cwd": {
       const plain = formatCwd();
+      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+    }
+    case "project": {
+      const plain = projectName;
       return { plain, styled: theme.fg("dim", plain), tone: "dim" };
     }
     case "git": {
@@ -714,6 +754,7 @@ function renderSide(
   pi: ExtensionAPI,
   gitBranch: string | null,
   gitStats: GitStats | null,
+  projectName: string,
   statuses: Map<string, string | undefined>,
   commsActive: boolean,
 ): string {
@@ -729,6 +770,7 @@ function renderSide(
       pi,
       gitBranch,
       gitStats,
+      projectName,
       statuses,
       commsActive,
     });
@@ -814,6 +856,7 @@ function openConfigInEditor(pathname: string): {
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
   let commsActive = false;
   let gitStatsCache: GitStatsCache | undefined;
+  let projectNameCache: ProjectNameCache | undefined;
   let configCache: FooterConfigCache | undefined;
   let lastConfigError: string | undefined;
 
@@ -916,9 +959,19 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             gitStatsCache = getGitStats(gitStatsCache);
           }
 
+          const usesProject =
+            configCache.config.left.includes("project") ||
+            configCache.config.right.includes("project");
+          if (usesProject) {
+            projectNameCache = getProjectName(projectNameCache);
+          }
+
           const statuses = footerData.getExtensionStatuses();
           const gitBranch = footerData.getGitBranch();
           const gitStats = usesGit ? (gitStatsCache?.stats ?? null) : null;
+          const projectName = usesProject
+            ? (projectNameCache?.name ?? computeProjectName())
+            : "";
 
           const left = renderSide(
             configCache.config.left,
@@ -929,6 +982,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             pi,
             gitBranch,
             gitStats,
+            projectName,
             statuses,
             commsActive,
           );
@@ -941,6 +995,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             pi,
             gitBranch,
             gitStats,
+            projectName,
             statuses,
             commsActive,
           );

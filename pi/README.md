@@ -103,6 +103,7 @@ Config shape:
 Available block ids:
 
 - `cwd`
+- `project` (git root dir name when available, otherwise current dir name)
 - `git`
 - `session-notes`
 - `comms`
