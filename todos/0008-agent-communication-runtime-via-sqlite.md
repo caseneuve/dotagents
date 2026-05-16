@@ -1,6 +1,6 @@
 ---
 title: experiment with agent communication runtime via sqlite
-status: open
+status: closed
 priority: medium
 type: feature
 created: 2026-04-06
@@ -53,6 +53,4 @@ review file artifacts
 
 ## Notes
 
-This epic is an experiment-first path. Keep the first version small and
-inspectable, then decide whether to fold it into the broader subagent
-framework.
+Closed as superseded by the current agent-channel / relay architecture. The useful communication goals moved forward through `pi/extensions/agent-channel/`, `shared/relay/`, and UDS/HTTP/File transports rather than a SQLite-backed `agent-comm` extension.
