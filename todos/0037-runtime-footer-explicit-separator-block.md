@@ -1,6 +1,6 @@
 ---
 title: runtime footer explicit separator block
-status: in_progress
+status: done
 priority: medium
 type: feature
 labels: []
