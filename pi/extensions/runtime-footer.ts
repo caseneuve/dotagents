@@ -69,12 +69,20 @@ type ThinkingConfig = {
   mapping: Record<string, string>;
 };
 
+type ContextMode = "percent" | "bar" | "blocks";
+
+type ContextConfig = {
+  mode: ContextMode;
+  barWidth: number;
+};
+
 type RuntimeFooterConfig = {
   left: string[];
   right: string[];
   separator: string;
   truncate: number | null;
   thinking: ThinkingConfig;
+  context: ContextConfig;
   branchStatusLine: boolean;
 };
 
@@ -109,6 +117,10 @@ const KNOWN_BLOCKS = new Set<FooterBlockId>([
 ]);
 
 const THINKING_BLOCK_CHARS = new Set(["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]);
+const CONTEXT_BLOCK_GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
+const CONTEXT_BAR_FILLED = "█";
+const CONTEXT_BAR_EMPTY = "░";
+const DEFAULT_CONTEXT_BAR_WIDTH = 8;
 
 const DEFAULT_THINKING_MAPPING: Record<string, string> = {
   off: "▁",
@@ -128,6 +140,10 @@ function defaultConfig(): RuntimeFooterConfig {
     thinking: {
       mode: "literal",
       mapping: { ...DEFAULT_THINKING_MAPPING },
+    },
+    context: {
+      mode: "percent",
+      barWidth: DEFAULT_CONTEXT_BAR_WIDTH,
     },
     branchStatusLine: true,
   };
@@ -163,6 +179,15 @@ function defaultConfigText(): string {
     }
   },
 
+  // Context block formatting.
+  "context": {
+    // "percent" (default), "bar", or "blocks"
+    "mode": "percent",
+
+    // Used only in "bar" mode.
+    "barWidth": 8
+  },
+
   // Show branch-status extension line under the main footer.
   "branchStatusLine": true,
 
@@ -184,6 +209,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     separator?: unknown;
     truncate?: unknown;
     thinking?: unknown;
+    context?: unknown;
     branchStatusLine?: unknown;
   };
 
@@ -222,6 +248,31 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     return { mode, mapping };
   };
 
+  const parseContextConfig = (value: unknown): ContextConfig => {
+    if (!value || typeof value !== "object") {
+      return { ...base.context };
+    }
+
+    const context = value as {
+      mode?: unknown;
+      barWidth?: unknown;
+    };
+
+    const mode: ContextMode =
+      context.mode === "bar" || context.mode === "blocks"
+        ? context.mode
+        : base.context.mode;
+
+    const barWidth =
+      typeof context.barWidth === "number" &&
+      Number.isFinite(context.barWidth) &&
+      context.barWidth >= 1
+        ? Math.floor(context.barWidth)
+        : base.context.barWidth;
+
+    return { mode, barWidth };
+  };
+
   return {
     left: parseSide(data.left, base.left),
     right: parseSide(data.right, base.right),
@@ -234,6 +285,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
         ? Math.floor(data.truncate)
         : base.truncate,
     thinking: parseThinkingConfig(data.thinking),
+    context: parseContextConfig(data.context),
     branchStatusLine:
       typeof data.branchStatusLine === "boolean"
         ? data.branchStatusLine
@@ -696,12 +748,7 @@ function formatCost(ctx: ExtensionContext): string | null {
   return `$${cost.toFixed(cost >= 10 ? 1 : 2)}`;
 }
 
-type ContextUsageInfo = {
-  text: string;
-  tone: "dim" | "warning" | "error";
-};
-
-function getContextUsageInfo(ctx: ExtensionContext): ContextUsageInfo | null {
+function getContextUsagePercent(ctx: ExtensionContext): number | null {
   const usage = ctx.getContextUsage?.();
   const contextWindow = (ctx.model as { contextWindow?: number } | undefined)
     ?.contextWindow;
@@ -710,19 +757,45 @@ function getContextUsageInfo(ctx: ExtensionContext): ContextUsageInfo | null {
     return null;
   }
 
-  const percent = Math.max(
+  return Math.max(
     0,
     Math.min(999, Math.round((usage.tokens / contextWindow) * 100)),
   );
-  const text = `${percent}%`;
+}
 
-  if (percent >= 90) {
-    return { text, tone: "error" };
-  }
-  if (percent >= 80) {
-    return { text, tone: "warning" };
-  }
-  return { text, tone: "dim" };
+function contextPercentTone(percent: number): "dim" | "warning" | "error" {
+  if (percent >= 90) return "error";
+  if (percent >= 80) return "warning";
+  return "dim";
+}
+
+function contextHeatTone(
+  percent: number,
+): "success" | "dim" | "warning" | "error" {
+  if (percent <= 20) return "success";
+  if (percent <= 70) return "dim";
+  if (percent <= 85) return "warning";
+  return "error";
+}
+
+function contextBarText(percent: number, width: number): string {
+  const fill = Math.max(
+    0,
+    Math.min(width, Math.round((percent / 100) * width)),
+  );
+  return `${CONTEXT_BAR_FILLED.repeat(fill)}${CONTEXT_BAR_EMPTY.repeat(Math.max(0, width - fill))}`;
+}
+
+function contextBlockText(percent: number): string {
+  const ratio = Math.max(0, Math.min(1, percent / 100));
+  const index = Math.max(
+    0,
+    Math.min(
+      CONTEXT_BLOCK_GLYPHS.length - 1,
+      Math.round(ratio * (CONTEXT_BLOCK_GLYPHS.length - 1)),
+    ),
+  );
+  return CONTEXT_BLOCK_GLYPHS[index];
 }
 
 type RenderBlockParams = {
@@ -741,7 +814,7 @@ type RenderBlockParams = {
 type FooterBlockText = {
   plain: string;
   styled: string;
-  tone: "dim" | "accent" | "warning" | "error";
+  tone: "dim" | "accent" | "success" | "warning" | "error";
 };
 
 function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
@@ -811,14 +884,24 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
         : undefined;
     }
     case "context": {
-      const info = getContextUsageInfo(ctx);
-      return info
-        ? {
-            plain: info.text,
-            styled: theme.fg(info.tone, info.text),
-            tone: info.tone,
-          }
-        : undefined;
+      const percent = getContextUsagePercent(ctx);
+      if (percent === null) return undefined;
+
+      if (config.context.mode === "bar") {
+        const plain = contextBarText(percent, config.context.barWidth);
+        const tone = contextHeatTone(percent);
+        return { plain, styled: theme.fg(tone, plain), tone };
+      }
+
+      if (config.context.mode === "blocks") {
+        const plain = contextBlockText(percent);
+        const tone = contextHeatTone(percent);
+        return { plain, styled: theme.fg(tone, plain), tone };
+      }
+
+      const plain = `${percent}%`;
+      const tone = contextPercentTone(percent);
+      return { plain, styled: theme.fg(tone, plain), tone };
     }
     default:
       return undefined;

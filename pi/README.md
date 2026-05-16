@@ -79,6 +79,8 @@ Configuration:
 - `truncate` (number or `null`) crops each block to visible width and appends `… ` (default: `null`, disabled)
 - `thinking.mode` controls the thinking block format: `literal` (default) or `blocks`
 - `thinking.mapping` maps levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) to block glyphs in `blocks` mode
+- `context.mode` controls context format: `percent` (default), `bar`, or `blocks`
+- `context.barWidth` controls bar width in `bar` mode (default: `8`)
 - unknown block ids are ignored safely
 
 Config shape:
@@ -111,6 +113,15 @@ Config shape:
       "high": "▇",
       "xhigh": "█",
     },
+  },
+
+  // Context block formatting.
+  "context": {
+    // "percent" (default), "bar", or "blocks"
+    "mode": "percent",
+
+    // Used only in "bar" mode.
+    "barWidth": 8,
   },
 
   // Show branch-status extension line under the main footer.
