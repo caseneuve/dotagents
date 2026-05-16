@@ -8,6 +8,7 @@ import {
   formatGitStatsPlainCompact,
   formatGitStatsStyledCompact,
   getGitStats,
+  isGitRepo,
   type GitStatsCache,
 } from "./shared/runtime-status-git";
 
@@ -129,8 +130,10 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
         if (lines.length === 0 || width <= 0) return lines;
 
         gitStatsCache = getGitStats(gitStatsCache);
+        const gitRepo = isGitRepo();
         const rightLabel =
-          formatGitStatsPlainCompact(gitStatsCache.stats) ?? "✓";
+          formatGitStatsPlainCompact(gitStatsCache.stats) ??
+          (gitRepo ? "✓" : "");
         lines[0] = renderTopBorder(
           width,
           this.borderColor.bind(this),
@@ -138,7 +141,7 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
           buildLeftLabel(state),
           rightLabel,
           formatGitStatsStyledCompact(fullTheme, gitStatsCache.stats) ??
-            fullTheme.fg("dim", "✓"),
+            (gitRepo ? fullTheme.fg("dim", "✓") : ""),
         );
         return lines;
       }

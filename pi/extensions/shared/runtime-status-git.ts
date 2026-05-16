@@ -90,6 +90,11 @@ function readGitStats(): GitStats | null {
   return stats;
 }
 
+export function isGitRepo(cwd: string = process.cwd()): boolean {
+  const topLevel = runGit(["rev-parse", "--show-toplevel"]);
+  return typeof topLevel === "string" && topLevel.trim().length > 0;
+}
+
 export function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
   const now = Date.now();
   const cwd = process.cwd();
