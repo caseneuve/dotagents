@@ -5,8 +5,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
-  formatGitStatsPlain,
-  formatGitStatsStyled,
+  formatGitStatsPlainCompact,
+  formatGitStatsStyledCompact,
   getGitStats,
   type GitStatsCache,
 } from "./shared/runtime-status-git";
@@ -127,14 +127,15 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
         if (lines.length === 0 || width <= 0) return lines;
 
         gitStatsCache = getGitStats(gitStatsCache);
-        const rightLabel = formatGitStatsPlain(gitStatsCache.stats) ?? "";
+        const rightLabel =
+          formatGitStatsPlainCompact(gitStatsCache.stats) ?? "";
         lines[0] = renderTopBorder(
           width,
           this.borderColor.bind(this),
           (text) => fullTheme.fg("accent", text),
           buildLeftLabel(state),
           rightLabel,
-          formatGitStatsStyled(fullTheme, gitStatsCache.stats) ?? "",
+          formatGitStatsStyledCompact(fullTheme, gitStatsCache.stats) ?? "",
         );
         return lines;
       }

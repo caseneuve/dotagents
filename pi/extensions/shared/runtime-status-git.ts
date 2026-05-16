@@ -104,14 +104,25 @@ export function getGitStats(cache: GitStatsCache | undefined): GitStatsCache {
   };
 }
 
-export function formatGitStatsPlain(stats: GitStats | null): string | null {
-  if (!stats) return null;
-
+function formatGitFileParts(stats: GitStats): string[] {
   const fileParts = [String(stats.changedFiles)];
   if (stats.addedFiles > 0) fileParts.push(`A${stats.addedFiles}`);
   if (stats.untrackedFiles > 0) fileParts.push(`?${stats.untrackedFiles}`);
+  return fileParts;
+}
 
+export function formatGitStatsPlain(stats: GitStats | null): string | null {
+  if (!stats) return null;
+  const fileParts = formatGitFileParts(stats);
   return `[+${stats.addedLines}/-${stats.removedLines} (${fileParts.join(", ")})]`;
+}
+
+export function formatGitStatsPlainCompact(
+  stats: GitStats | null,
+): string | null {
+  if (!stats) return null;
+  const fileParts = formatGitFileParts(stats);
+  return `+${stats.addedLines}/-${stats.removedLines} (${fileParts.join(", ")})`;
 }
 
 export function formatGitStatsStyled(
@@ -132,4 +143,24 @@ export function formatGitStatsStyled(
   )}${theme.fg("error", `-${stats.removedLines}`)} ${theme.fg("dim", "(")}${fileParts.join(
     theme.fg("dim", ", "),
   )}${theme.fg("dim", ")]")}`;
+}
+
+export function formatGitStatsStyledCompact(
+  theme: ExtensionContext["ui"]["theme"],
+  stats: GitStats | null,
+): string | null {
+  if (!stats) return null;
+
+  const fileParts = [theme.fg("dim", String(stats.changedFiles))];
+  if (stats.addedFiles > 0)
+    fileParts.push(theme.fg("success", `A${stats.addedFiles}`));
+  if (stats.untrackedFiles > 0)
+    fileParts.push(theme.fg("warning", `?${stats.untrackedFiles}`));
+
+  return `${theme.fg("success", `+${stats.addedLines}`)}${theme.fg(
+    "dim",
+    "/",
+  )}${theme.fg("error", `-${stats.removedLines}`)} ${theme.fg("dim", "(")}${fileParts.join(
+    theme.fg("dim", ", "),
+  )}${theme.fg("dim", ")")}`;
 }
