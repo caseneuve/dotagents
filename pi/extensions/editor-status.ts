@@ -3,7 +3,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   formatGitStatsPlain,
   getGitStats,
@@ -41,6 +41,19 @@ function buildLeftLabel(state: EditorStatusState): string {
   return state.commsActive ? ` ${state.name} 📡 ` : ` ${state.name} `;
 }
 
+function clipLabel(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+  let out = "";
+  let used = 0;
+  for (const ch of text) {
+    const w = visibleWidth(ch);
+    if (used + w > maxWidth) break;
+    out += ch;
+    used += w;
+  }
+  return out;
+}
+
 function renderTopBorder(
   width: number,
   borderColor: (text: string) => string,
@@ -51,30 +64,36 @@ function renderTopBorder(
 ): string {
   if (width <= 0) return "";
 
-  const full = "─".repeat(width);
-  let plainLeft = leftLabel;
   const right = rightLabel.trim();
+  let plainLeft = leftLabel;
 
   const rightBudget = right ? visibleWidth(right) + MIN_GAP : 0;
-  const leftMax = Math.max(3, width - rightBudget);
+  const leftMax = Math.max(3, width - 1 - rightBudget);
   if (visibleWidth(plainLeft) > leftMax) {
-    plainLeft = `${truncateToWidth(plainLeft.trim(), Math.max(1, leftMax - 2))} `;
-    plainLeft = ` ${plainLeft.trimEnd()} `;
+    const clipped = clipLabel(plainLeft.trim(), Math.max(1, leftMax - 2));
+    plainLeft = ` ${clipped} `;
   }
 
   const leftWidth = visibleWidth(plainLeft);
+  const leftSegmentWidth = 1 + leftWidth;
   const rightWidth = right ? visibleWidth(right) : 0;
 
-  if (!right || leftWidth + MIN_GAP + rightWidth > width) {
-    const leftRendered = borderColor("─") + colorAccent(plainLeft);
-    return truncateToWidth(`${leftRendered}${borderColor(full)}`, width);
+  if (!right || width - leftSegmentWidth - rightWidth < MIN_GAP) {
+    const tailWidth = Math.max(0, width - leftSegmentWidth);
+    return (
+      borderColor("─") +
+      colorAccent(plainLeft) +
+      borderColor("─".repeat(tailWidth))
+    );
   }
 
-  const gap = Math.max(MIN_GAP, width - leftWidth - rightWidth);
-  const leftRendered = borderColor("─") + colorAccent(plainLeft);
-  const mid = borderColor("─".repeat(Math.max(0, gap - 1)));
-  const rightRendered = colorDim(right);
-  return truncateToWidth(`${leftRendered}${mid}${rightRendered}`, width);
+  const gapWidth = width - leftSegmentWidth - rightWidth;
+  return (
+    borderColor("─") +
+    colorAccent(plainLeft) +
+    borderColor("─".repeat(gapWidth)) +
+    colorDim(right)
+  );
 }
 
 function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
