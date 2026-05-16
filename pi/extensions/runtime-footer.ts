@@ -196,7 +196,7 @@ function defaultConfigText(): string {
   // Available block ids:
   // cwd, project, git-branch, git-diff, git, session-notes, comms, provider, model, thinking, cost, context
   // sep, S (explicit separator pseudo-block)
-  // text:<payload> (inline literal block, e.g. text:foo or text:bar baz)
+  // text:<payload> or T:<payload> (inline literal block, e.g. text:foo or T:bar baz)
 }
 `;
 }
@@ -873,7 +873,7 @@ function isSeparatorToken(token: string): boolean {
 }
 
 function isInlineTextToken(token: string): boolean {
-  return token.startsWith("text:");
+  return token.startsWith("text:") || token.startsWith("T:");
 }
 
 function renderInlineTextToken(
@@ -881,7 +881,9 @@ function renderInlineTextToken(
   theme: ExtensionContext["ui"]["theme"],
 ): FooterBlockText | undefined {
   if (!isInlineTextToken(token)) return undefined;
-  const payload = token.slice("text:".length);
+  const payload = token.startsWith("T:")
+    ? token.slice("T:".length)
+    : token.slice("text:".length);
   if (payload.trim().length === 0) return undefined;
   return { plain: payload, styled: theme.fg("dim", payload), tone: "dim" };
 }
