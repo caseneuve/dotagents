@@ -6,6 +6,7 @@ import {
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   formatGitStatsPlain,
+  formatGitStatsStyled,
   getGitStats,
   type GitStatsCache,
 } from "./shared/runtime-status-git";
@@ -58,13 +59,13 @@ function renderTopBorder(
   width: number,
   borderColor: (text: string) => string,
   colorAccent: (text: string) => string,
-  colorDim: (text: string) => string,
   leftLabel: string,
-  rightLabel: string,
+  rightPlain: string,
+  rightStyled: string,
 ): string {
   if (width <= 0) return "";
 
-  const right = rightLabel.trim();
+  const right = rightPlain.trim();
   let plainLeft = leftLabel;
 
   const rightBudget = right ? visibleWidth(right) + MIN_GAP : 0;
@@ -77,8 +78,9 @@ function renderTopBorder(
   const leftWidth = visibleWidth(plainLeft);
   const leftSegmentWidth = 1 + leftWidth;
   const rightWidth = right ? visibleWidth(right) : 0;
+  const rightSegmentWidth = rightWidth > 0 ? rightWidth + 1 : 0;
 
-  if (!right || width - leftSegmentWidth - rightWidth < MIN_GAP) {
+  if (!right || width - leftSegmentWidth - rightSegmentWidth < MIN_GAP) {
     const tailWidth = Math.max(0, width - leftSegmentWidth);
     return (
       borderColor("─") +
@@ -87,12 +89,13 @@ function renderTopBorder(
     );
   }
 
-  const gapWidth = width - leftSegmentWidth - rightWidth;
+  const gapWidth = width - leftSegmentWidth - rightSegmentWidth;
   return (
     borderColor("─") +
     colorAccent(plainLeft) +
     borderColor("─".repeat(gapWidth)) +
-    colorDim(right)
+    rightStyled +
+    borderColor("─")
   );
 }
 
@@ -129,9 +132,9 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
           width,
           this.borderColor.bind(this),
           (text) => fullTheme.fg("accent", text),
-          (text) => fullTheme.fg("dim", text),
           buildLeftLabel(state),
           rightLabel,
+          formatGitStatsStyled(fullTheme, gitStatsCache.stats) ?? "",
         );
         return lines;
       }
