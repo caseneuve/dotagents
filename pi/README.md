@@ -77,6 +77,8 @@ Configuration:
 - command-created config includes inline comments and all available options
 - `separator` controls the delimiter between blocks (default: `·`)
 - `truncate` (number or `null`) crops each block to visible width and appends `… ` (default: `null`, disabled)
+- `thinking.mode` controls the thinking block format: `literal` (default) or `blocks`
+- `thinking.mapping` maps levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) to block glyphs in `blocks` mode
 - unknown block ids are ignored safely
 
 Config shape:
@@ -94,6 +96,22 @@ Config shape:
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
+
+  // Thinking block formatting.
+  "thinking": {
+    // "literal" (default) or "blocks"
+    "mode": "literal",
+
+    // Used only in "blocks" mode; keys are thinking levels.
+    "mapping": {
+      "off": "▁",
+      "minimal": "▂",
+      "low": "▃",
+      "medium": "▅",
+      "high": "▇",
+      "xhigh": "█",
+    },
+  },
 
   // Show branch-status extension line under the main footer.
   "branchStatusLine": true,
