@@ -1,6 +1,6 @@
 ---
 title: editor status extension
-status: in_progress
+status: done
 priority: medium
 type: feature
 labels: []
