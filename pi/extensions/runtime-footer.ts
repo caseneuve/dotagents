@@ -20,7 +20,7 @@ import {
   getGitStats,
   type GitStats,
   type GitStatsCache,
-} from "./runtime-status-git";
+} from "./shared/runtime-status-git";
 
 const MIN_GAP = 2;
 const PROJECT_NAME_TTL_MS = 2000;

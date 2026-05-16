@@ -8,7 +8,7 @@ import {
   formatGitStatsPlain,
   getGitStats,
   type GitStatsCache,
-} from "./runtime-status-git";
+} from "./shared/runtime-status-git";
 
 const MIN_GAP = 1;
 
