@@ -62,11 +62,19 @@ type FooterBlockId =
   | "cost"
   | "context";
 
+type ThinkingMode = "literal" | "blocks";
+
+type ThinkingConfig = {
+  mode: ThinkingMode;
+  mapping: Record<string, string>;
+};
+
 type RuntimeFooterConfig = {
   left: string[];
   right: string[];
   separator: string;
   truncate: number | null;
+  thinking: ThinkingConfig;
   branchStatusLine: boolean;
 };
 
@@ -100,12 +108,27 @@ const KNOWN_BLOCKS = new Set<FooterBlockId>([
   "project",
 ]);
 
+const THINKING_BLOCK_CHARS = new Set(["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]);
+
+const DEFAULT_THINKING_MAPPING: Record<string, string> = {
+  off: "▁",
+  minimal: "▂",
+  low: "▃",
+  medium: "▅",
+  high: "▇",
+  xhigh: "█",
+};
+
 function defaultConfig(): RuntimeFooterConfig {
   return {
     left: [...DEFAULT_LEFT_BLOCKS],
     right: [...DEFAULT_RIGHT_BLOCKS],
     separator: " · ",
     truncate: null,
+    thinking: {
+      mode: "literal",
+      mapping: { ...DEFAULT_THINKING_MAPPING },
+    },
     branchStatusLine: true,
   };
 }
@@ -123,6 +146,22 @@ function defaultConfigText(): string {
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
+
+  // Thinking block formatting.
+  "thinking": {
+    // "literal" (default) or "blocks"
+    "mode": "literal",
+
+    // Used only in "blocks" mode; keys are thinking levels.
+    "mapping": {
+      "off": "▁",
+      "minimal": "▂",
+      "low": "▃",
+      "medium": "▅",
+      "high": "▇",
+      "xhigh": "█"
+    }
+  },
 
   // Show branch-status extension line under the main footer.
   "branchStatusLine": true,
@@ -144,12 +183,43 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     right?: unknown;
     separator?: unknown;
     truncate?: unknown;
+    thinking?: unknown;
     branchStatusLine?: unknown;
   };
 
   const parseSide = (side: unknown, fallback: string[]): string[] => {
     if (!Array.isArray(side)) return fallback;
     return side.filter((item): item is string => typeof item === "string");
+  };
+
+  const parseThinkingConfig = (value: unknown): ThinkingConfig => {
+    if (!value || typeof value !== "object") {
+      return {
+        mode: base.thinking.mode,
+        mapping: { ...base.thinking.mapping },
+      };
+    }
+
+    const thinking = value as {
+      mode?: unknown;
+      mapping?: unknown;
+    };
+
+    const mode: ThinkingMode =
+      thinking.mode === "blocks" ? "blocks" : base.thinking.mode;
+
+    const mapping: Record<string, string> = { ...base.thinking.mapping };
+    if (thinking.mapping && typeof thinking.mapping === "object") {
+      for (const [rawKey, rawValue] of Object.entries(thinking.mapping)) {
+        const key = rawKey.trim().toLowerCase();
+        if (!key || typeof rawValue !== "string") continue;
+        const glyph = rawValue.trim();
+        if (!THINKING_BLOCK_CHARS.has(glyph)) continue;
+        mapping[key] = glyph;
+      }
+    }
+
+    return { mode, mapping };
   };
 
   return {
@@ -163,6 +233,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
       data.truncate >= 1
         ? Math.floor(data.truncate)
         : base.truncate,
+    thinking: parseThinkingConfig(data.thinking),
     branchStatusLine:
       typeof data.branchStatusLine === "boolean"
         ? data.branchStatusLine
@@ -659,6 +730,7 @@ type RenderBlockParams = {
   theme: ExtensionContext["ui"]["theme"];
   ctx: ExtensionContext;
   pi: ExtensionAPI;
+  config: RuntimeFooterConfig;
   gitBranch: string | null;
   gitStats: GitStats | null;
   projectName: string;
@@ -678,6 +750,7 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
     theme,
     ctx,
     pi,
+    config,
     gitBranch,
     gitStats,
     projectName,
@@ -721,8 +794,15 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
       return { plain, styled: theme.fg("dim", plain), tone: "dim" };
     }
     case "thinking": {
-      const plain = formatThinking(pi);
-      return { plain, styled: theme.fg("dim", plain), tone: "dim" };
+      const level = formatThinking(pi);
+      if (config.thinking.mode === "blocks") {
+        const glyph =
+          config.thinking.mapping[level.toLowerCase()] ??
+          config.thinking.mapping[level] ??
+          "▁";
+        return { plain: glyph, styled: theme.fg("dim", glyph), tone: "dim" };
+      }
+      return { plain: level, styled: theme.fg("dim", level), tone: "dim" };
     }
     case "cost": {
       const plain = formatCost(ctx);
@@ -752,6 +832,7 @@ function renderSide(
   theme: ExtensionContext["ui"]["theme"],
   ctx: ExtensionContext,
   pi: ExtensionAPI,
+  config: RuntimeFooterConfig,
   gitBranch: string | null,
   gitStats: GitStats | null,
   projectName: string,
@@ -768,6 +849,7 @@ function renderSide(
       theme,
       ctx,
       pi,
+      config,
       gitBranch,
       gitStats,
       projectName,
@@ -980,6 +1062,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             theme,
             ctx,
             pi,
+            configCache.config,
             gitBranch,
             gitStats,
             projectName,
@@ -993,6 +1076,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             theme,
             ctx,
             pi,
+            configCache.config,
             gitBranch,
             gitStats,
             projectName,
