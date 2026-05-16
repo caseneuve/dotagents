@@ -196,6 +196,7 @@ function defaultConfigText(): string {
   // Available block ids:
   // cwd, project, git-branch, git-diff, git, session-notes, comms, provider, model, thinking, cost, context
   // sep, S (explicit separator pseudo-block)
+  // text:<payload> (inline literal block, e.g. text:foo or text:bar baz)
 }
 `;
 }
@@ -871,6 +872,20 @@ function isSeparatorToken(token: string): boolean {
   return SEPARATOR_BLOCKS.has(token);
 }
 
+function isInlineTextToken(token: string): boolean {
+  return token.startsWith("text:");
+}
+
+function renderInlineTextToken(
+  token: string,
+  theme: ExtensionContext["ui"]["theme"],
+): FooterBlockText | undefined {
+  if (!isInlineTextToken(token)) return undefined;
+  const payload = token.slice("text:".length);
+  if (payload.trim().length === 0) return undefined;
+  return { plain: payload, styled: theme.fg("dim", payload), tone: "dim" };
+}
+
 function renderSide(
   blockIds: string[],
   separator: string,
@@ -894,20 +909,20 @@ function renderSide(
     const parts: string[] = [];
 
     for (const rawBlockId of blockIds) {
-      if (!KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)) continue;
-
-      const block = renderBlock({
-        blockId: rawBlockId as FooterBlockId,
-        theme,
-        ctx,
-        pi,
-        config,
-        gitBranch,
-        gitStats,
-        projectName,
-        statuses,
-        commsActive,
-      });
+      const block = KNOWN_BLOCKS.has(rawBlockId as FooterBlockId)
+        ? renderBlock({
+            blockId: rawBlockId as FooterBlockId,
+            theme,
+            ctx,
+            pi,
+            config,
+            gitBranch,
+            gitStats,
+            projectName,
+            statuses,
+            commsActive,
+          })
+        : renderInlineTextToken(rawBlockId, theme);
 
       if (block) {
         if (
@@ -935,20 +950,20 @@ function renderSide(
       continue;
     }
 
-    if (!KNOWN_BLOCKS.has(token as FooterBlockId)) continue;
-
-    const block = renderBlock({
-      blockId: token as FooterBlockId,
-      theme,
-      ctx,
-      pi,
-      config,
-      gitBranch,
-      gitStats,
-      projectName,
-      statuses,
-      commsActive,
-    });
+    const block = KNOWN_BLOCKS.has(token as FooterBlockId)
+      ? renderBlock({
+          blockId: token as FooterBlockId,
+          theme,
+          ctx,
+          pi,
+          config,
+          gitBranch,
+          gitStats,
+          projectName,
+          statuses,
+          commsActive,
+        })
+      : renderInlineTextToken(token, theme);
     if (!block) continue;
 
     const renderedBlock =

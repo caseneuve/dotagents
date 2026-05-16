@@ -88,6 +88,7 @@ Configuration:
 - `context.mode` controls context format: `percent` (default), `bar`, or `blocks`
 - `context.barWidth` controls bar width in `bar` mode (default: `8`)
 - unknown block ids are ignored safely
+- inline literal blocks are supported via `text:<payload>` entries (for example `text:foo`)
 
 Config shape:
 
@@ -107,6 +108,10 @@ Config shape:
   // "sep" (canonical) or "S" (alias).
   // If either side uses sep/S, both sides stop implicit separators
   // and render separators only where sep/S appears.
+
+  // Inline literal blocks are supported via block ids like:
+  // "text:foo" or "text:bar baz".
+  // Empty payload ("text:") is ignored.
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
@@ -163,6 +168,7 @@ Available block ids:
 - `thinking`
 - `cost`
 - `context`
+- `text:<payload>` (inline literal block; examples: `text:foo`, `text:bar baz`; empty `text:` is ignored)
 
 Explicit separator example:
 
