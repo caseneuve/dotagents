@@ -112,6 +112,8 @@ Config shape:
   // Inline literal blocks are supported via block ids like:
   // "text:foo" / "text:bar baz" or alias "T:foo" / "T:bar baz".
   // Empty payload ("text:" or "T:") is ignored.
+  // In explicit-separator mode, T: blocks are spacing-managed and do not
+  // get implicit baseline spaces around them.
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
@@ -168,7 +170,8 @@ Available block ids:
 - `thinking`
 - `cost`
 - `context`
-- `text:<payload>` (inline literal block; alias: `T:<payload>`; examples: `text:foo`, `T:bar baz`; empty `text:` / `T:` is ignored)
+- `text:<payload>` (inline literal block; examples: `text:foo`, `text:bar baz`; empty `text:` is ignored)
+- `T:<payload>` (inline literal alias that manages its own spacing in explicit-separator mode; empty `T:` is ignored)
 
 Explicit separator example:
 

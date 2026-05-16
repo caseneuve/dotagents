@@ -876,6 +876,10 @@ function isInlineTextToken(token: string): boolean {
   return token.startsWith("text:") || token.startsWith("T:");
 }
 
+function isInlineTextAliasToken(token: string): boolean {
+  return token.startsWith("T:");
+}
+
 function renderInlineTextToken(
   token: string,
   theme: ExtensionContext["ui"]["theme"],
@@ -945,6 +949,7 @@ function renderSide(
 
   const parts: string[] = [];
   let pendingSeparator = false;
+  let previousWasSpacingManaged = false;
 
   for (const token of blockIds) {
     if (isSeparatorToken(token)) {
@@ -968,6 +973,8 @@ function renderSide(
       : renderInlineTextToken(token, theme);
     if (!block) continue;
 
+    const spacingManaged = isInlineTextAliasToken(token);
+
     const renderedBlock =
       truncate &&
       shouldTruncateBlock(token, truncateBlocks) &&
@@ -981,13 +988,14 @@ function renderSide(
     if (parts.length > 0) {
       if (pendingSeparator) {
         parts.push(renderedSeparator);
-      } else {
+      } else if (!previousWasSpacingManaged && !spacingManaged) {
         parts.push(" ");
       }
     }
 
     parts.push(renderedBlock);
     pendingSeparator = false;
+    previousWasSpacingManaged = spacingManaged;
   }
 
   return parts.join("");
