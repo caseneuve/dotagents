@@ -75,6 +75,7 @@ type RuntimeFooterConfig = {
   right: string[];
   separator: string;
   truncate: number | null;
+  truncateBlocks: string[] | null;
   thinking: ThinkingConfig;
   context: ContextConfig;
   branchStatusLine: boolean;
@@ -131,6 +132,7 @@ function defaultConfig(): RuntimeFooterConfig {
     right: [...DEFAULT_RIGHT_BLOCKS],
     separator: " · ",
     truncate: null,
+    truncateBlocks: null,
     thinking: {
       mode: "literal",
       mapping: { ...DEFAULT_THINKING_MAPPING },
@@ -156,6 +158,11 @@ function defaultConfigText(): string {
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
+
+  // Optional list of block ids eligible for truncation.
+  // Omit or set [] to allow truncation on all blocks.
+  // Special matching: "git" also matches "git-branch" and "git-diff".
+  "truncateBlocks": [],
 
   // Thinking block formatting.
   "thinking": {
@@ -206,6 +213,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     right?: unknown;
     separator?: unknown;
     truncate?: unknown;
+    truncateBlocks?: unknown;
     thinking?: unknown;
     context?: unknown;
     branchStatusLine?: unknown;
@@ -286,6 +294,15 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     return { mode, barWidth };
   };
 
+  const parseTruncateBlocks = (value: unknown): string[] | null => {
+    if (!Array.isArray(value)) return null;
+    const blocks = value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    return blocks.length > 0 ? blocks : null;
+  };
+
   return {
     left: parseSide(data.left, base.left),
     right: parseSide(data.right, base.right),
@@ -299,6 +316,7 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
       data.truncate >= 1
         ? Math.floor(data.truncate)
         : base.truncate,
+    truncateBlocks: parseTruncateBlocks(data.truncateBlocks),
     thinking: parseThinkingConfig(data.thinking),
     context: parseContextConfig(data.context),
     branchStatusLine:
@@ -832,10 +850,26 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
   }
 }
 
+function shouldTruncateBlock(
+  blockId: string,
+  truncateBlocks: string[] | null,
+): boolean {
+  if (!truncateBlocks || truncateBlocks.length === 0) return true;
+  if (blockId === "sep" || blockId === "S") return false;
+
+  if (truncateBlocks.includes(blockId)) return true;
+  if (blockId === "git-branch" || blockId === "git-diff" || blockId === "git") {
+    return truncateBlocks.includes("git");
+  }
+
+  return false;
+}
+
 function renderSide(
   blockIds: string[],
   separator: string,
   truncate: number | null,
+  truncateBlocks: string[] | null,
   theme: ExtensionContext["ui"]["theme"],
   ctx: ExtensionContext,
   pi: ExtensionAPI,
@@ -865,7 +899,11 @@ function renderSide(
     });
 
     if (block) {
-      if (truncate && visibleWidth(block.plain) > truncate) {
+      if (
+        truncate &&
+        shouldTruncateBlock(rawBlockId, truncateBlocks) &&
+        visibleWidth(block.plain) > truncate
+      ) {
         const shortened = clipPlainTextToWidth(block.plain, truncate);
         parts.push(theme.fg(block.tone, `${shortened}… `));
       } else {
@@ -1075,6 +1113,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             configCache.config.left,
             configCache.config.separator,
             configCache.config.truncate,
+            configCache.config.truncateBlocks,
             theme,
             ctx,
             pi,
@@ -1089,6 +1128,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             configCache.config.right,
             configCache.config.separator,
             configCache.config.truncate,
+            configCache.config.truncateBlocks,
             theme,
             ctx,
             pi,

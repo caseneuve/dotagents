@@ -76,7 +76,9 @@ Configuration:
 - open/create config via `/runtime-footer-config` (global default) or `/runtime-footer-config local`
 - command-created config includes inline comments and all available options
 - `separator` controls the delimiter between blocks (default: `·`)
-- `truncate` (number or `null`) crops each block to visible width and appends `… ` (default: `null`, disabled)
+- `truncate` (number or `null`) crops eligible blocks to visible width and appends `… ` (default: `null`, disabled)
+- `truncateBlocks` (optional string array) limits truncation to selected block ids; when omitted or empty, all blocks remain truncation-eligible
+- special truncation matching: `git` in `truncateBlocks` applies to `git-branch` and `git-diff`
 - `thinking.mode` controls the thinking block format: `literal` (default) or `blocks`
 - `thinking.mapping` maps levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) to block glyphs in `blocks` mode
 - `context.mode` controls context format: `percent` (default), `bar`, or `blocks`
@@ -98,6 +100,11 @@ Config shape:
 
   // Optional per-block truncation (visible width). Use null to disable.
   "truncate": null,
+
+  // Optional list of block ids eligible for truncation.
+  // Omit or set [] to allow truncation on all blocks.
+  // Special matching: "git" also matches "git-branch" and "git-diff".
+  "truncateBlocks": [],
 
   // Thinking block formatting.
   "thinking": {
