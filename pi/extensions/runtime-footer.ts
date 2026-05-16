@@ -54,6 +54,8 @@ type FooterBlockId =
   | "cwd"
   | "project"
   | "git"
+  | "git-branch"
+  | "git-diff"
   | "session-notes"
   | "comms"
   | "provider"
@@ -97,7 +99,8 @@ type FooterConfigCache = {
 
 const DEFAULT_LEFT_BLOCKS: FooterBlockId[] = [
   "cwd",
-  "git",
+  "git-branch",
+  "git-diff",
   "session-notes",
   "comms",
 ];
@@ -114,6 +117,7 @@ const KNOWN_BLOCKS = new Set<FooterBlockId>([
   ...DEFAULT_LEFT_BLOCKS,
   ...DEFAULT_RIGHT_BLOCKS,
   "project",
+  "git",
 ]);
 
 const THINKING_BLOCK_CHARS = new Set(["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]);
@@ -152,7 +156,7 @@ function defaultConfig(): RuntimeFooterConfig {
 function defaultConfigText(): string {
   return `{
   // Ordered block ids rendered on the left side.
-  "left": ["cwd", "git", "session-notes", "comms"],
+  "left": ["cwd", "git-branch", "git-diff", "session-notes", "comms"],
 
   // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
@@ -192,9 +196,13 @@ function defaultConfigText(): string {
   "branchStatusLine": true,
 
   // Available block ids:
-  // cwd, project, git, session-notes, comms, provider, model, thinking, cost, context
+  // cwd, project, git-branch, git-diff, git, session-notes, comms, provider, model, thinking, cost, context
 }
 `;
+}
+
+function normalizeTabs(text: string): string {
+  return text.replace(/\t/g, "    ");
 }
 
 function parseConfig(value: unknown): RuntimeFooterConfig | null {
@@ -215,7 +223,22 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
 
   const parseSide = (side: unknown, fallback: string[]): string[] => {
     if (!Array.isArray(side)) return fallback;
-    return side.filter((item): item is string => typeof item === "string");
+    const parsed = side.filter(
+      (item): item is string => typeof item === "string",
+    );
+
+    // Backward compatibility: legacy "git" expands to separate branch+diff
+    // blocks so truncation can affect them independently.
+    const expanded: string[] = [];
+    for (const item of parsed) {
+      if (item === "git") {
+        expanded.push("git-branch", "git-diff");
+      } else {
+        expanded.push(item);
+      }
+    }
+
+    return expanded;
   };
 
   const parseThinkingConfig = (value: unknown): ThinkingConfig => {
@@ -277,7 +300,9 @@ function parseConfig(value: unknown): RuntimeFooterConfig | null {
     left: parseSide(data.left, base.left),
     right: parseSide(data.right, base.right),
     separator:
-      typeof data.separator === "string" ? data.separator : base.separator,
+      typeof data.separator === "string"
+        ? normalizeTabs(data.separator)
+        : base.separator,
     truncate:
       typeof data.truncate === "number" &&
       Number.isFinite(data.truncate) &&
@@ -849,6 +874,20 @@ function renderBlock(params: RenderBlockParams): FooterBlockText | undefined {
       const styled = statsStyled ? `${branch} ${statsStyled}` : branch;
       return { plain, styled, tone: "dim" };
     }
+    case "git-branch": {
+      if (!gitBranch) return undefined;
+      return {
+        plain: gitBranch,
+        styled: theme.fg("dim", gitBranch),
+        tone: "dim",
+      };
+    }
+    case "git-diff": {
+      const statsPlain = formatGitStatsPlain(gitStats);
+      const statsStyled = formatGitStats(theme, gitStats);
+      if (!statsPlain || !statsStyled) return undefined;
+      return { plain: statsPlain, styled: statsStyled, tone: "dim" };
+    }
     case "session-notes": {
       const status = statuses.get("session-notes");
       if (!status) return undefined;
@@ -950,7 +989,7 @@ function renderSide(
     }
   }
 
-  return parts.join(theme.fg("dim", separator));
+  return parts.join(theme.fg("dim", normalizeTabs(separator)));
 }
 
 function clipPlainTextToWidth(text: string, maxWidth: number): string {
@@ -970,10 +1009,12 @@ function clipPlainTextToWidth(text: string, maxWidth: number): string {
 }
 
 function renderFooterLine(width: number, left: string, right: string): string {
+  const safeLeft = normalizeTabs(left);
+  const safeRight = normalizeTabs(right);
   const gap = " ".repeat(
-    Math.max(MIN_GAP, width - visibleWidth(left) - visibleWidth(right)),
+    Math.max(MIN_GAP, width - visibleWidth(safeLeft) - visibleWidth(safeRight)),
   );
-  return truncateToWidth(`${left}${gap}${right}`, width);
+  return truncateToWidth(`${safeLeft}${gap}${safeRight}`, width);
 }
 
 function ensureConfigFile(pathname: string): void {
@@ -1106,6 +1147,9 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
         },
         invalidate() {},
         render(width: number): string[] {
+          const terminalWidth = process.stdout.columns ?? width;
+          const safeWidth = Math.max(1, Math.min(width, terminalWidth));
+
           configCache = readFooterConfig(ctx.cwd, configCache);
           if (configCache.error && configCache.error !== lastConfigError) {
             lastConfigError = configCache.error;
@@ -1119,7 +1163,11 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
 
           const usesGit =
             configCache.config.left.includes("git") ||
-            configCache.config.right.includes("git");
+            configCache.config.right.includes("git") ||
+            configCache.config.left.includes("git-branch") ||
+            configCache.config.left.includes("git-diff") ||
+            configCache.config.right.includes("git-branch") ||
+            configCache.config.right.includes("git-diff");
           if (usesGit) {
             gitStatsCache = getGitStats(gitStatsCache);
           }
@@ -1167,16 +1215,16 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
             commsActive,
           );
 
-          const lines = [renderFooterLine(width, left, right)];
+          const lines = [renderFooterLine(safeWidth, left, right)];
 
           if (configCache.config.branchStatusLine) {
             const branchStatus = statuses.get("branch-status");
             if (branchStatus) {
-              lines.push(truncateToWidth(branchStatus, width));
+              lines.push(truncateToWidth(branchStatus, safeWidth));
             }
           }
 
-          return lines;
+          return lines.map((line) => truncateToWidth(line, safeWidth));
         },
       };
     });

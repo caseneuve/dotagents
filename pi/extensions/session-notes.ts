@@ -205,15 +205,19 @@ function applyStatus(ctx: ExtensionContext, notes: SessionNote[]): void {
   ctx.ui.setStatus(STATUS_KEY, buildStatusText(notes));
 }
 
+function normalizeTabs(text: string): string {
+  return text.replace(/\t/g, "    ");
+}
+
 function padVisible(text: string, width: number): string {
-  const truncated = truncateToWidth(text, width);
+  const truncated = truncateToWidth(normalizeTabs(text), width);
   const missing = Math.max(0, width - visibleWidth(truncated));
   return truncated + " ".repeat(missing);
 }
 
 function wrapBlock(text: string, width: number): string[] {
   const lines: string[] = [];
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of normalizeTabs(text).split(/\r?\n/)) {
     const wrapped = wrapTextWithAnsi(
       line.length > 0 ? line : " ",
       Math.max(1, width),
@@ -370,7 +374,7 @@ class SessionNotesComponent {
   }
 
   private getContentWidth(width: number): number {
-    return Math.max(CONTENT_MIN_WIDTH, width - 2);
+    return Math.max(1, width - 2);
   }
 
   private clampListSelectionIntoView(height: number): void {
@@ -635,10 +639,12 @@ class SessionNotesComponent {
   }
 
   render(width: number): string[] {
-    const contentWidth = this.getContentWidth(width);
+    const terminalWidth = process.stdout.columns ?? width;
+    const safeWidth = Math.max(3, Math.min(width, terminalWidth));
+    const contentWidth = this.getContentWidth(safeWidth);
     const bodyHeight = this.getBodyHeight();
 
-    const effectiveSplitMode = this.getEffectiveSplitMode(width);
+    const effectiveSplitMode = this.getEffectiveSplitMode(safeWidth);
     const isPreviewFocused = this.focusPane === "preview";
     const isVerticalSplit =
       !isPreviewFocused && effectiveSplitMode === "vertical";
@@ -647,12 +653,18 @@ class SessionNotesComponent {
       ? 0
       : isVerticalSplit
         ? contentWidth
-        : this.getListPaneWidth(contentWidth);
+        : Math.max(
+            1,
+            Math.min(
+              this.getListPaneWidth(contentWidth),
+              Math.max(1, contentWidth - DIVIDER_WIDTH - 1),
+            ),
+          );
     const previewWidth = isPreviewFocused
       ? contentWidth
       : isVerticalSplit
         ? contentWidth
-        : Math.max(PREVIEW_MIN_WIDTH, contentWidth - listWidth - DIVIDER_WIDTH);
+        : Math.max(1, contentWidth - listWidth - DIVIDER_WIDTH);
     const listHeight = this.getListPaneHeight(bodyHeight, effectiveSplitMode);
     const previewHeight = isPreviewFocused
       ? bodyHeight
@@ -752,7 +764,9 @@ class SessionNotesComponent {
       makeBorderLine("┗", "━", "┛"),
     ];
 
-    return [...header, ...body, ...footer];
+    return [...header, ...body, ...footer].map((line) =>
+      truncateToWidth(line, safeWidth),
+    );
   }
 
   invalidate(): void {}

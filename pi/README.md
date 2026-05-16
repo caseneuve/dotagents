@@ -60,7 +60,7 @@ Replaces the default footer with a denser single-line runtime status.
 What it does:
 
 - renders an ordered left/right footer from configurable blocks
-- defaults to cwd + git(+stats) + session-notes + comms on the left
+- defaults to cwd + git-branch + git-diff + session-notes + comms on the left
 - defaults to provider + model + thinking + cost + context on the right
 - shows compact dirty-worktree stats beside git, e.g. `[+13/-4 (3, A1, ?2)]`
 - removes the noisier token counters from the default footer
@@ -88,7 +88,7 @@ Config shape:
 ```jsonc
 {
   // Ordered block ids rendered on the left side.
-  "left": ["cwd", "git", "session-notes", "comms"],
+  "left": ["cwd", "git-branch", "git-diff", "session-notes", "comms"],
 
   // Ordered block ids rendered on the right side.
   "right": ["provider", "model", "thinking", "cost", "context"],
@@ -133,7 +133,9 @@ Available block ids:
 
 - `cwd`
 - `project` (git root dir name when available, otherwise current dir name)
-- `git`
+- `git-branch`
+- `git-diff`
+- `git` (legacy alias that expands to `git-branch` + `git-diff`)
 - `session-notes`
 - `comms`
 - `provider`
