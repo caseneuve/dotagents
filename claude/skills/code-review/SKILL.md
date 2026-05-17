@@ -11,6 +11,13 @@ triggers:
 
 # code-review — Comprehensive Code Review
 
+> **Note**: if the change touches user-facing text (CLI `--help` output, error
+> messages, README, ADRs, commit messages, public API docs), invoke the
+> `ux-review` skill *in addition to* (or instead of) this one. Code review
+> evaluates correctness against shared specs both sides can see; UX review
+> evaluates whether a fresh reader without your context can use the artifact.
+> They catch different bugs and are complementary, not redundant.
+
 ## Optional Arguments
 
 | Argument       | Purpose                                                         |

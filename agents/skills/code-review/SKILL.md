@@ -7,6 +7,13 @@ description: Review uncommitted changes or a branch diff, run automated checks, 
 
 Use this skill for reviews of local diffs, staged changes, or branch-to-branch comparisons.
 
+> **Note**: if the change touches user-facing text (CLI `--help` output, error
+> messages, README, ADRs, commit messages, public API docs), invoke the
+> `ux-review` skill *in addition to* (or instead of) this one. Code review
+> evaluates correctness against shared specs both sides can see; UX review
+> evaluates whether a fresh reader without your context can use the artifact.
+> They catch different bugs and are complementary, not redundant.
+
 ## Optional arguments
 
 - `--todo <ref>`: review against a todo, ADR, or issue reference
