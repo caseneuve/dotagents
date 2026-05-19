@@ -130,6 +130,7 @@ export default function (pi: ExtensionAPI) {
       agentName: agentName(),
       lobbyChannel: sessionLobbyChannel,
       lobbyAutoAnnounced: sessionLobbyAutoAnnounced,
+      displayName: display.name,
     });
     try {
       pi.sendMessage(

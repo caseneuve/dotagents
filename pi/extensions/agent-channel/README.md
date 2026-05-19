@@ -48,7 +48,7 @@ with macOS `osascript` notifications.
 | `channel_ack` | Mark a message as received |
 | `channel_watch` | Start background polling (auto-injects incoming messages) |
 | `channel_unwatch` | Stop background polling |
-| `channel_status` | Update cmux sidebar (status pills, progress bar, log lines) |
+| `channel_status` | Update local human-visible status surface (cmux sidebar, or tmux pane status/title) |
 | `channel_list` | List all channels and message counts |
 
 ## Commands
@@ -175,6 +175,8 @@ conversation message showing:
 
 This notice is only emitted on comms ON transitions (or session start when
 comms are already ON), and never when comms are OFF.
+
+In **tmux mode**, subject/status intent is pane-local by design: `channel_status` updates this pane's status/title surface and does **not** act like shared channel-description metadata.
 
 Set `AGENT_NOTIFY_MODE` to override TmuxBackend notification strategy:
 - `tmux` — always use `tmux display-message` (default when `notify-send` not found)

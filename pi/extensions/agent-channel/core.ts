@@ -397,6 +397,8 @@ export interface OrientationFields {
   lobbyChannel?: string;
   /** Whether the extension sent the presence announce on the lobby for this session. */
   lobbyAutoAnnounced: boolean;
+  /** Active display backend name (`cmux`, `tmux`, `noop`). */
+  displayName?: string;
 }
 
 /**
@@ -411,11 +413,16 @@ export function buildOrientation(fields: OrientationFields): string {
       }.`
     : "• No lobby channel could be resolved for this session.";
 
+  const statusLine =
+    fields.displayName === "tmux"
+      ? `• In tmux mode, subject/status updates are local to this pane (pane border/title), not shared channel metadata.`
+      : `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`;
+
   return [
     fields.header,
     `• Your agent name is "${fields.agentName}".`,
     lobbyLine,
-    `• Use "channel_send" to talk to other agents and "channel_status" for the sidebar (sidebar is NOT a message to others).`,
+    statusLine,
     `• When you receive a request-shaped message (request, review-request, ping, etc.) send a short ack (type="ack" body="got it, working on X. OVER") FIRST, then do the work, then send results. Silence between receipt and result looks like a dropped message.`,
     `• Default sign-off is OVER (or no suffix). OUT is only correct when BOTH sides have confirmed they are done — e.g. one side sent "approved"/"task-complete" and the other replied "ack. OUT". If you are the first to say "done", use OVER so the other side can confirm.`,
     `• Do not call "channel_unwatch" on a channel where you are still expecting a reply.`,

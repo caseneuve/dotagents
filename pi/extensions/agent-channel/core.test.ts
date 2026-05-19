@@ -674,6 +674,7 @@ describe("buildOrientation", () => {
     header: "[agent-channel] Comms are now ON.",
     agentName: "reviewer",
     lobbyAutoAnnounced: false,
+    displayName: "cmux",
   };
 
   test("starts with the provided header", () => {
@@ -719,14 +720,17 @@ describe("buildOrientation", () => {
 
   test("includes the protocol bullets", () => {
     const out = buildOrientation(baseFields);
-    // ack-first
     expect(out).toContain("send a short ack");
-    // OVER/OUT handshake
     expect(out).toContain("BOTH sides have confirmed");
-    // unwatch caveat
     expect(out).toContain("channel_unwatch");
-    // status vs send
     expect(out).toContain("sidebar is NOT a message to others");
+  });
+
+  test("uses tmux-specific status/subject guidance in tmux mode", () => {
+    const out = buildOrientation({ ...baseFields, displayName: "tmux" });
+    expect(out).toContain("subject/status updates are local to this pane");
+    expect(out).toContain("not shared channel metadata");
+    expect(out).not.toContain("sidebar is NOT a message to others");
   });
 
   test("does NOT include the legacy 'Comms are currently OFF' bullet", () => {
