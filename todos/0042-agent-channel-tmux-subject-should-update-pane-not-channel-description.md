@@ -1,6 +1,6 @@
 ---
 title: "agent-channel: tmux subject updates should target pane status/title, not channel description"
-status: in_progress
+status: done
 priority: high
 type: bug
 labels: [agent-channel, tmux, ux]
@@ -22,11 +22,11 @@ Tmux UX still leaks cmux-style guidance/behavior, so agent status/subject update
 
 ## Acceptance Criteria
 
-- [ ] Tmux-mode guidance explicitly tells agents to set local pane subject/status
-- [ ] Subject/status intent in tmux routes to pane status/title path deterministically
-- [ ] Shared channel-description semantics are not presented as primary in tmux mode
-- [ ] Behavior remains coherent when comms are muted/off (as designed)
-- [ ] Tests verify tmux-specific subject/status routing and messaging
+- [x] Tmux-mode guidance explicitly tells agents to set local pane subject/status
+- [x] Subject/status intent in tmux routes to pane status/title path deterministically
+- [x] Shared channel-description semantics are not presented as primary in tmux mode
+- [x] Behavior remains coherent when comms are muted/off (as designed)
+- [x] Tests verify tmux-specific subject/status routing and messaging
 
 ## Suggested Files
 
