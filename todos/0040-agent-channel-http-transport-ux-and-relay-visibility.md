@@ -18,11 +18,11 @@ connections could drop with socket hangups due to idle timeout behavior.
 
 ## Acceptance Criteria
 
-- [ ] Comms-on transport notice includes active transport plus endpoint details (HTTP base URL / UDS socket path).
-- [ ] `/transport` with no args shows transport plus endpoint details when available.
-- [ ] `/transport http` accepts shorthand forms (`host:port`, `:port`, `port`) while keeping legacy `/transport http <full-url>` behavior.
-- [ ] HTTP transport normalizes `0.0.0.0` to loopback for client connections.
-- [ ] Relay SSE streams stay alive without periodic socket hangups under idle conditions.
+- [x] Comms-on transport notice includes active transport plus endpoint details (HTTP base URL / UDS socket path).
+- [x] `/transport` with no args shows transport plus endpoint details when available.
+- [x] `/transport http` accepts shorthand forms (`host:port`, `:port`, `port`) while keeping legacy `/transport http <full-url>` behavior.
+- [x] HTTP transport normalizes `0.0.0.0` to loopback for client connections.
+- [x] Relay SSE streams stay alive without periodic socket hangups under idle conditions.
 
 ## Affected Files
 
