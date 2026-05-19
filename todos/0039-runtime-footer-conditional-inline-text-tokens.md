@@ -1,6 +1,6 @@
 ---
 title: runtime footer conditional inline text tokens
-status: in_progress
+status: done
 priority: medium
 type: feature
 labels: []
