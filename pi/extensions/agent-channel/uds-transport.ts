@@ -28,7 +28,7 @@ interface PendingRequest {
 export class UdsTransport implements MessageTransport {
   readonly name = "uds";
   onParseError?: (info: ParseErrorInfo) => void;
-  private socketPath: string;
+  readonly socketPath: string;
   private socket: net.Socket | null = null;
   private connected: boolean = false;
   private connectPromise: Promise<void> | null = null;

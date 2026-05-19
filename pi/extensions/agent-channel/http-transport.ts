@@ -11,18 +11,28 @@ import {
 } from "./core";
 import type { MessageTransport, ParseErrorInfo } from "./interfaces";
 
+function normalizeRelayUrl(baseUrl: string): string {
+  try {
+    const u = new URL(baseUrl);
+    // 0.0.0.0 is a bind-address for servers, not a client destination.
+    if (u.hostname === "0.0.0.0") u.hostname = "127.0.0.1";
+    return u.toString().replace(/\/+$/, "");
+  } catch {
+    return baseUrl.replace(/\/+$/, "");
+  }
+}
+
 export class HttpTransport implements MessageTransport {
   readonly name = "http";
   onParseError?: (info: ParseErrorInfo) => void;
-  private baseUrl: string;
+  readonly baseUrl: string;
   private sseConnections: Map<
     string,
     { req: http.ClientRequest; callback: (msgs: ChannelMessage[]) => void }
   > = new Map();
 
   constructor(baseUrl: string) {
-    // Strip trailing slash
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.baseUrl = normalizeRelayUrl(baseUrl);
   }
 
   private channelUrl(channel: string): string {

@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import {
@@ -79,6 +80,8 @@ function resolveLobby(): string | undefined {
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+const DEFAULT_UDS_SOCKET = "/tmp/agent-channels.sock";
 
 // Track message IDs published by this agent instance so the subscriber can skip them.
 // Capped to prevent unbounded growth in long sessions.
@@ -201,6 +204,124 @@ export default function (pi: ExtensionAPI) {
         }`,
       );
     }
+  }
+
+  function currentTransportDetail(): string {
+    if (transport instanceof HttpTransport) {
+      return `${transport.name} (${transport.baseUrl})`;
+    }
+    if (transport instanceof UdsTransport) {
+      return `${transport.name} (${transport.socketPath})`;
+    }
+    return transport.name;
+  }
+
+  /**
+   * On comms ON, surface the active transport and currently reachable relay
+   * endpoints so the agent immediately knows which path is live.
+   */
+  function normalizeHttpProbeUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      // 0.0.0.0 is valid for bind/listen logs, but clients should connect
+      // through a routable address.
+      if (u.hostname === "0.0.0.0") u.hostname = "127.0.0.1";
+      return u.toString().replace(/\/+$/, "");
+    } catch {
+      return url.replace(/\/+$/, "");
+    }
+  }
+
+  async function injectTransportAvailabilityNotice(
+    reason: "session-start" | "comms-on",
+  ): Promise<void> {
+    const udsPath = process.env.AGENT_UDS_SOCKET || DEFAULT_UDS_SOCKET;
+    const rawHttpUrl = process.env.AGENT_RELAY_URL;
+    const httpUrl = rawHttpUrl ? normalizeHttpProbeUrl(rawHttpUrl) : undefined;
+
+    const probeUds = async (): Promise<boolean> => {
+      if (!fs.existsSync(udsPath)) return false;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("probe timeout")), 500);
+          const sock = net.createConnection({ path: udsPath }, () => {
+            clearTimeout(timeout);
+            sock.destroy();
+            resolve();
+          });
+          sock.on("error", (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const probeHttp = async (): Promise<boolean> => {
+      if (!httpUrl) return false;
+      try {
+        const res = await fetch(`${httpUrl.replace(/\/+$/, "")}/channels`, {
+          signal: AbortSignal.timeout(500),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const [udsAvailable, httpAvailable] = await Promise.all([
+      probeUds(),
+      probeHttp(),
+    ]);
+
+    const availableRelays = [
+      udsAvailable ? `uds (${udsPath})` : null,
+      httpAvailable && httpUrl
+        ? `http (${httpUrl})${rawHttpUrl && rawHttpUrl !== httpUrl ? ` [from ${rawHttpUrl}]` : ""}`
+        : null,
+    ].filter(Boolean) as string[];
+
+    const content = [
+      `[agent-channel] Active transport: ${currentTransportDetail()}`,
+      `Available relays: ${availableRelays.length > 0 ? availableRelays.join(", ") : "none (file fallback only)"}`,
+    ].join("\n");
+
+    try {
+      pi.sendMessage(
+        {
+          customType: "agent-channel",
+          content,
+          display: true,
+          details: {
+            kind: "transport-availability",
+            reason,
+            activeTransport: transport.name,
+            activeTransportDetail: currentTransportDetail(),
+            relays: {
+              uds: { path: udsPath, available: udsAvailable },
+              http: {
+                url: httpUrl ?? null,
+                configuredUrl: rawHttpUrl ?? null,
+                available: httpAvailable,
+              },
+            },
+          },
+        },
+        { triggerTurn: false },
+      );
+    } catch (err) {
+      console.error(
+        `[agent-channel] failed to inject transport availability notice: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+
+    // Intentionally conversation-only: this state is primarily for agent
+    // reasoning and transcript/debug context, not a human-facing toast.
   }
 
   /** Cap + stringify an arbitrary value for inclusion in session state. */
@@ -518,6 +639,7 @@ export default function (pi: ExtensionAPI) {
     // later when /comms on is called.
     if (!commsMuted) {
       injectOrientation("session-start");
+      await injectTransportAvailabilityNotice("session-start");
     }
   });
 
@@ -1051,6 +1173,7 @@ export default function (pi: ExtensionAPI) {
           sessionLobbyAutoAnnounced = true;
         }
         injectOrientation("comms-on");
+        await injectTransportAvailabilityNotice("comms-on");
       } else {
         // on → off: announce leaving first so the last thing peers see on
         // the lobby is an honest "I'm gone", then drop subscriptions so
@@ -1095,7 +1218,7 @@ export default function (pi: ExtensionAPI) {
   // ── Command: /transport ──
   pi.registerCommand("transport", {
     description:
-      "Switch transport (usage: /transport [file|uds|http <url>|auto])",
+      "Switch transport (usage: /transport [file|uds|http <url|host:port|:port|port>|auto])",
     getArgumentCompletions: (prefix) => {
       const p = prefix.toLowerCase();
       const options = [
@@ -1113,7 +1236,8 @@ export default function (pi: ExtensionAPI) {
         {
           label: "http",
           value: "http ",
-          description: "use HTTP relay transport (requires URL)",
+          description:
+            "use HTTP relay transport (url, host:port, :port, or port)",
         },
         {
           label: "auto",
@@ -1132,7 +1256,7 @@ export default function (pi: ExtensionAPI) {
       const mode = parts[0]?.toLowerCase();
 
       if (!mode) {
-        ctx.ui.notify(`Current transport: ${transport.name}`, "info");
+        ctx.ui.notify(`Current transport: ${currentTransportDetail()}`, "info");
         return;
       }
 
@@ -1163,14 +1287,24 @@ export default function (pi: ExtensionAPI) {
           break;
         }
         case "http": {
-          const url = parts[1] || process.env.AGENT_RELAY_URL;
-          if (!url) {
+          const raw = parts[1] || process.env.AGENT_RELAY_URL;
+          if (!raw) {
             ctx.ui.notify(
-              "Usage: /transport http <url> (e.g. http://pi.local:7700)",
+              "Usage: /transport http <url|host:port|:port|port> (e.g. /transport http :7700)",
               "warning",
             );
             return;
           }
+
+          let url = raw;
+          if (/^:\d+$/.test(raw)) {
+            url = `http://127.0.0.1${raw}`;
+          } else if (/^\d+$/.test(raw)) {
+            url = `http://127.0.0.1:${raw}`;
+          } else if (!/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(raw)) {
+            url = `http://${raw}`;
+          }
+
           newTransport = new HttpTransport(url);
           wireParseErrorHook(newTransport);
           try {
@@ -1189,7 +1323,7 @@ export default function (pi: ExtensionAPI) {
           break;
         default:
           ctx.ui.notify(
-            "Usage: /transport [file|uds|http <url>|auto]",
+            "Usage: /transport [file|uds|http <url|host:port|:port|port>|auto]",
             "warning",
           );
           return;
@@ -1208,7 +1342,7 @@ export default function (pi: ExtensionAPI) {
 
       ctx.ui.setStatus("agent-ch", `channel: ${transport.name}`);
       ctx.ui.notify(
-        `Transport switched to: ${transport.name}${
+        `Transport switched to: ${currentTransportDetail()}${
           !commsMuted && watchedChannels.size > 0
             ? ` (${watchedChannels.size} channels migrated)`
             : commsMuted

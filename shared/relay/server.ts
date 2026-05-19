@@ -284,6 +284,8 @@ export class RelayServer {
       },
     };
 
+    let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
     const stream = new ReadableStream({
       start(controller) {
         sub.write = (data: string) => {
@@ -295,8 +297,22 @@ export class RelayServer {
         };
         relay.addSubscriber(channel, sub);
         relay.log(`sse client connected (id=${sub.id}) [${channel}]`);
+
+        // Keep the stream non-idle so Bun doesn't terminate it after the
+        // default request timeout window when no channel messages flow.
+        keepAliveTimer = setInterval(() => {
+          try {
+            sub.write(JSON.stringify({ type: "keepalive", ts: Date.now() }));
+          } catch {
+            // Stream likely closed; cancel path will clear timer.
+          }
+        }, 5000);
       },
       cancel() {
+        if (keepAliveTimer) {
+          clearInterval(keepAliveTimer);
+          keepAliveTimer = null;
+        }
         relay.removeSubscriber(channel, sub);
         relay.log(`sse client disconnected (id=${sub.id}) [${channel}]`);
       },

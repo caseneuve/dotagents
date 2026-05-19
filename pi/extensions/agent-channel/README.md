@@ -56,6 +56,7 @@ with macOS `osascript` notifications.
 | Command | Purpose |
 |---------|---------|
 | `/comms [on\|off]` | Toggle agent comms on/off |
+| `/transport [file\|uds\|http <url\|host:port\|:port\|port>\|auto]` | Switch channel transport backend |
 | `/channel-clear <name>` | Delete all messages from a channel |
 | `/channel-ls` | List channels in the notification bar |
 
@@ -137,6 +138,7 @@ Use descriptive, scoped names:
 | `CMUX_SOCKET_PATH` | Auto-detected; triggers cmux backend |
 | `TMUX` | Auto-detected; triggers tmux backend when cmux is not available |
 | `AGENT_NOTIFY_MODE` | Notification strategy for tmux backend: `auto`, `tmux`, or `notify-send` |
+| `AGENT_RELAY_URL` | HTTP relay URL for `HttpTransport` (if host is `0.0.0.0`, client normalizes to `127.0.0.1`) |
 
 ## Architecture: pluggable backends
 
@@ -162,9 +164,17 @@ Current backends:
 - **FileOnlyBackend** — file-based messages + platform-native notifications (`osascript` on macOS, `notify-send` on Linux). No status bar integration.
 
 Backend selection is automatic:
-1. cmux detected (`CMUX_SOCKET_PATH` or `cmux` on PATH) → CmuxBackend
-2. tmux session detected (`$TMUX` set) → TmuxBackend
-3. Otherwise → FileOnlyBackend
+1. UDS relay reachable (`AGENT_UDS_SOCKET` or `/tmp/agent-channels.sock`) → `UdsTransport`
+2. HTTP relay reachable (`AGENT_RELAY_URL`) → `HttpTransport`
+3. Otherwise → `FileTransport`
+
+When comms are turned ON, the extension injects a non-triggering
+conversation message showing:
+- active transport (`file`, `uds`, or `http`)
+- currently reachable relays (`uds (...)`, `http (...)`, or `none`)
+
+This notice is only emitted on comms ON transitions (or session start when
+comms are already ON), and never when comms are OFF.
 
 Set `AGENT_NOTIFY_MODE` to override TmuxBackend notification strategy:
 - `tmux` — always use `tmux display-message` (default when `notify-send` not found)
