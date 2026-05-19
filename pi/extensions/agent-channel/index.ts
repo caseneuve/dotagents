@@ -54,7 +54,7 @@ function shortHash(input: string): string {
 }
 
 /** Derive the lobby channel from the environment.
- *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session hash → file/lobby. */
+ *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session+window hash → file/lobby. */
 function resolveLobby(): string | undefined {
   if (process.env.CMUX_WORKSPACE_ID) return process.env.CMUX_WORKSPACE_ID;
   if (process.env.TMUX) {
@@ -65,10 +65,11 @@ function resolveLobby(): string | undefined {
         "-p",
         "#{session_name}",
       ]);
-      if (session) {
+      const windowId = execArgs(["tmux", "display-message", "-p", "#{window_id}"]);
+      if (session && windowId) {
         const socket = (process.env.TMUX || "").split(",")[0] || "";
-        const hash = shortHash(`${socket}/${session}`);
-        return `tmux/${session}-${hash}`;
+        const hash = shortHash(`${socket}/${session}/${windowId}`);
+        return `tmux/${session}-${windowId}-${hash}`;
       }
     } catch {
       /* tmux unavailable */
