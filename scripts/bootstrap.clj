@@ -207,6 +207,7 @@
     :target-dir (:pi-dst p)
     :extensions [(str (fs/path (:pi-src p) "extensions"))]
     :themes [(str (fs/path (:pi-src p) "themes"))]
+    :prompts [(str (fs/path (:pi-src p) "prompts"))]
     :theme "modus-operandi"}])
 
 (defn plan [p {:keys [mode]}]
@@ -276,17 +277,19 @@
         perms (some-> perms-json slurp-json)]
     (merge-claude-settings base hooks perms home)))
 
-(defn merge-pi-settings [base {:keys [extensions themes theme]}]
+(defn merge-pi-settings [base {:keys [extensions themes prompts theme]}]
   (cond-> (or base {})
     (seq extensions) (update :extensions merge-distinct-vec extensions)
     (seq themes) (update :themes merge-distinct-vec themes)
+    (seq prompts) (update :prompts merge-distinct-vec prompts)
     theme (assoc :theme theme)))
 
-(defn merge-pi-settings-data [{:keys [target-dir extensions themes theme]}]
+(defn merge-pi-settings-data [{:keys [target-dir extensions themes prompts theme]}]
   (let [settings-file (str (fs/path target-dir "settings.json"))
         base (or (slurp-json settings-file) {})]
     (merge-pi-settings base {:extensions extensions
                              :themes themes
+                             :prompts prompts
                              :theme theme})))
 
 (defn say [dry-run? live-msg dry-msg]
@@ -416,13 +419,15 @@
                   (require-dir! (:shared-src p) "shared"))
       :pi (do (require-dir! (:pi-src p) "pi")
               (require-dir! (str (fs/path (:pi-src p) "extensions")) "pi/extensions")
-              (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes"))
+              (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes")
+              (require-dir! (str (fs/path (:pi-src p) "prompts")) "pi/prompts"))
       :all (do (require-dir! (:claude-src p) "claude")
                (require-dir! (:agents-src p) "agents")
                (require-dir! (:shared-src p) "shared")
                (require-dir! (:pi-src p) "pi")
                (require-dir! (str (fs/path (:pi-src p) "extensions")) "pi/extensions")
-               (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes")))))
+               (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes")
+               (require-dir! (str (fs/path (:pi-src p) "prompts")) "pi/prompts")))))
 
 (defn announce [p {:keys [mode force? dry-run?]}]
   (let [force-line (when force? ["Force mode: enabled"])
@@ -459,6 +464,7 @@
                             "Sources:"
                             (str "  - " (fs/path (:pi-src p) "extensions"))
                             (str "  - " (fs/path (:pi-src p) "themes"))
+                            (str "  - " (fs/path (:pi-src p) "prompts"))
                             "Target:"
                             (str "  - " (:pi-dst p))
                             ""]

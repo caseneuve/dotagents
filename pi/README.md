@@ -1,19 +1,21 @@
 # pi
 
-Pi-specific themes and extensions for this dotagents repo.
+Pi-specific themes, extensions, and prompt templates for this dotagents repo.
 
 ## Contents
 
 - `extensions/` — small focused extensions following a composable, Unix-style philosophy
 - `themes/` — custom themes
+- `prompts/` — reusable prompt templates (`/name`) for Pi
 
 These resources are intended to be loaded directly from this repo by entries in `~/.pi/agent/settings.json`:
 
 - `"extensions": ["/path/to/dotagents/pi/extensions"]`
 - `"themes": ["/path/to/dotagents/pi/themes"]`
+- `"prompts": ["/path/to/dotagents/pi/prompts"]`
 - `"theme": "modus-operandi"`
 
-The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/` and `~/.pi/agent/themes/`.
+The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/`, `~/.pi/agent/themes/`, or `~/.pi/agent/prompts/`.
 
 ## Type-checking and Pi upgrades
 
