@@ -252,6 +252,11 @@ Implementation is not complete until another agent has reviewed it. The agent-co
 
 Sub-channels are task-scoped (`pqdw/review-0042`, not `pqdw/review`). A closed channel is dead — new task, new channel.
 
+**Hard guardrails (must):**
+- Do not start non-trivial multi-commit work on trunk; create `NNNN-slug` / `NNNN.M-slug` first.
+- For review, start `channel_watch(<review-channel>, catch_up=true)` before (or immediately with) the first review-request message and keep it watched until review is resolved.
+- After requesting review, stay active on that channel; if blocked/silent, follow timeout escalation (re-ping ~2m, notify human ~5m).
+
 The protocol mechanics (ack-first, OVER/OUT, turn-suppression for `type: "ack"`) are defined once in `~/.agents/skills/agent-comms/SKILL.md`. If that skill and this section disagree, the skill wins — these AGENTS.md notes are repo-specific overrides, not a second source of truth.
 
 **If the reviewer goes silent**, follow the timeout pattern from the skill: re-ping the sub-channel at ~2 min, notify the human at ~5 min. Do not block the branch indefinitely on an unresponsive reviewer.

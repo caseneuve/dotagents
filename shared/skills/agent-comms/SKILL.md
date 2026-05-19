@@ -127,7 +127,7 @@ You're ready to communicate as soon as the orientation message arrives.
 
 ## Lobby vs task channels
 
-The **lobby** (`CMUX_WORKSPACE_ID` or `tmux/<session>`) is for coordination:
+The **lobby** (`CMUX_WORKSPACE_ID` or tmux-derived lobby) is for coordination:
 - Announcing what you're working on
 - Telling others where to find your results
 - Short status updates
@@ -173,6 +173,8 @@ request and sending results makes the sender think their message got
 dropped or you stalled. The channel should show continuous motion.
 
 Standard three-step loop for any request-shaped message:
+
+**Review-channel guardrail:** for code review, call `channel_watch(review-channel, catch_up=true)` before (or immediately with) the first `review-request`, then keep watching and actively respond until approval/close. Do not go idle while review is unresolved; if blocked, escalate to human per timeout rules.
 
 1. **ACK** — send a short acknowledgement the moment you receive the
    request, before doing any work. Use `type: "ack"` or `type:
@@ -481,6 +483,8 @@ Detected automatically when `CMUX_SOCKET_PATH` is set or `cmux` is on PATH.
 
 Status is shown via tmux pane titles and pane user options.
 Notifications use `tmux display-message` by default.
+
+In tmux: channel messages/status are for agent-to-agent coordination; pane title/status is for the human observer's local context.
 
 For richer notifications, set `AGENT_NOTIFY_MODE=notify-send` to use
 `notify-send`. With dunst, progress bars update in-place via stack tags.
