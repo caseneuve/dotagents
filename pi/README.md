@@ -272,6 +272,29 @@ Notes:
 - extracts the last text block, not tool payloads or non-text content
 - leaves the built-in `ctrl-g` external editor flow unchanged
 
+### `extensions/cwd-editor.ts`
+
+Adds a `/cwd-editor` command for opening your external editor in the current working directory without touching the current Pi prompt text.
+
+What it does:
+
+- launches `$VISUAL` or `$EDITOR` with the current repo directory as the target
+- optionally accepts a relative path argument and resolves it from current `cwd`
+- waits for the editor process to exit, then returns you to Pi in the same state
+- leaves the existing `ctrl-g` flow unchanged (that one still edits the prompt buffer)
+
+Usage:
+
+- `/cwd-editor`
+- `/cwd-editor .`
+- `/cwd-editor path/to/file-or-dir`
+- `alt+e` — open editor in current working directory
+
+Notes:
+
+- requires interactive mode
+- requires `$VISUAL` or `$EDITOR` to be set
+
 ### `extensions/attach-screenshot.ts`
 
 Adds an `/attach-screenshot` command for picking screenshots in `sxiv` and queueing them into the editor for the next message.
