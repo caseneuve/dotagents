@@ -1,6 +1,6 @@
 ---
 title: "agent-channel: tmux lobby should default to window scope"
-status: open
+status: in_progress
 priority: high
 type: bug
 labels: [agent-channel, tmux, comms]
