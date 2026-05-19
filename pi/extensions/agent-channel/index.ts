@@ -6,7 +6,6 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import {
   shouldTriggerTurn,
   isValidMessage,
@@ -41,6 +40,7 @@ import {
   DEFAULT_CHANNEL_DIR,
 } from "./transports";
 import { TmuxDisplay, createDisplay, execArgs } from "./displays";
+import { resolveLobbyFromEnv } from "./lobby";
 
 // Re-export types for external consumers
 export type { ChannelMessage } from "./core";
@@ -48,34 +48,11 @@ export type { MessageTransport, StatusDisplay } from "./interfaces";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-/** Short hash for lobby channel names. */
-function shortHash(input: string): string {
-  return createHash("sha256").update(input).digest("hex").slice(0, 4);
-}
-
-/** Derive the lobby channel from the environment.
- *  Priority: CMUX_WORKSPACE_ID (cmux) → tmux socket+session+window hash → file/lobby. */
+/** Derive the lobby channel from the process environment. */
 function resolveLobby(): string | undefined {
-  if (process.env.CMUX_WORKSPACE_ID) return process.env.CMUX_WORKSPACE_ID;
-  if (process.env.TMUX) {
-    try {
-      const session = execArgs([
-        "tmux",
-        "display-message",
-        "-p",
-        "#{session_name}",
-      ]);
-      const windowId = execArgs(["tmux", "display-message", "-p", "#{window_id}"]);
-      if (session && windowId) {
-        const socket = (process.env.TMUX || "").split(",")[0] || "";
-        const hash = shortHash(`${socket}/${session}/${windowId}`);
-        return `tmux/${session}-${windowId}-${hash}`;
-      }
-    } catch {
-      /* tmux unavailable */
-    }
-  }
-  return "file/lobby";
+  return resolveLobbyFromEnv(process.env, (format) =>
+    execArgs(["tmux", "display-message", "-p", format]),
+  );
 }
 
 function makeId(): string {
