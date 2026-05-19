@@ -1,6 +1,6 @@
 ---
 title: "agent-channel: tmux subject updates should target pane status/title, not channel description"
-status: open
+status: in_progress
 priority: high
 type: bug
 labels: [agent-channel, tmux, ux]
