@@ -197,6 +197,8 @@ function defaultConfigText(): string {
   // cwd, project, git-branch, git-diff, git, session-notes, comms, provider, model, thinking, cost, context
   // sep, S (explicit separator pseudo-block)
   // text:<payload> or T:<payload> (inline literal block, e.g. text:foo or T:bar baz)
+  // ?text:<payload> / ?T:<payload> (show only when previous non-separator token renders non-empty)
+  // !text:<payload> / !T:<payload> (show only when next non-separator token renders non-empty)
 }
 `;
 }
@@ -872,24 +874,82 @@ function isSeparatorToken(token: string): boolean {
   return SEPARATOR_BLOCKS.has(token);
 }
 
+type InlineTextCondition = "none" | "prev" | "next";
+
+type ParsedInlineTextToken = {
+  payload: string;
+  aliasSpacingManaged: boolean;
+  condition: InlineTextCondition;
+};
+
+function parseInlineTextToken(token: string): ParsedInlineTextToken | null {
+  let condition: InlineTextCondition = "none";
+  let source = token;
+
+  if (source.startsWith("?")) {
+    condition = "prev";
+    source = source.slice(1);
+  } else if (source.startsWith("!")) {
+    condition = "next";
+    source = source.slice(1);
+  }
+
+  if (!(source.startsWith("text:") || source.startsWith("T:"))) return null;
+
+  const aliasSpacingManaged = source.startsWith("T:");
+  const payload = aliasSpacingManaged
+    ? source.slice("T:".length)
+    : source.slice("text:".length);
+
+  return { payload, aliasSpacingManaged, condition };
+}
+
 function isInlineTextToken(token: string): boolean {
-  return token.startsWith("text:") || token.startsWith("T:");
+  return parseInlineTextToken(token) !== null;
 }
 
 function isInlineTextAliasToken(token: string): boolean {
-  return token.startsWith("T:");
+  const parsed = parseInlineTextToken(token);
+  return parsed?.aliasSpacingManaged === true;
 }
 
 function renderInlineTextToken(
   token: string,
   theme: ExtensionContext["ui"]["theme"],
 ): FooterBlockText | undefined {
-  if (!isInlineTextToken(token)) return undefined;
-  const payload = token.startsWith("T:")
-    ? token.slice("T:".length)
-    : token.slice("text:".length);
-  if (payload.trim().length === 0) return undefined;
-  return { plain: payload, styled: theme.fg("dim", payload), tone: "dim" };
+  const parsed = parseInlineTextToken(token);
+  if (!parsed) return undefined;
+  if (parsed.payload.trim().length === 0) return undefined;
+  return {
+    plain: parsed.payload,
+    styled: theme.fg("dim", parsed.payload),
+    tone: "dim",
+  };
+}
+
+function shouldRenderInlineByCondition(
+  token: string,
+  index: number,
+  blockIds: string[],
+  hasRenderableTokenAt: (index: number) => boolean,
+): boolean {
+  const parsed = parseInlineTextToken(token);
+  if (!parsed) return false;
+
+  if (parsed.condition === "none") return true;
+
+  const step = parsed.condition === "prev" ? -1 : 1;
+  let cursor = index + step;
+
+  while (cursor >= 0 && cursor < blockIds.length) {
+    if (isSeparatorToken(blockIds[cursor])) {
+      cursor += step;
+      continue;
+    }
+    return hasRenderableTokenAt(cursor);
+  }
+
+  return false;
 }
 
 function renderSide(
@@ -951,12 +1011,7 @@ function renderSide(
   let pendingSeparator = false;
   let previousWasSpacingManaged = false;
 
-  for (const token of blockIds) {
-    if (isSeparatorToken(token)) {
-      if (parts.length > 0) pendingSeparator = true;
-      continue;
-    }
-
+  const renderedTokens = blockIds.map((token) => {
     const block = KNOWN_BLOCKS.has(token as FooterBlockId)
       ? renderBlock({
           blockId: token as FooterBlockId,
@@ -971,7 +1026,37 @@ function renderSide(
           commsActive,
         })
       : renderInlineTextToken(token, theme);
+    return { token, block };
+  });
+
+  const hasRenderableTokenAt = (index: number): boolean => {
+    const entry = renderedTokens[index];
+    if (!entry || !entry.block) return false;
+    return entry.block.plain.trim().length > 0;
+  };
+
+  for (let index = 0; index < blockIds.length; index += 1) {
+    const token = blockIds[index];
+
+    if (isSeparatorToken(token)) {
+      if (parts.length > 0) pendingSeparator = true;
+      continue;
+    }
+
+    const block = renderedTokens[index]?.block;
     if (!block) continue;
+
+    if (
+      isInlineTextToken(token) &&
+      !shouldRenderInlineByCondition(
+        token,
+        index,
+        blockIds,
+        hasRenderableTokenAt,
+      )
+    ) {
+      continue;
+    }
 
     const spacingManaged = isInlineTextAliasToken(token);
 
