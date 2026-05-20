@@ -1,6 +1,6 @@
 ---
 description: Ask another agent to review your latest work
-argument-hint: "[agent-name] [focus...]"
+argument-hint: "[agent-name] [focus]"
 ---
 Request a code review via /agent-channel.
 
@@ -19,4 +19,4 @@ Assume review is for the current workspace/branch (do not repeat branch unless c
 Ask for a critical, honest review (no rubber-stamping), following this repo’s review protocol and standards.
 
 Reviewer (optional): $1
-Extra focus (optional): $@
+Extra focus (optional): ${@:2}
