@@ -1,4 +1,8 @@
-import { type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   Input,
   Key,
@@ -11,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { appendEditorText } from "./shared/editor-text";
 
 type FocusPane = "list" | "preview";
 type QueryFocus = "none" | "input";
@@ -1108,94 +1113,103 @@ class AgentJournalComponent {
 }
 
 export default function agentJournalExtension(pi: ExtensionAPI) {
+  const openAgentJournal = async (ctx: ExtensionContext) => {
+    if (!ctx.hasUI) {
+      ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
+      return;
+    }
+
+    const termWidth = process.stdout.columns ?? 0;
+    if (termWidth < MIN_TERMINAL_COLUMNS) {
+      ctx.ui.notify(
+        `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
+        "warning",
+      );
+      return;
+    }
+
+    const currentProject = detectCurrentProject(ctx.cwd);
+
+    const markedEntries = await ctx.ui.custom<MarkedEntriesPayload | undefined>(
+      (tui, theme, _kb, done) => {
+        const openEditor = async (filePath: string) => {
+          const editorCmd = process.env.VISUAL || process.env.EDITOR;
+          if (!editorCmd) {
+            ctx.ui.notify(
+              "Set $VISUAL or $EDITOR to edit journal entries",
+              "warning",
+            );
+            return;
+          }
+
+          const [editor, ...editorArgs] = editorCmd.split(" ");
+          tui.stop();
+          try {
+            const result = spawnSync(editor, [...editorArgs, filePath], {
+              stdio: "inherit",
+              shell: process.platform === "win32",
+            });
+            if (result.status && result.status !== 0) {
+              ctx.ui.notify(
+                `Editor exited with code ${result.status}`,
+                "warning",
+              );
+            }
+          } catch (error) {
+            ctx.ui.notify(
+              `Failed to open editor: ${error instanceof Error ? error.message : String(error)}`,
+              "error",
+            );
+          } finally {
+            tui.start();
+            tui.requestRender(true);
+            void component.reload();
+          }
+        };
+
+        const component = new AgentJournalComponent(
+          JOURNAL_ROOT,
+          currentProject,
+          theme,
+          (full) => tui.requestRender(Boolean(full)),
+          (payload) => done(payload),
+          openEditor,
+        );
+        void component.init();
+        return component;
+      },
+      {
+        overlay: true,
+        overlayOptions: {
+          anchor: "center",
+          width: "82%",
+          minWidth: OVERLAY_MIN_WIDTH,
+          maxHeight: OVERLAY_MAX_HEIGHT,
+          margin: OVERLAY_MARGIN,
+        },
+      },
+    );
+
+    if (markedEntries) {
+      ctx.ui.setEditorText(
+        appendEditorText(ctx.ui.getEditorText(), markedEntries.text),
+      );
+      ctx.ui.notify(
+        `Appended ${markedEntries.count} marked journal entr${markedEntries.count === 1 ? "y" : "ies"} to the editor`,
+        "info",
+      );
+    }
+  };
+
   pi.registerCommand(COMMAND_NAME, {
     description: "Browse ~/org/agent-journal with preview and quick filters",
     handler: async (_args, ctx) => {
-      if (!ctx.hasUI) {
-        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
-        return;
-      }
-
-      const termWidth = process.stdout.columns ?? 0;
-      if (termWidth < MIN_TERMINAL_COLUMNS) {
-        ctx.ui.notify(
-          `/${COMMAND_NAME} requires at least ${MIN_TERMINAL_COLUMNS} columns (current: ${termWidth})`,
-          "warning",
-        );
-        return;
-      }
-
-      const currentProject = detectCurrentProject(ctx.cwd);
-
-      const markedEntries = await ctx.ui.custom<
-        MarkedEntriesPayload | undefined
-      >(
-        (tui, theme, _kb, done) => {
-          const openEditor = async (filePath: string) => {
-            const editorCmd = process.env.VISUAL || process.env.EDITOR;
-            if (!editorCmd) {
-              ctx.ui.notify(
-                "Set $VISUAL or $EDITOR to edit journal entries",
-                "warning",
-              );
-              return;
-            }
-
-            const [editor, ...editorArgs] = editorCmd.split(" ");
-            tui.stop();
-            try {
-              const result = spawnSync(editor, [...editorArgs, filePath], {
-                stdio: "inherit",
-                shell: process.platform === "win32",
-              });
-              if (result.status && result.status !== 0) {
-                ctx.ui.notify(
-                  `Editor exited with code ${result.status}`,
-                  "warning",
-                );
-              }
-            } catch (error) {
-              ctx.ui.notify(
-                `Failed to open editor: ${error instanceof Error ? error.message : String(error)}`,
-                "error",
-              );
-            } finally {
-              tui.start();
-              tui.requestRender(true);
-              void component.reload();
-            }
-          };
-
-          const component = new AgentJournalComponent(
-            JOURNAL_ROOT,
-            currentProject,
-            theme,
-            (full) => tui.requestRender(Boolean(full)),
-            (payload) => done(payload),
-            openEditor,
-          );
-          void component.init();
-          return component;
-        },
-        {
-          overlay: true,
-          overlayOptions: {
-            anchor: "center",
-            width: "82%",
-            minWidth: OVERLAY_MIN_WIDTH,
-            maxHeight: OVERLAY_MAX_HEIGHT,
-            margin: OVERLAY_MARGIN,
-          },
-        },
-      );
-
-      if (markedEntries) {
-        ctx.ui.setEditorText(markedEntries.text);
-        ctx.ui.notify(
-          `Loaded ${markedEntries.count} marked journal entr${markedEntries.count === 1 ? "y" : "ies"} into the editor`,
-          "info",
-        );
-      }
+      await openAgentJournal(ctx);
     },
+  });
+
+  pi.registerShortcut("alt+j", {
+    description: "Open agent journal",
+    handler: openAgentJournal,
   });
 }

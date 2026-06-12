@@ -15,6 +15,7 @@ import {
 import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { appendEditorText } from "./shared/editor-text";
 
 type SortMode = "number" | "state" | "priority" | "type" | "labels";
 type FocusPane = "list" | "preview";
@@ -1740,9 +1741,11 @@ export default function repoTodosExtension(pi: ExtensionAPI) {
     );
 
     if (markedTodos) {
-      ctx.ui.setEditorText(markedTodos.text);
+      ctx.ui.setEditorText(
+        appendEditorText(ctx.ui.getEditorText(), markedTodos.text),
+      );
       ctx.ui.notify(
-        `Loaded ${markedTodos.count} marked todo${markedTodos.count === 1 ? "" : "s"} into the editor`,
+        `Appended ${markedTodos.count} marked todo${markedTodos.count === 1 ? "" : "s"} to the editor`,
         "info",
       );
     }
