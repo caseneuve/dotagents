@@ -314,6 +314,10 @@ function anchorForBaseIndex(
 ): Omit<ReviewComment, "body"> {
   let currentFile: string | undefined;
   let currentHunk: string | undefined;
+  let oldLine: number | undefined;
+  let newLine: number | undefined;
+  let lastOldLine: number | undefined;
+  let lastNewLine: number | undefined;
 
   for (let i = 0; i <= afterBaseIndex && i < baseLines.length; i += 1) {
     const line = baseLines[i];
@@ -321,17 +325,49 @@ function anchorForBaseIndex(
     if (fileMatch) {
       currentFile = fileMatch[2];
       currentHunk = undefined;
+      oldLine = undefined;
+      newLine = undefined;
+      lastOldLine = undefined;
+      lastNewLine = undefined;
       continue;
     }
-    if (line.startsWith("@@ ")) {
+
+    const hunkMatch = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+    if (hunkMatch) {
       currentHunk = line;
+      oldLine = Number.parseInt(hunkMatch[1], 10);
+      newLine = Number.parseInt(hunkMatch[2], 10);
+      lastOldLine = oldLine;
+      lastNewLine = newLine;
+      continue;
     }
+
+    if (oldLine === undefined || newLine === undefined) continue;
+    if (line.startsWith("\\")) continue;
+
+    if (line.startsWith("-")) {
+      lastOldLine = oldLine;
+      oldLine += 1;
+      continue;
+    }
+
+    if (line.startsWith("+")) {
+      lastNewLine = newLine;
+      newLine += 1;
+      continue;
+    }
+
+    lastOldLine = oldLine;
+    lastNewLine = newLine;
+    oldLine += 1;
+    newLine += 1;
   }
 
   return {
     file: currentFile,
     hunk: currentHunk,
-    ...parseHunkStart(currentHunk ?? ""),
+    oldLine: lastOldLine ?? parseHunkStart(currentHunk ?? "").oldLine,
+    newLine: lastNewLine ?? parseHunkStart(currentHunk ?? "").newLine,
   };
 }
 
