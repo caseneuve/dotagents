@@ -210,7 +210,7 @@ Why it exists:
 
 ### `extensions/diff-review.ts`
 
-Adds `/diff-review` for editor-backed human review of the current git diff.
+Adds `/diff` for editor-backed human review of the current git diff.
 
 What it does:
 
@@ -220,15 +220,23 @@ What it does:
 - writes parsed comments to a sibling `/tmp/pi-diff-reviews/*.comments.md` file
 - sends only those parsed comment lines back to the agent as a follow-up message
 
-Supported forms (`/diff` is an alias for `/diff-review`):
+Primary command:
 
-- `/diff-review` — review unstaged worktree changes
-- `/diff-review staged` — review staged changes
-- `/diff-review dirty` — review staged plus unstaged tracked changes against `HEAD`
-- `/diff-review latest` — review `HEAD~1..HEAD`
-- `/diff-review master` — review the current branch against `master` with `master...HEAD`
-- `/diff-review N` — review the last N commits, e.g. `/diff-review 3` uses `HEAD~3..HEAD`
-- `/diff-review <revspec>` — review a custom git diff target, such as `master...HEAD`
+- `/diff` — review unstaged worktree changes
+- `/diff staged` — review staged changes
+- `/diff dirty` — review staged plus unstaged tracked changes against `HEAD`
+- `/diff dirty-all` — same as dirty plus untracked file patches
+- `/diff latest` — review `HEAD~1..HEAD`
+- `/diff master` — review the current branch against `master` with `master...HEAD`
+- `/diff N` — review the last N commits, e.g. `/diff 3` uses `HEAD~3..HEAD`
+- `/diff <revspec>` — review a custom git diff target
+
+Focused alias commands (no arguments needed):
+
+- `/diff-dirty` — shorthand for `/diff dirty-all`
+- `/diff-staged` — shorthand for `/diff staged`
+- `/diff-latest` — shorthand for `/diff latest`
+- `/diff-vs-master` — shorthand for `/diff master`
 
 ### `extensions/bookmark.ts`
 
