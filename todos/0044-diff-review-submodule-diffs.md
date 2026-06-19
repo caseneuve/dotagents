@@ -1,6 +1,6 @@
 ---
 title: Show dirty submodule diffs in Pi diff review
-status: open
+status: in_progress
 priority: medium
 type: feature
 labels: []
