@@ -224,8 +224,8 @@ Primary command:
 
 - `/diff` — review unstaged worktree changes
 - `/diff staged` — review staged changes
-- `/diff dirty` — review staged plus unstaged tracked changes against `HEAD`
-- `/diff dirty-all` — same as dirty plus untracked file patches
+- `/diff dirty` — review staged plus unstaged tracked changes against `HEAD`, including dirty submodules recursively
+- `/diff dirty-all` — same as dirty plus untracked file patches, including dirty submodules recursively
 - `/diff latest` — review `HEAD~1..HEAD`
 - `/diff master` — review the current branch against `master` with `master...HEAD`
 - `/diff N` — review the last N commits, e.g. `/diff 3` uses `HEAD~3..HEAD`

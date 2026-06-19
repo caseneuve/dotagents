@@ -73,10 +73,10 @@ function parseArgs(args: string): ParsedArgs {
 
 type GitResult = { ok: true; stdout: string } | { ok: false; message: string };
 
-function git(args: string[]): GitResult {
+function git(args: string[], cwd = process.cwd()): GitResult {
   try {
     const stdout = execFileSync("git", args, {
-      cwd: process.cwd(),
+      cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 5000,
@@ -100,9 +100,12 @@ function diffArgs(parsed: Extract<ParsedArgs, { ok: true }>): string[] {
   return common;
 }
 
-function gitOutputAllowingDiffExit(args: string[]): GitResult {
+function gitOutputAllowingDiffExit(
+  args: string[],
+  cwd = process.cwd(),
+): GitResult {
   const result = spawnSync("git", args, {
-    cwd: process.cwd(),
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 5000,
@@ -119,8 +122,8 @@ function gitOutputAllowingDiffExit(args: string[]): GitResult {
   return { ok: false, message: (result.stderr || "git command failed").trim() };
 }
 
-function buildUntrackedDiff(): GitResult {
-  const list = git(["ls-files", "--others", "--exclude-standard"]);
+function buildUntrackedDiff(cwd = process.cwd()): GitResult {
+  const list = git(["ls-files", "--others", "--exclude-standard"], cwd);
   if (!list.ok) return list;
 
   const files = list.stdout
@@ -132,15 +135,88 @@ function buildUntrackedDiff(): GitResult {
 
   const chunks: string[] = [];
   for (const file of files) {
-    const patch = gitOutputAllowingDiffExit([
-      "diff",
-      "--no-index",
-      "--",
-      "/dev/null",
-      file,
-    ]);
+    const patch = gitOutputAllowingDiffExit(
+      ["diff", "--no-index", "--", "/dev/null", file],
+      cwd,
+    );
     if (!patch.ok) return patch;
     if (patch.stdout.trim()) chunks.push(patch.stdout.trimEnd());
+  }
+
+  return {
+    ok: true,
+    stdout: chunks.join("\n\n") + (chunks.length ? "\n" : ""),
+  };
+}
+
+function prefixDiffPaths(diff: string, prefix: string): string {
+  const normalizedPrefix = prefix.replace(/\/+$/, "");
+  if (!normalizedPrefix) return diff;
+
+  return diff
+    .split(/\r?\n/)
+    .map((line) => {
+      const gitMatch = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+      if (gitMatch) {
+        return `diff --git a/${normalizedPrefix}/${gitMatch[1]} b/${normalizedPrefix}/${gitMatch[2]}`;
+      }
+      const fileMatch = /^(---|\+\+\+) ([ab])\/(.+)$/.exec(line);
+      if (fileMatch) {
+        return `${fileMatch[1]} ${fileMatch[2]}/${normalizedPrefix}/${fileMatch[3]}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+function listSubmodulePaths(): GitResult {
+  const status = git(["submodule", "status", "--recursive"]);
+  if (!status.ok) return status;
+
+  const paths = status.stdout
+    .split(/\r?\n/)
+    .map((line) => /^.\S+\s+(\S+)/.exec(line)?.[1])
+    .filter((submodulePath): submodulePath is string => Boolean(submodulePath));
+
+  return { ok: true, stdout: paths.join("\n") };
+}
+
+function buildSubmoduleDiffs(
+  parsed: Extract<ParsedArgs, { ok: true }>,
+): GitResult {
+  if (parsed.mode !== "dirty" && parsed.mode !== "dirty-all") {
+    return { ok: true, stdout: "" };
+  }
+
+  const paths = listSubmodulePaths();
+  if (!paths.ok) return paths;
+
+  const chunks: string[] = [];
+  for (const submodulePath of paths.stdout.split(/\r?\n/).filter(Boolean)) {
+    const cwd = path.join(process.cwd(), submodulePath);
+    const tracked = git(diffArgs(parsed), cwd);
+    if (!tracked.ok) {
+      return {
+        ok: false,
+        message: `failed to read submodule ${submodulePath}: ${tracked.message}`,
+      };
+    }
+    if (tracked.stdout.trim()) {
+      chunks.push(prefixDiffPaths(tracked.stdout.trimEnd(), submodulePath));
+    }
+
+    if (parsed.mode === "dirty-all") {
+      const untracked = buildUntrackedDiff(cwd);
+      if (!untracked.ok) {
+        return {
+          ok: false,
+          message: `failed to read untracked files in submodule ${submodulePath}: ${untracked.message}`,
+        };
+      }
+      if (untracked.stdout.trim()) {
+        chunks.push(prefixDiffPaths(untracked.stdout.trimEnd(), submodulePath));
+      }
+    }
   }
 
   return {
@@ -357,6 +433,21 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
             : `${untracked.stdout.trimEnd()}\n`;
         }
       }
+
+      const submodules = buildSubmoduleDiffs(parsed);
+      if (!submodules.ok) {
+        ctx.ui.notify(
+          `Failed to read submodule diffs: ${submodules.message}`,
+          "error",
+        );
+        return;
+      }
+      if (submodules.stdout.trim()) {
+        diff = diff.trim()
+          ? `${diff.trimEnd()}\n\n${submodules.stdout.trimEnd()}\n`
+          : `${submodules.stdout.trimEnd()}\n`;
+      }
+
       if (!diff.trim()) {
         ctx.ui.notify("No diff to review", "info");
         return;
