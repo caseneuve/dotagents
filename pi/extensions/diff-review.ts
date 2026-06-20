@@ -72,6 +72,7 @@ function parseArgs(args: string): ParsedArgs {
 }
 
 type GitResult = { ok: true; stdout: string } | { ok: false; message: string };
+type GitRunner = (args: string[], cwd?: string) => GitResult;
 
 function git(args: string[], cwd = process.cwd()): GitResult {
   try {
@@ -149,7 +150,7 @@ function buildUntrackedDiff(cwd = process.cwd()): GitResult {
   };
 }
 
-function prefixDiffPaths(diff: string, prefix: string): string {
+export function prefixDiffPaths(diff: string, prefix: string): string {
   const normalizedPrefix = prefix.replace(/\/+$/, "");
   if (!normalizedPrefix) return diff;
 
@@ -169,32 +170,42 @@ function prefixDiffPaths(diff: string, prefix: string): string {
     .join("\n");
 }
 
-function listSubmodulePaths(): GitResult {
-  const status = git(["submodule", "status", "--recursive"]);
-  if (!status.ok) return status;
-
-  const paths = status.stdout
-    .split(/\r?\n/)
-    .map((line) => /^.\S+\s+(\S+)/.exec(line)?.[1])
-    .filter((submodulePath): submodulePath is string => Boolean(submodulePath));
-
-  return { ok: true, stdout: paths.join("\n") };
+export function parseNullDelimitedPaths(stdout: string): string[] {
+  return stdout.split("\0").filter(Boolean);
 }
 
-function buildSubmoduleDiffs(
+function listSubmodulePaths(runner: GitRunner = git): GitResult {
+  const status = runner([
+    "submodule",
+    "foreach",
+    "--recursive",
+    "--quiet",
+    'printf "%s\\0" "$displaypath"',
+  ]);
+  if (!status.ok) return status;
+
+  return {
+    ok: true,
+    stdout: parseNullDelimitedPaths(status.stdout).join("\n"),
+  };
+}
+
+export function buildSubmoduleDiffs(
   parsed: Extract<ParsedArgs, { ok: true }>,
+  runner: GitRunner = git,
+  untrackedBuilder: (cwd?: string) => GitResult = buildUntrackedDiff,
 ): GitResult {
   if (parsed.mode !== "dirty" && parsed.mode !== "dirty-all") {
     return { ok: true, stdout: "" };
   }
 
-  const paths = listSubmodulePaths();
+  const paths = listSubmodulePaths(runner);
   if (!paths.ok) return paths;
 
   const chunks: string[] = [];
   for (const submodulePath of paths.stdout.split(/\r?\n/).filter(Boolean)) {
     const cwd = path.join(process.cwd(), submodulePath);
-    const tracked = git(diffArgs(parsed), cwd);
+    const tracked = runner(diffArgs(parsed), cwd);
     if (!tracked.ok) {
       return {
         ok: false,
@@ -206,7 +217,7 @@ function buildSubmoduleDiffs(
     }
 
     if (parsed.mode === "dirty-all") {
-      const untracked = buildUntrackedDiff(cwd);
+      const untracked = untrackedBuilder(cwd);
       if (!untracked.ok) {
         return {
           ok: false,
