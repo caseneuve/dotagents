@@ -1,5 +1,5 @@
 ---
-title: pi extension package extraction v1 (new repos under ~/git/pi)
+title: reorganize Pi extensions into installable packages
 status: open
 priority: high
 type: epic
@@ -7,70 +7,73 @@ labels: [pi, packaging, extraction]
 created: 2026-05-12
 parent: null
 blocked-by: []
-blocks: [0027.1, 0027.2, 0027.3, 0027.4, 0027.5, 0027.6, 0027.7, 0027.8, 0027.9, 0046]
+blocks: []
 ---
 
 ## Context
 
-Move dotagents Pi extensions and resources into independently installable logical package clusters,
-with one repository per package under `~/git/pi/`. The initial distribution path is local package
-installation for personal machines plus pinned Git installation for reproducible projects; npm is
-a possible follow-up.
+Reorganize the existing dotagents Pi extensions and resources into seven public repositories owned
+by `caseneuve`, with one repository per logical package under `~/git/pi/`:
 
-Agreed package map:
+1. `caseneuve/pi-agent-channel`
+2. `caseneuve/pi-playwright`
+3. `caseneuve/pi-runtime-ui`
+4. `caseneuve/pi-conversation-tools`
+5. `caseneuve/pi-workbench`
+6. `caseneuve/pi-provider-extras`
+7. `caseneuve/pi-dotagents-resources`
 
-1. `pi-agent-channel`
-2. `pi-playwright`
-3. `pi-runtime-ui`
-4. `pi-conversation-tools`
-5. `pi-workbench`
-6. `pi-provider-extras`
-7. `pi-dotagents-resources`
+This epic is a move-only reorganization. Preserve existing behavior, commands, tools, shortcuts,
+configuration, platform support, and tests. Changes are limited to mechanical necessities such as
+paths/imports, explicit Pi manifests, dependency metadata, moving tests/docs, and compatibility
+fixes required by the currently supported Earendil Pi API (`@earendil-works/*`).
 
-Constraints:
-
-- use `@earendil-works/*` dependencies and current Pi package conventions
-- declare resources explicitly in each Pi manifest
-- preserve independent resource filtering inside logical multi-extension packages
-- support Linux and macOS for relevant workbench/editor utilities
-- keep Tree-sitter dormant and outside stable package manifests
-- keep canonical implementations in package repositories after cutover, not duplicated in dotagents
+Do not redesign or improve extensions during extraction. Record discovered improvements as
+follow-up todos. Initial installation is by local path and immutable Pi-supported Git ref; npm
+publication is follow-up `0051`.
 
 ## Acceptance Criteria
 
-- [ ] The seven-repository target map under `~/git/pi/` is implemented and documented.
-- [ ] A shared package convention covers manifests, dependencies, tests, platform support, local/Git installation, and experimental lifecycle.
-- [ ] `agent-channel` extraction includes the bundled `agent-comms` skill and detached relay operations model.
-- [ ] Conversation tools preserve assistant outline, last-assistant-block, bookmarks, and session notes as independently filterable resources.
-- [ ] Workbench preserves diff-review aliases plus repo todos, agent journal, cwd editor, and screenshot attachment as independently filterable resources.
-- [ ] Runtime UI provides one footer owner and one editor-component owner with optional cross-package integrations.
-- [ ] Playwright is installable independently with reproducible runtime dependencies and restrictive policy defaults.
-- [ ] Provider extras and themes/prompts are independently installable packages.
-- [ ] The complete package set passes isolated local/Git install and composition validation before cutover.
-- [ ] Tree-sitter remains explicitly experimental/dormant and is not installed by this epic.
+- [ ] The seven public `github.com/caseneuve/pi-*` repositories exist and are installable by local path and Git.
+- [ ] Each repository uses explicit Pi manifest entries so package membership is intentional and each included resource remains filterable through Pi's documented package filtering/config mechanism.
+- [ ] Existing extension behavior, resource names/paths exposed by the package, commands, tools, shortcuts, settings, and platform limitations are preserved.
+- [ ] Existing tests and relevant documentation move with their canonical implementation and pass using documented commands.
+- [ ] Package runtime imports are compatible with the currently supported `@earendil-works/*` Pi API.
+- [ ] No redesign, feature work, platform expansion, or daemon hardening is required to close the extraction tasks.
+- [ ] The complete extracted package set passes isolated installation and composition validation in `0027.9`.
+- [ ] Tree-sitter remains dormant and is not packaged or installed by this epic.
+- [ ] Epic `0027` can close after `0027.9`; dotagents adoption and source retirement remain downstream top-level work.
 
 ## Sub-tasks
 
-- `0027.1`: extract agent-channel suite
-- `0027.2`: extract conversation-tools package
-- `0027.3`: extract workbench package
-- `0027.4`: extract/rewrite runtime-ui package
-- `0027.5`: define package conventions and repository template
-- `0027.6`: extract Playwright package
-- `0027.7`: extract provider-extras package
-- `0027.8`: extract dotagents-resources package
+- `0027.1`: move agent-channel suite
+- `0027.2`: move conversation-tools package
+- `0027.3`: move workbench package
+- `0027.4`: move runtime-ui package
+- `0027.5`: define minimal package conventions/checklist
+- `0027.6`: move Playwright package
+- `0027.7`: move provider-extras package
+- `0027.8`: move dotagents-resources package
 - `0027.9`: validate the extracted package set
+
+## Follow-ups (out of scope)
+
+- `0048`: redesign runtime UI around a plugin/provider architecture
+- `0049`: harden agent-channel relay daemon operations
+- `0050`: add a cross-platform screenshot picker
+- `0051`: publish packages to npm
+- `0052`: automate Playwright browser installation and broader CI
 
 ## Affected Files
 
-- `todos/0027*.md` — epic and sub-task tracking.
-- New repositories under `~/git/pi/` — canonical implementations.
-- `pi/*` — current behavior baseline and temporary migration sources until todo `0046` completes.
+- `todos/0027*.md` — epic and extraction subtasks.
+- New public repositories under `github.com/caseneuve/` and local checkouts under `~/git/pi/`.
+- `pi/*` — temporary source baseline retained through cutover and soak.
 
 ## Notes
 
-- Install-strategy policy remains in todo `0026`.
-- Actual dotagents bootstrap/settings cutover remains in todo `0046`.
-- Emacs bridge already lives in `~/git/pi/pi-emacs-bridge` and is out of scope.
-- One repository per package is intentional: Pi's Git installer is repository-root oriented, making
-  this cleaner than a multi-package monorepo for local/Git-first distribution.
+- Installation policy remains in `0026`.
+- Bootstrap cutover remains in `0046`.
+- Dormant source retirement remains in `0047`.
+- The repositories consume Earendil Pi APIs but are not owned by the `earendil-works` organization.
+- Emacs bridge already lives separately and is out of scope.

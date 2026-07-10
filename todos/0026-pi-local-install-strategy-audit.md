@@ -22,7 +22,7 @@ This item is intentionally standalone and not part of extraction epic `0027`.
 
 - [ ] Document current state (`extensions` path entries, bootstrap wiring, pros/cons).
 - [ ] Evaluate package-based alternatives (`pi install /path`, npm, git, global vs `-l`).
-- [ ] Recommend local-path packages for dotagents development/personal machines and pinned Git packages for reproducible project/team use; leave npm publication as follow-up work.
+- [ ] Recommend local-path packages for dotagents development/personal machines and immutable Pi-supported Git refs from public `github.com/caseneuve/pi-*` repositories for reproducible project/team use; leave npm publication to follow-up `0051`.
 - [ ] Define which packages are global defaults versus selective or project-local capabilities.
 - [ ] Document committed project `.pi/settings.json` behavior, project trust, automatic missing-package installation, and why committed settings should use portable Git sources rather than personal absolute paths.
 - [ ] Define dotagents' long-term ownership: shared skills, agent orchestration, bootstrap, and package-selection policy rather than duplicate Pi extension implementations.
@@ -39,7 +39,8 @@ This item is intentionally standalone and not part of extraction epic `0027`.
 
 - Keep this work decoupled from the extraction epic.
 - Prefer package semantics over ad-hoc path wiring when practical.
-- Agreed initial distribution order: local paths first, pinned Git second, npm later.
+- Agreed initial distribution order: local paths first, immutable Git refs second, npm later (`0051`).
+- Repositories are public and owned by `caseneuve`; `@earendil-works/*` identifies the supported Pi API dependencies, not repository/package ownership.
 - Agreed global defaults: agent-channel, runtime UI, conversation tools, and dotagents resources.
 - Playwright is project-local by default; workbench and provider extras are selective.
 - This item defines policy; todo `0046` performs the destructive bootstrap/settings cutover.
