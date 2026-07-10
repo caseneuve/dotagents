@@ -86,7 +86,7 @@ Configuration:
 - `truncateBlocks` (optional string array) limits truncation to selected block ids; when omitted or empty, all blocks remain truncation-eligible
 - special truncation matching: `git` in `truncateBlocks` applies to `git-branch` and `git-diff`
 - `thinking.mode` controls the thinking block format: `literal` (default) or `blocks`
-- `thinking.mapping` maps levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) to block glyphs in `blocks` mode
+- `thinking.mapping` maps levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) to block glyphs in `blocks` mode
 - `context.mode` controls context format: `percent` (default), `bar`, or `blocks`
 - `context.barWidth` controls bar width in `bar` mode (default: `8`)
 - unknown block ids are ignored safely
@@ -135,9 +135,10 @@ Config shape:
       "off": "▁",
       "minimal": "▂",
       "low": "▃",
-      "medium": "▅",
-      "high": "▇",
-      "xhigh": "█",
+      "medium": "▄",
+      "high": "▅",
+      "xhigh": "▆",
+      "max": "█",
     },
   },
 

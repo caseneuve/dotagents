@@ -118,13 +118,14 @@ const CONTEXT_BAR_FILLED = "█";
 const CONTEXT_BAR_EMPTY = "░";
 const DEFAULT_CONTEXT_BAR_WIDTH = 8;
 
-const DEFAULT_THINKING_MAPPING: Record<string, string> = {
+export const DEFAULT_THINKING_MAPPING: Record<string, string> = {
   off: "▁",
   minimal: "▂",
   low: "▃",
-  medium: "▅",
-  high: "▇",
-  xhigh: "█",
+  medium: "▄",
+  high: "▅",
+  xhigh: "▆",
+  max: "█",
 };
 
 function defaultConfig(): RuntimeFooterConfig {
@@ -175,9 +176,10 @@ function defaultConfigText(): string {
       "off": "▁",
       "minimal": "▂",
       "low": "▃",
-      "medium": "▅",
-      "high": "▇",
-      "xhigh": "█"
+      "medium": "▄",
+      "high": "▅",
+      "xhigh": "▆",
+      "max": "█"
     }
   },
 
@@ -698,15 +700,15 @@ function contextHeatTone(
   return "error";
 }
 
-function thinkingBlockTone(
+export function thinkingBlockTone(
   level: string,
 ): "dim" | "success" | "accent" | "warning" | "error" {
   const normalized = level.trim().toLowerCase();
   if (normalized === "off" || normalized === "minimal") return "dim";
   if (normalized === "low") return "success";
   if (normalized === "medium") return "accent";
-  if (normalized === "high") return "warning";
-  if (normalized === "xhigh") return "error";
+  if (normalized === "high" || normalized === "xhigh") return "warning";
+  if (normalized === "max") return "error";
   return "dim";
 }
 
