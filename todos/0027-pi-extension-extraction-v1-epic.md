@@ -56,6 +56,8 @@ publication is follow-up `0051`.
 - `0027.8`: move dotagents-resources package
 - `0027.9`: validate the extracted package set
 
+Shared conventions: [`docs/pi-package-conventions.md`](../docs/pi-package-conventions.md) (defined by `0027.5`).
+
 ## Follow-ups (out of scope)
 
 - `0048`: redesign runtime UI around a plugin/provider architecture
