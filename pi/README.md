@@ -572,33 +572,19 @@ The guiding idea is to prefer:
 
 over large do-everything workflow extensions.
 
-### `extensions/agent-channel/`
+### `pi-agent-channel` package
 
-Adds inter-agent communication tools (`channel_send`, `channel_read`, `channel_watch`, etc.)
-with pluggable backends for status and notifications.
+The former `extensions/agent-channel/` implementation moved to the public
+[`caseneuve/pi-agent-channel`](https://github.com/caseneuve/pi-agent-channel)
+Pi package. It was removed from this extension directory so installing the
+package cannot register duplicate `channel_*` tools.
 
-What it does:
+Install the pinned initial release with:
 
-- registers channel\_\* tools for file-based inter-agent messaging via `~/.agent-channels/`
-- publishes agent-name/comms state events consumed by `editor-status`
-- auto-detects the best available backend: cmux (macOS sidebar), tmux (pane titles + status-right), or file-only fallback
-- injects incoming messages into the conversation with turn-control (OVER/OUT protocol)
-- persists agent identity and watch list across session reloads
-- bundles the `agent-comms` skill doc for teaching agents the protocol
+```bash
+pi install git:github.com/caseneuve/pi-agent-channel@v2026.7.10
+```
 
-Backend behaviour:
-
-| Backend | Status display                  | Notifications                               | Progress                      |
-| ------- | ------------------------------- | ------------------------------------------- | ----------------------------- |
-| cmux    | Sidebar pills                   | cmux notify + badge                         | Sidebar bar                   |
-| tmux    | Pane title + `@agent-*` options | `tmux display-message` or `notify-send`     | Status-right + optional dunst |
-| file    | no-op                           | `osascript` (macOS) / `notify-send` (Linux) | no-op                         |
-
-Environment variables:
-
-- `CMUX_SOCKET_PATH` / `cmux` on PATH → cmux backend
-- `$TMUX` set → tmux backend
-- `AGENT_NOTIFY_MODE` → override tmux notification strategy (`auto`, `tmux`, `notify-send`)
-- `CMUX_AGENT_NAME` → agent identity
-
-See `pi/extensions/agent-channel/README.md` for full docs.
+The package remains the canonical implementation and bundles the `agent-comms`
+skill. See its repository README for tools, transports, displays, relay setup,
+and current limitations.

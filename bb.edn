@@ -30,15 +30,9 @@
     (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj"))
     ;; ── Relay config ──
-    ;; Matches the defaults baked into shared/relay/main.ts so ad-hoc
-    ;; `bun shared/relay/main.ts` invocations and `bb relay:*` agree.
-    (def relay-script "shared/relay/main.ts")
-    (def relay-socket "/tmp/agent-channels.sock")
-    (def relay-log "/tmp/agent-relay.log")
-    (defn relay-pid []
-      (let [r (jsh/sh "pgrep" "-f" relay-script)]
-        (when (zero? (:exit r))
-          (first (str/split-lines (str/trim (:out r))))))))
+    ;; Temporary compatibility wrappers delegate to the extracted package.
+    (def relay-manager (str (System/getenv "HOME")
+                            "/git/pi/pi-agent-channel/scripts/relay-manager.ts")))
 
   build:test-image
   {:doc "Build the podman test image (with tmux)"
@@ -99,60 +93,24 @@
                          (str " " (str/join " " *command-line-args*))))))}
 
   ;; ── Relay management ──
-  ;; Manage the agent-channel relay process (bun shared/relay/main.ts).
-  ;; The relay is a long-running per-user daemon; these tasks replace the
-  ;; 9-days-ago hand-started shell process so restarts (e.g. to pick up
-  ;; server.ts fixes) are reproducible.
+  ;; Compatibility wrappers; pi-agent-channel owns the implementation.
 
   relay:status
   {:doc "Show relay process status (PID, uptime, socket, log tail)"
-   :task (let [pid (relay-pid)]
-           (if pid
-             (do
-               (println "relay pid:" pid)
-               (shell "ps" "-o" "pid,etime,rss,command" "-p" pid)
-               (println)
-               (shell {:continue true} "ls" "-la" relay-socket)
-               (println)
-               (println "--- last 10 log lines (" relay-log ") ---")
-               (shell {:continue true} "tail" "-n" "10" relay-log))
-             (println "relay: not running")))}
+   :task (shell "bun" relay-manager "status")}
 
   relay:start
-  {:doc "Start the relay detached; logs to /tmp/agent-relay.log"
-   :task (if-let [pid (relay-pid)]
-           (println "relay already running, pid:" pid)
-           (do
-             (shell "sh" "-c"
-                    (str "nohup bun " relay-script
-                         " --quiet > " relay-log " 2>&1 &"))
-             ;; Give bun a moment to fork + bind the socket before we
-             ;; report the PID.
-             (Thread/sleep 400)
-             (if-let [pid (relay-pid)]
-               (println "relay started, pid:" pid)
-               (do (println "relay start: PID not detected; check" relay-log)
-                   (System/exit 1)))))}
+  {:doc "Start the package-owned relay detached; logs to /tmp/agent-relay.log"
+   :task (shell "bun" relay-manager "start")}
 
   relay:stop
   {:doc "Stop the running relay (SIGTERM, clean shutdown)"
-   :task (if-let [pid (relay-pid)]
-           (do (shell "kill" pid)
-               ;; Wait for the SIGTERM handler in main.ts to unlink the
-               ;; socket and exit before returning.
-               (Thread/sleep 500)
-               (if (relay-pid)
-                 (do (println "relay still running after SIGTERM; sending SIGKILL")
-                     (shell "kill" "-9" pid))
-                 (println "relay stopped, pid was:" pid)))
-           (println "relay: not running"))}
+   :task (shell "bun" relay-manager "stop")}
 
   relay:restart
   {:doc "Restart the relay (stop + short pause + start)"
-   :task (do (run 'relay:stop)
-             (Thread/sleep 700)
-             (run 'relay:start))}
+   :task (shell "bun" relay-manager "restart")}
 
   relay:logs
   {:doc "Tail the relay log (Ctrl+C to stop)"
-   :task (shell "tail" "-f" relay-log)}}}
+   :task (shell "bun" relay-manager "logs")}}}

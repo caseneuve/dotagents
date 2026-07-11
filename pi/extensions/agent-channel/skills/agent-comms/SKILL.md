@@ -1,1 +1,0 @@
-../../../../../shared/skills/agent-comms/SKILL.md

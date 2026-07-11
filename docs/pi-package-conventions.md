@@ -18,7 +18,7 @@ Repository/package names are the unscoped names above (for example `pi-agent-cha
 
 ## Versioning and changelog
 
-Each package is versioned independently using CalVer `YYYY.MM.PATCH` (for example `2026.07.0`) in `package.json`. Increment `PATCH` for fixes and move/features within the same month; start the patch sequence at `0` for a new month. Every user-visible or installable change updates a root `CHANGELOG.md` under an `Added`, `Changed`, `Fixed`, or `Removed` heading. Release tags use the exact package version with a `v` prefix (for example `v2026.07.0`) and Git installs should reference that immutable tag or its commit SHA.
+Each package is versioned independently using date-based CalVer `YYYY.MM.DD[.PATCH]` (for example `2026.07.10`, then `2026.07.10.1` for a second release that day) in `package.json`. Use the release date; local development changes do not require version bumps or release tags. Every user-visible or installable release updates a root `CHANGELOG.md` under an `Added`, `Changed`, `Fixed`, or `Removed` heading. Release tags use the exact package version with a `v` prefix (for example `v2026.07.10`) and Git installs should reference that immutable tag or its commit SHA.
 
 ## Legal defaults
 
@@ -66,7 +66,7 @@ Pi currently accepts `git:host/user/repo@ref` (and protocol URL equivalents); `@
 
 ## Per-repository checklist
 
-- [ ] `package.json` has the unscoped package name, MIT metadata, `pi-package` keyword, explicit manifest, correct dependencies, and CalVer version (`YYYY.MM.PATCH`).
+- [ ] `package.json` has the unscoped package name, MIT metadata, `pi-package` keyword, explicit manifest, correct dependencies, and CalVer version (`YYYY.MM.DD[.PATCH]`).
 - [ ] Root `CHANGELOG.md` records the change under a standard heading; release tags use `vYYYY.MM.PATCH`.
 - [ ] README documents purpose, resources, supported platforms/limitations, local install, Git install with an immutable ref, filtering, and test/typecheck commands; links to Pi (`https://pi.dev/`) and `@earendil-works/pi-coding-agent` context.
 - [ ] Repository metadata uses relevant discoverability topics/tags (at minimum `pi`, `agents`, `extensions`, plus package-specific terms).
