@@ -28,7 +28,7 @@ The `agents/` tree includes:
 - `hooks/smart-lint.sh`
 - `skills/` with ports of all repo skills
 
-The `shared/` tree holds the common helper scripts and hooks so both platforms use one implementation.
+The `shared/` tree holds common skills, helper scripts, and hooks so supported agent runtimes use one implementation. Shared skills include `linear-todo`, which keeps repository todo files canonical while recording claims and completion traces in Linear through a minimal set of MCP calls.
 
 ## Installation
 
@@ -116,6 +116,7 @@ To reduce maintenance overhead, the helper scripts and hooks now live once under
 | add-todo     | Yes         | Yes         |
 | code-review  | Yes         | Yes         |
 | journal      | Yes         | Yes         |
+| linear-todo  | Shared      | Shared      |
 | org-journal  | Yes         | Yes         |
 | pk-tmux      | Yes         | Yes         |
 | project-init | `CLAUDE.md` | `AGENTS.md` |

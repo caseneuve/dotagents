@@ -79,13 +79,19 @@
           ops (with-redefs [sut/skill-ops (fn [{:keys [src]}]
                                            [{:op :link :source (str src "/agent-comms/SKILL.md")
                                              :target "/home/.agents/skills/agent-comms/SKILL.md"
-                                             :label "agent-comms/SKILL.md"}])]
-                (sut/plan-agents p))
-          comms-ops (filter #(and (= (:op %) :link)
-                                 (some-> (:label %) (clojure.string/includes? "agent-comms")))
-                            ops)]
-      (is (pos? (count comms-ops))
-          "should include shared skill ops"))))
+                                             :label "agent-comms/SKILL.md"}
+                                            {:op :link :source (str src "/linear-todo/SKILL.md")
+                                             :target "/home/.agents/skills/linear-todo/SKILL.md"
+                                             :label "linear-todo/SKILL.md"}])]
+                (sut/plan-agents p))]
+      (is (some #(and (= (:op %) :link)
+                      (= (:target %) "/home/.agents/skills/agent-comms/SKILL.md"))
+                ops)
+          "should include agent-comms shared skill")
+      (is (some #(and (= (:op %) :link)
+                      (= (:target %) "/home/.agents/skills/linear-todo/SKILL.md"))
+                ops)
+          "should include linear-todo shared skill"))))
 
 (deftest plan-pi-settings
   (testing "plan-pi includes single extensions dir"

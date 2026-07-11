@@ -36,6 +36,7 @@
            [:fs-layout {:symlinks [["{home}/.agents/AGENTS.md" "{work}/agents/AGENTS.md"]
                                    ["{home}/.codex/AGENTS.md" "{work}/agents/AGENTS.md"]
                                    ["{home}/.agents/skills/add-todo/src/todo/cli.clj" "{work}/shared/skills/add-todo/src/todo/cli.clj"]
+                                   ["{home}/.agents/skills/linear-todo/SKILL.md" "{work}/shared/skills/linear-todo/SKILL.md"]
                                    ;; #0022: ~/.local/bin/ag-* must link to the bash wrappers,
                                    ;; NOT the raw .clj files (bb needs cwd-bb.edn for classpath).
                                    ["{home}/.local/bin/ag-todo"    "{work}/shared/skills/add-todo/ag-todo"]
