@@ -4,6 +4,6 @@ repos:
       - id: strip-ai-coauthor
         name: Strip AI Co-authored-by
         language: system
-        entry: sed -i '/^Co-[Aa]uthored-[Bb]y:.*noreply@*/d'
+        entry: perl -i -ne 'print unless /^Co-[Aa]uthored-[Bb]y:.*noreply/'
         stages: [commit-msg]
         always_run: true
