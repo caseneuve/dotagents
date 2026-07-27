@@ -13,7 +13,7 @@ These resources are intended to be loaded directly from this repo by entries in 
 - `"extensions": ["/path/to/dotagents/pi/extensions"]`
 - `"themes": ["/path/to/dotagents/pi/themes"]`
 - `"prompts": ["/path/to/dotagents/pi/prompts"]`
-- `"theme": "modus-operandi"`
+- `"theme": "modus-operandi/modus-vivendi"` (auto light/dark pair; pi syncs live with terminal color-scheme changes)
 
 The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/`, `~/.pi/agent/themes/`, or `~/.pi/agent/prompts/`.
 

@@ -208,7 +208,7 @@
     :extensions [(str (fs/path (:pi-src p) "extensions"))]
     :themes [(str (fs/path (:pi-src p) "themes"))]
     :prompts [(str (fs/path (:pi-src p) "prompts"))]
-    :theme "modus-operandi"}])
+    :theme "modus-operandi/modus-vivendi"}])
 
 (defn plan [p {:keys [mode]}]
   (case mode
