@@ -741,7 +741,7 @@ type RenderBlockParams = {
   gitBranch: string | null;
   gitStats: GitStats | null;
   projectName: string;
-  statuses: Map<string, string | undefined>;
+  statuses: ReadonlyMap<string, string>;
   commsActive: boolean;
 };
 
@@ -966,7 +966,7 @@ function renderSide(
   gitBranch: string | null,
   gitStats: GitStats | null,
   projectName: string,
-  statuses: Map<string, string | undefined>,
+  statuses: ReadonlyMap<string, string>,
   commsActive: boolean,
   explicitSeparatorMode: boolean,
 ): string {
@@ -1209,7 +1209,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
       ensureConfigFile(targetPath);
 
       const opened = openConfigInEditor(targetPath);
-      ctx.ui.notify(opened.message, opened.ok ? "success" : "warning");
+      ctx.ui.notify(opened.message, opened.ok ? "info" : "warning");
 
       configCache = undefined;
       lastConfigError = undefined;

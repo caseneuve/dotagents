@@ -2,9 +2,13 @@ import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { Key } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 
-type OpenResult = { ok: true; message: string } | { ok: false; message: string };
+type OpenResult =
+  { ok: true; message: string } | { ok: false; message: string };
 
 function openEditorAtPath(targetPath: string): OpenResult {
   const editorCommand = process.env.VISUAL || process.env.EDITOR;
@@ -58,7 +62,10 @@ function getPathArgumentCompletions(prefix: string, cwd: string) {
   ];
 
   const [baseDirInput, leafPrefix = ""] = rawPrefix.includes("/")
-    ? [rawPrefix.slice(0, rawPrefix.lastIndexOf("/") + 1), rawPrefix.slice(rawPrefix.lastIndexOf("/") + 1)]
+    ? [
+        rawPrefix.slice(0, rawPrefix.lastIndexOf("/") + 1),
+        rawPrefix.slice(rawPrefix.lastIndexOf("/") + 1),
+      ]
     : ["", rawPrefix];
 
   const scanDir = path.resolve(cwd, baseDirInput || ".");
@@ -99,15 +106,15 @@ async function openCwdEditor(ctx: ExtensionContext, args = "") {
   const raw = args.trim();
   const targetPath = raw ? path.resolve(ctx.cwd, raw) : ctx.cwd;
   const opened = openEditorAtPath(targetPath);
-  ctx.ui.notify(opened.message, opened.ok ? "success" : "warning");
+  ctx.ui.notify(opened.message, opened.ok ? "info" : "warning");
 }
 
 export default function cwdEditorExtension(pi: ExtensionAPI) {
   pi.registerCommand("cwd-editor", {
     description:
       "Open $EDITOR at cwd, or pass a relative file/dir path. Examples: /cwd-editor, /cwd-editor ., /cwd-editor src/",
-    getArgumentCompletions: (prefix, ctx) =>
-      getPathArgumentCompletions(prefix, ctx?.cwd ?? process.cwd()),
+    getArgumentCompletions: (prefix) =>
+      getPathArgumentCompletions(prefix, process.cwd()),
     handler: async (args, ctx) => {
       await openCwdEditor(ctx, args);
     },

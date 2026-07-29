@@ -102,7 +102,14 @@ function renderTopBorder(
   );
 }
 
-function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
+function installEditor(
+  ctx: ExtensionContext,
+  pi: ExtensionAPI,
+  disposePreviousSubscriptions: () => void,
+  setDisposeSubscriptions: (dispose: () => void) => void,
+): void {
+  disposePreviousSubscriptions();
+
   let state = readInitialState(ctx);
   let gitStatsCache: GitStatsCache | undefined;
 
@@ -124,7 +131,12 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
       },
     );
 
-    const editor = new (class extends CustomEditor {
+    setDisposeSubscriptions(() => {
+      disposeName();
+      disposeComms();
+    });
+
+    return new (class extends CustomEditor {
       render(width: number): string[] {
         const lines = super.render(width);
         if (lines.length === 0 || width <= 0) return lines;
@@ -145,21 +157,26 @@ function installEditor(ctx: ExtensionContext, pi: ExtensionAPI): void {
         );
         return lines;
       }
-
-      dispose(): void {
-        super.dispose();
-        disposeName();
-        disposeComms();
-      }
     })(tui, theme, keybindings);
-
-    return editor;
   });
 }
 
 export default function editorStatusExtension(pi: ExtensionAPI) {
+  let disposeSubscriptions: (() => void) | undefined;
+
+  const clearSubscriptions = () => {
+    disposeSubscriptions?.();
+    disposeSubscriptions = undefined;
+  };
+
   pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;
-    installEditor(ctx, pi);
+    installEditor(ctx, pi, clearSubscriptions, (dispose) => {
+      disposeSubscriptions = dispose;
+    });
+  });
+
+  pi.on("session_shutdown", async () => {
+    clearSubscriptions();
   });
 }
