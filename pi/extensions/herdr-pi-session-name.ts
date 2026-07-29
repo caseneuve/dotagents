@@ -1,13 +1,14 @@
 // Project-local companion to Herdr's bundled Pi integration.
 //
-// Mirrors Pi's /name session label into Herdr's visible agent label for this
-// pane. It deliberately lives beside (rather than modifies)
-// herdr-agent-state.ts, which Herdr manages and may overwrite on update.
+// Mirrors Pi session metadata into Herdr's sidebar for this pane. It
+// deliberately lives beside (rather than modifies) herdr-agent-state.ts,
+// which Herdr manages and may overwrite on update.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import net from "node:net";
 
-const SOURCE = "custom:pi-session-name";
+const SESSION_NAME_SOURCE = "custom:pi-session-name";
+const MODEL_SOURCE = "custom:pi-model";
 const HERDR_ENV = process.env.HERDR_ENV;
 const socketPath = process.env.HERDR_SOCKET_PATH;
 const socketEndpoint =
@@ -18,6 +19,7 @@ const paneId = process.env.HERDR_PANE_ID;
 
 let requestSequence = 0;
 let lastReportedName: string | undefined;
+let lastReportedModel: string | undefined;
 
 function enabled(): boolean {
   return HERDR_ENV === "1" && Boolean(socketEndpoint) && Boolean(paneId);
@@ -57,15 +59,37 @@ function reportSessionName(name: string | undefined): void {
   lastReportedName = normalized;
 
   void sendRequest({
-    id: `${SOURCE}:${Date.now()}:${++requestSequence}`,
+    id: `${SESSION_NAME_SOURCE}:${Date.now()}:${++requestSequence}`,
     method: "pane.report_metadata",
     params: {
       pane_id: paneId,
-      source: SOURCE,
+      source: SESSION_NAME_SOURCE,
       agent: "pi",
       ...(normalized
         ? { display_agent: normalized }
         : { clear_display_agent: true }),
+    },
+  });
+}
+
+function sidebarModelName(model: string | undefined): string | undefined {
+  const claude = model?.match(/(?:^|[/.])claude-((?:sonnet|opus)-.+)$/)?.[1];
+  return claude ?? model;
+}
+
+function reportModel(model: string | undefined): void {
+  const name = sidebarModelName(model);
+  if (name === lastReportedModel) return;
+  lastReportedModel = name;
+
+  void sendRequest({
+    id: `${MODEL_SOURCE}:${Date.now()}:${++requestSequence}`,
+    method: "pane.report_metadata",
+    params: {
+      pane_id: paneId,
+      source: MODEL_SOURCE,
+      agent: "pi",
+      tokens: { model: name ?? null },
     },
   });
 }
@@ -77,6 +101,13 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     if (ctx.hasUI) {
       reportSessionName(pi.getSessionName());
+      reportModel(ctx.model?.id);
+    }
+  });
+
+  pi.on("model_select", (event, ctx) => {
+    if (ctx.hasUI) {
+      reportModel(event.model.id);
     }
   });
 
