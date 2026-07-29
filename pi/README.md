@@ -475,6 +475,25 @@ Notes:
 - the first backend implementation covers the ChatGPT subscription / `wham/usage` endpoint only
 - model-to-backend matching is heuristic for now and can be refined as more backends are added
 
+### `extensions/herdr-pi-session-name.ts`
+
+Mirrors the current Pi session name into Herdr's visible agent label.
+
+What it does:
+
+- reports the Pi `/name` value as display-only Herdr pane metadata
+- updates the label when Pi emits `session_info_changed`
+- clears its label when the Pi session name is cleared
+- does nothing unless Pi is running in a Herdr-managed pane (`HERDR_ENV=1`)
+
+Notes:
+
+- requires Herdr's bundled Pi integration for its socket environment
+- this is a companion extension; do not modify Herdr's managed
+  `herdr-agent-state.ts`, which may be overwritten by integration updates
+- Pi's `session_info_changed` event is required for live rename updates;
+  session start still reports the current name on older runtimes
+
 ### `extensions/assistant-outline/`
 
 Adds an `/assistant-outline` command for browsing the latest assistant response as a heading tree and as an extracted shell-commands view.
