@@ -41,19 +41,17 @@ Current scope: the check covers top-level `pi/extensions/*.ts` files. Nested ext
 
 ### `extensions/branch-status.ts`
 
-Shows the current conversational branch context in the status area.
+Shows whether the current session has diverged in the status area.
 
 What it does:
 
-- infers the current branch path from the active session leaf
-- shows a compact branch name in the footer/status area only when there is branch context to show
-- prefers the nearest label/bookmark on the active path when available
-- falls back to the split point id when no label exists
+- shows a compact `⋔` marker only when the session tree contains a split
+- appends labels on the active root-to-leaf path when present
 
 Why it exists:
 
-- make tree navigation and branching more legible during long sessions
-- surface the current conversational branch without opening `/tree`
+- remind you that the session has branches without showing opaque entry ids
+- surface the active labeled path without opening `/tree`
 
 ### `extensions/runtime-footer.ts`
 

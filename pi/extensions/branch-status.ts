@@ -6,13 +6,11 @@ import type {
 type SessionEntryLike = {
   id: string;
   parentId: string | null;
-  type?: string;
 };
 
 const STATUS_KEY = "branch-status";
 const RENDER_EVENT = "branch-status:changed";
 const MAX_LABEL_LENGTH = 24;
-const FALLBACK_ID_LENGTH = 8;
 
 function truncateLabel(label: string): string {
   const normalized = label.trim().replace(/\s+/g, " ");
@@ -22,140 +20,43 @@ function truncateLabel(label: string): string {
   return `${normalized.slice(0, MAX_LABEL_LENGTH - 1)}…`;
 }
 
-function buildChildCountMap(entries: SessionEntryLike[]): Map<string, number> {
+function hasBranches(entries: SessionEntryLike[]): boolean {
   const childCounts = new Map<string, number>();
 
   for (const entry of entries) {
-    childCounts.set(entry.id, childCounts.get(entry.id) ?? 0);
-    if (entry.parentId) {
-      childCounts.set(
-        entry.parentId,
-        (childCounts.get(entry.parentId) ?? 0) + 1,
-      );
-    }
+    if (!entry.parentId) continue;
+    const count = (childCounts.get(entry.parentId) ?? 0) + 1;
+    if (count > 1) return true;
+    childCounts.set(entry.parentId, count);
   }
 
-  return childCounts;
+  return false;
 }
 
-function buildEntryMap(
-  entries: SessionEntryLike[],
-): Map<string, SessionEntryLike> {
-  return new Map(entries.map((entry) => [entry.id, entry]));
-}
-
-function buildLeafToRootPath(
-  entries: SessionEntryLike[],
-  leafId: string,
-): SessionEntryLike[] {
-  const entryMap = buildEntryMap(entries);
-  const path: SessionEntryLike[] = [];
-  let currentId: string | null = leafId;
-
-  while (currentId) {
-    const entry = entryMap.get(currentId);
-    if (!entry) break;
-    path.push(entry);
-    currentId = entry.parentId;
-  }
-
-  return path;
-}
-
-function findNearestLabel(
+function labelsOnCurrentPath(
   ctx: ExtensionContext,
   entries: SessionEntryLike[],
-): string | undefined {
-  for (const entry of entries) {
+): string[] {
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const labels: string[] = [];
+  let entry = ctx.sessionManager.getLeafEntry() as SessionEntryLike | undefined;
+
+  while (entry) {
     const label = ctx.sessionManager.getLabel(entry.id);
-    if (label) {
-      return truncateLabel(label);
-    }
-  }
-  return undefined;
-}
-
-function fallbackName(entryId: string): string {
-  return entryId.slice(0, FALLBACK_ID_LENGTH);
-}
-
-function uniqueSegments(segments: string[]): string[] {
-  const unique: string[] = [];
-  for (const segment of segments) {
-    if (unique.at(-1) !== segment) {
-      unique.push(segment);
-    }
-  }
-  return unique;
-}
-
-function computeBranchTrail(ctx: ExtensionContext): string[] {
-  const leafId = ctx.sessionManager.getLeafId();
-  if (!leafId) {
-    return ["main"];
+    if (label) labels.push(truncateLabel(label));
+    entry = entry.parentId ? entriesById.get(entry.parentId) : undefined;
   }
 
-  const entries = ctx.sessionManager.getEntries() as SessionEntryLike[];
-  const path = buildLeafToRootPath(entries, leafId);
-  if (path.length === 0) {
-    return ["main"];
-  }
-
-  const childCounts = buildChildCountMap(entries);
-  const splitIndices: number[] = [];
-
-  for (let i = 0; i < path.length; i += 1) {
-    if ((childCounts.get(path[i].id) ?? 0) > 1) {
-      splitIndices.push(i);
-    }
-  }
-
-  if (splitIndices.length === 0) {
-    return ["main"];
-  }
-
-  const segments: string[] = [];
-  let segmentStart = 0;
-
-  for (const splitIndex of splitIndices) {
-    const segmentEntries = path.slice(segmentStart, splitIndex);
-    const splitEntry = path[splitIndex];
-    const name =
-      findNearestLabel(ctx, segmentEntries) ?? fallbackName(splitEntry.id);
-    segments.push(name);
-    segmentStart = splitIndex;
-  }
-
-  segments.push("main");
-  return uniqueSegments(segments);
-}
-
-function countLabels(ctx: ExtensionContext): number {
-  const entries = ctx.sessionManager.getEntries() as SessionEntryLike[];
-  let count = 0;
-
-  for (const entry of entries) {
-    if (ctx.sessionManager.getLabel(entry.id)) {
-      count += 1;
-    }
-  }
-
-  return count;
+  return labels.reverse();
 }
 
 function renderStatus(ctx: ExtensionContext): string | undefined {
-  const theme = ctx.ui.theme;
-  const trail = computeBranchTrail(ctx);
-  const labelCount = countLabels(ctx);
+  const entries = ctx.sessionManager.getEntries() as SessionEntryLike[];
+  if (!hasBranches(entries)) return undefined;
 
-  if (trail.length <= 1 && labelCount === 0) {
-    return undefined;
-  }
-
-  const branchText = trail.join(" →  ");
-  const suffix = labelCount > 0 ? ` (${labelCount})` : "";
-
-  return theme.fg("dim", `[⋔ ${branchText}]${suffix}`);
+  const labels = labelsOnCurrentPath(ctx, entries);
+  const path = labels.length > 0 ? ` ${labels.join(" → ")}` : "";
+  return ctx.ui.theme.fg("dim", `[⋔${path}]`);
 }
 
 function updateStatus(
