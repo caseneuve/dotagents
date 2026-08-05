@@ -1,6 +1,16 @@
 ---
 name: ux-review
-description: Review user-facing text (CLI help, error messages, README, ADRs, commit messages, onboarding docs) using a two-pass discipline that catches both wording bugs and structural-context gaps.
+description: Review user-facing text (CLI help, error messages, READMEs, ADRs, commit messages, and onboarding docs) using a two-pass discipline that catches wording bugs and structural-context gaps.
+triggers:
+  - ux review
+  - help text review
+  - cold read
+  - cold-read
+  - review help
+  - review readme
+  - review error messages
+  - review user-facing text
+  - fresh-agent review
 ---
 
 # UX Review
@@ -74,8 +84,8 @@ both classes caught.
   Engineering*. Empirical case for user testing: designers consistently
   fail to predict user confusion.
 
-For the long-form treatment with full citations and the synthesis
-argument, see the worked example referenced under "Reference" below.
+These sources motivate the protocol; the steps below turn their shared
+principle into an operational review workflow.
 
 ## Protocol
 
@@ -144,8 +154,8 @@ declines the rest with rationale, ships.
 
 ## Reviewer sign-off pattern
 
-Sign-off and ack-first conventions live in
-`~/.agents/skills/agent-comms/SKILL.md`; that skill wins on any conflict.
+Sign-off and ack-first conventions live in the installed `agent-comms` skill;
+that skill wins on any conflict.
 The rough shape:
 
 1. Author requests review on the project channel with the artifacts inline.
@@ -184,8 +194,7 @@ use `Issue` for a specific finding in one artifact; cross-artifact rows use
 **What counts as an artifact**: one atomic, single-screen-ish unit — one
 `--help` block, one README section, one ADR, one error-message string.
 
-From the worked example (pat-cli `#0025.1` self-pass, `#0025.2` fresh-pass
-over 11 CLI helps):
+For a CLI with roughly a dozen help screens, typical timing is:
 
 - Self-pass: tens of minutes for a CLI's full help surface.
 - Fresh-pass: similar, sometimes shorter — reviewer doesn't open source.
@@ -235,17 +244,9 @@ Examples in increasing-asymmetry order (**bold** = primary use case):
 | Onboarding docs | very high | **yes** |
 | Error messages | very high | **yes** |
 
-## Reference
+## Further reading
 
-- Long-form theory + full citations + synthesis: journal entry
-  `~/org/agent-journal/2026/05/17/1319-pat-cli.org` (on the host where
-  this skill was authored; an agent on another machine can find the
-  inline citation summary above sufficient).
-- Worked example: pat-cli `#0025` (self-pass author) + `#0025.1`
-  (post-self-pass polish) + `#0025.2` (fresh-pass via pat-rev review).
-  Master commits `c5862d3`, `730166b`, `64758b5` on
-  `pythonanywhere/pat-cli`.
-- This SKILL.md was itself UX-reviewed via the protocol it documents
-  (pat-rev's cold-read of pat-cli's help surface motivated the skill;
-  v562's cold-read of this SKILL.md surfaced two rounds of polish before
-  merge).
+The academic sources in “Theoretical foundation” provide background on
+information asymmetry, the curse of knowledge, theory of mind, cognitive
+walkthroughs, and usability testing. The protocol above is self-contained;
+reviewers do not need access to any author's local notes or project history.

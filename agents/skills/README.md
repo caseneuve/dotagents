@@ -16,7 +16,6 @@ bootstrap installs for this runtime.
 | [project-init](project-init/SKILL.md) | Generate a concise project `AGENTS.md` from detected stack and workflow details. |
 | [sandbox](sandbox/SKILL.md) | Use isolated git worktrees for ticket work and controlled merges back to the main repo. |
 | [self-reflect](self-reflect/SKILL.md) | Review the session for mistakes and friction, proposing targeted doc and rule improvements. |
-| [ux-review](ux-review/SKILL.md) | Review user-facing text with a two-pass check for wording and structural-context gaps. |
 
 ## Shared skills
 
@@ -28,3 +27,4 @@ bootstrap installs for this runtime.
 | [linear](../../shared/skills/linear/SKILL.md) | Manage Linear projects, issues, milestones, labels, and status updates through MCP. |
 | [linear-todo](../../shared/skills/linear-todo/SKILL.md) | Claim and finish repository todo work in Linear. |
 | [testmap](../../shared/skills/testmap/SKILL.md) | Statically check test presence and source/test placement without running tests. |
+| [ux-review](../../shared/skills/ux-review/SKILL.md) | Review user-facing text with a two-pass check for wording and structural-context gaps. |

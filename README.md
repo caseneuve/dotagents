@@ -131,6 +131,6 @@ shared skills from `shared/skills/` into both supported runtimes.
 | sandbox | Runtime-specific ([Claude](claude/skills/sandbox/SKILL.md), [Agents](agents/skills/sandbox/SKILL.md)) | Yes | Yes |
 | self-reflect | Runtime-specific ([Claude](claude/skills/self-reflect/SKILL.md), [Agents](agents/skills/self-reflect/SKILL.md)) | Yes | Yes |
 | testmap | [Shared](shared/skills/testmap/SKILL.md) | Yes | Yes |
-| ux-review | Runtime-specific ([Claude](claude/skills/ux-review/SKILL.md), [Agents](agents/skills/ux-review/SKILL.md)) | Yes | Yes |
+| ux-review | [Shared](shared/skills/ux-review/SKILL.md) | Yes | Yes |
 
 See [claude/skills/README.md](claude/skills/README.md) and [agents/skills/README.md](agents/skills/README.md).
