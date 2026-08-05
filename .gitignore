@@ -3,3 +3,4 @@
 .pi/
 .reviews/
 node_modules/
+__pycache__
