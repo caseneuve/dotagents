@@ -600,11 +600,13 @@ The former `extensions/agent-channel/` implementation moved to the public
 Pi package. It was removed from this extension directory so installing the
 package cannot register duplicate `channel_*` tools.
 
-Install the pinned initial release with:
+Install the corrected pinned release with:
 
 ```bash
-pi install git:github.com/caseneuve/pi-agent-channel@v2026.7.10
+pi install git:github.com/caseneuve/pi-agent-channel@v2026.7.24
 ```
+
+The `v2026.7.24` package README still shows its historic `v2026.7.10` initial-release example; use the corrected ref above, whose manifest fixes bundled-skill registration.
 
 The package remains the canonical implementation and bundles the `agent-comms`
 skill. See its repository README for tools, transports, displays, relay setup,
