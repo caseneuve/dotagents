@@ -1,6 +1,6 @@
 ---
 title: callgraph production only
-status: in_progress
+status: done
 priority: medium
 type: feature
 labels: [skills]
@@ -17,10 +17,10 @@ for users who want to inspect only production code without changing the default 
 
 ## Acceptance Criteria
 
-- [ ] Add `--production-only` while preserving existing default output.
-- [ ] Exclude conventional Python test files and `test`/`tests` directories when enabled.
-- [ ] Cover filename, directory, and default-behavior cases with tests.
-- [ ] Document the flag and verify it against the Dry4py repository.
+- [x] Add `--production-only` while preserving existing default output.
+- [x] Exclude conventional Python test files and `test`/`tests` directories when enabled.
+- [x] Cover filename, directory, and default-behavior cases with tests.
+- [x] Document the flag and verify it against the Dry4py repository.
 
 ## Affected Files
 
