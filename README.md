@@ -111,15 +111,26 @@ To reduce maintenance overhead, the helper scripts and hooks now live once under
 
 ## Skills
 
-| Skill        | Claude tree | Agents tree |
-| ------------ | ----------- | ----------- |
-| add-todo     | Yes         | Yes         |
-| code-review  | Yes         | Yes         |
-| journal      | Yes         | Yes         |
-| linear-todo  | Shared      | Shared      |
-| org-journal  | Yes         | Yes         |
-| pk-tmux      | Yes         | Yes         |
-| project-init | `CLAUDE.md` | `AGENTS.md` |
-| sandbox      | Yes         | Yes         |
+The bootstrap installs each runtime's specific skills from its own tree, and
+shared skills from `shared/skills/` into both supported runtimes.
+
+| Skill | Source | Claude tree | Agents tree |
+| ----- | ------ | ----------- | ----------- |
+| add-todo | Runtime-specific ([Claude](claude/skills/add-todo/SKILL.md), [Agents](agents/skills/add-todo/SKILL.md)) | Yes | Yes |
+| agent-comms | [Shared](shared/skills/agent-comms/SKILL.md) | Yes | Yes |
+| callgraph | [Shared](shared/skills/callgraph/SKILL.md) | Yes | Yes |
+| cicero | [Agents](agents/skills/cicero/SKILL.md) | No | Yes |
+| code-review | Runtime-specific ([Claude](claude/skills/code-review/SKILL.md), [Agents](agents/skills/code-review/SKILL.md)) | Yes | Yes |
+| dataflow | [Shared](shared/skills/dataflow/SKILL.md) | Yes | Yes |
+| journal | Runtime-specific ([Claude](claude/skills/journal/SKILL.md), [Agents](agents/skills/journal/SKILL.md)) | Yes | Yes |
+| linear | [Shared](shared/skills/linear/SKILL.md) | Yes | Yes |
+| linear-todo | [Shared](shared/skills/linear-todo/SKILL.md) | Yes | Yes |
+| org-journal | Runtime-specific ([Claude](claude/skills/org-journal/SKILL.md), [Agents](agents/skills/org-journal/SKILL.md)) | Yes | Yes |
+| pk-tmux | Runtime-specific ([Claude](claude/skills/pk-tmux/SKILL.md), [Agents](agents/skills/pk-tmux/SKILL.md)) | Yes | Yes |
+| project-init | Runtime-specific ([Claude](claude/skills/project-init/SKILL.md), [Agents](agents/skills/project-init/SKILL.md)) | Yes | Yes |
+| sandbox | Runtime-specific ([Claude](claude/skills/sandbox/SKILL.md), [Agents](agents/skills/sandbox/SKILL.md)) | Yes | Yes |
+| self-reflect | Runtime-specific ([Claude](claude/skills/self-reflect/SKILL.md), [Agents](agents/skills/self-reflect/SKILL.md)) | Yes | Yes |
+| testmap | [Shared](shared/skills/testmap/SKILL.md) | Yes | Yes |
+| ux-review | Runtime-specific ([Claude](claude/skills/ux-review/SKILL.md), [Agents](agents/skills/ux-review/SKILL.md)) | Yes | Yes |
 
 See [claude/skills/README.md](claude/skills/README.md) and [agents/skills/README.md](agents/skills/README.md).
