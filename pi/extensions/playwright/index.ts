@@ -119,6 +119,37 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: TOOL_NAMES.setViewport,
+    label: "Playwright Set Viewport",
+    description: "Resize the active Playwright page viewport.",
+    promptSnippet: "Resize the browser viewport for responsive layout checks",
+    parameters: Type.Object({
+      width: Type.Integer({
+        minimum: 1,
+        maximum: 8192,
+        description: "Viewport width in CSS pixels",
+      }),
+      height: Type.Integer({
+        minimum: 1,
+        maximum: 8192,
+        description: "Viewport height in CSS pixels",
+      }),
+    }),
+    async execute(_toolCallId, params) {
+      const result = await session.setViewport(params);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Viewport set to ${result.width}×${result.height}`,
+          },
+        ],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
     name: TOOL_NAMES.query,
     label: "Playwright Query",
     description: "Query DOM elements by CSS selector.",

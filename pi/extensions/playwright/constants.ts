@@ -2,6 +2,7 @@ export const EXTENSION_NAME = "playwright";
 
 export const TOOL_NAMES = {
   open: "playwright_open",
+  setViewport: "playwright_set_viewport",
   query: "playwright_query",
   snapshot: "playwright_snapshot",
   computedStyle: "playwright_computed_style",

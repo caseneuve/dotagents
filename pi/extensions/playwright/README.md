@@ -35,6 +35,7 @@ Settings UX notes:
 ## Tools
 
 - `playwright_open`
+- `playwright_set_viewport`
 - `playwright_query`
 - `playwright_snapshot`
 - `playwright_computed_style`

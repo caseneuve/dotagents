@@ -16,6 +16,11 @@ import type { UrlPolicyConfig } from "./policy-config";
 
 import type { Browser, BrowserContext, Page } from "playwright";
 
+type ViewportOptions = {
+  width: number;
+  height: number;
+};
+
 type QueryOptions = {
   selector: string;
   all?: boolean;
@@ -238,6 +243,17 @@ export class PlaywrightSession {
       finalUrl: this.page.url(),
       title: await this.page.title(),
     };
+  }
+
+  async setViewport(options: ViewportOptions): Promise<ViewportOptions> {
+    const page = this.getPageOrThrow();
+    const viewport = {
+      width: options.width,
+      height: options.height,
+    };
+
+    await page.setViewportSize(viewport);
+    return viewport;
   }
 
   async query(options: QueryOptions) {

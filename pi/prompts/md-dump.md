@@ -4,7 +4,7 @@ argument-hint: "[path-or-filename]"
 ---
 Create a persistent Markdown handoff document that captures the current discussion/findings so another agent can continue from scratch.
 
-If $1 is provided, write to that path. Otherwise, create `./notes/YYYY-MM-DD-<semantic-topic>-handoff.md` using today’s ISO date and a content-specific slug.
+If a path (`$1`) is provided, write to that path. Otherwise, create `./notes/YYYY-MM-DD-<semantic-topic>-handoff.md` using today’s ISO date and a content-specific slug.
 
 Include, at minimum:
 - Goal / request summary
