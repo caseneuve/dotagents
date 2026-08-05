@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -6,10 +7,87 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from py_callers import analyze_file, scan_repo  # noqa: E402
+from py_callers import analyze_file, is_test_path, scan_repo  # noqa: E402
 
 
 class AnalyzeFileTest(unittest.TestCase):
+    def test_identifies_conventional_test_paths(self) -> None:
+        root = Path("/repo")
+        test_paths = [
+            root / "test" / "helpers.py",
+            root / "tests" / "helpers.py",
+            root / "package" / "test_service.py",
+            root / "package" / "service_test.py",
+        ]
+        production_paths = [
+            root / "package" / "service.py",
+            root / "package" / "testing" / "helpers.py",
+            root / "package" / "contest.py",
+        ]
+
+        self.assertTrue(all(is_test_path(path, root) for path in test_paths))
+        self.assertFalse(
+            any(is_test_path(path, root) for path in production_paths)
+        )
+
+    def test_production_only_scan_and_cli_exclude_test_callers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "app"
+            package.mkdir()
+            (package / "__init__.py").write_text("")
+            (package / "production.py").write_text("def target(): pass\n")
+            (package / "caller.py").write_text(
+                "from app.production import target\n"
+                "target()\n"
+            )
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_caller.py").write_text(
+                "from app.production import target\n"
+                "target()\n"
+            )
+            (root / "support_test.py").write_text(
+                "from app.production import target\n"
+                "target()\n"
+            )
+
+            default_paths = {
+                item.path.relative_to(root)
+                for item in scan_repo(root, {"target"})
+            }
+            production_paths = {
+                item.path.relative_to(root)
+                for item in scan_repo(root, {"target"}, production_only=True)
+            }
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "py_callers.py"),
+                    "--root",
+                    str(root),
+                    "--production-only",
+                    "target",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertIn(Path("tests/test_caller.py"), default_paths)
+        self.assertIn(Path("support_test.py"), default_paths)
+        self.assertEqual(
+            production_paths,
+            {
+                Path("app/__init__.py"),
+                Path("app/caller.py"),
+                Path("app/production.py"),
+            },
+        )
+        self.assertIn("app/caller.py:2", result.stdout)
+        self.assertNotIn("tests/test_caller.py", result.stdout)
+        self.assertNotIn("support_test.py", result.stdout)
+
     def test_counts_only_proven_direct_and_imported_module_calls(self) -> None:
         source = """
 from library import target as imported_target

@@ -20,6 +20,19 @@ python3 ~/.agents/skills/callgraph/scripts/py_callers.py \
   release_lock get_lock_state
 ```
 
+By default the report includes production and test files. To exclude conventional
+tests, add `--production-only`:
+
+```bash
+python3 ~/.agents/skills/callgraph/scripts/py_callers.py \
+  --root src \
+  --production-only \
+  release_lock get_lock_state
+```
+
+The filter excludes `test_*.py`, `*_test.py`, and Python files beneath a path
+component named `test` or `tests`.
+
 Output is grouped per symbol:
 
 ```

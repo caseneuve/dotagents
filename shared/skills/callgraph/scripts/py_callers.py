@@ -424,11 +424,24 @@ def _package_name(root: Path, path: Path) -> str:
     return ".".join(parts)
 
 
-def scan_repo(root: Path, targets: set[str]) -> list[FileFacts]:
+def is_test_path(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root)
+    directories = relative.parts[:-1]
+    return (
+        path.name.startswith("test_")
+        or path.name.endswith("_test.py")
+        or any(part in {"test", "tests"} for part in directories)
+    )
+
+
+def scan_repo(
+    root: Path, targets: set[str], production_only: bool = False
+) -> list[FileFacts]:
     paths = [
         path
         for path in root.rglob("*.py")
         if not any(part.startswith(".") for part in path.relative_to(root).parts)
+        and (not production_only or not is_test_path(path, root))
     ]
     allowed_import_modules = {target: set() for target in targets}
     for path in paths:
@@ -489,6 +502,13 @@ def report(root: Path, targets: list[str], all_facts: list[FileFacts]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument(
+        "--production-only",
+        action="store_true",
+        help=(
+            "Exclude test_*.py, *_test.py, and files under test/ or tests/"
+        ),
+    )
     parser.add_argument("symbols", nargs="+")
     args = parser.parse_args()
 
@@ -498,7 +518,9 @@ def main() -> None:
         sys.exit(1)
 
     targets = set(args.symbols)
-    all_facts = scan_repo(root, targets)
+    all_facts = scan_repo(
+        root, targets, production_only=args.production_only
+    )
     report(root, args.symbols, all_facts)
 
     print(
