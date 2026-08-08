@@ -1,6 +1,28 @@
 import { describe, expect, it } from "bun:test";
 
-import { openExternalEditor } from "../../pi/extensions/shared/external-editor";
+import {
+  openExternalEditor,
+  parseEditorCommand,
+} from "../../pi/extensions/shared/external-editor";
+
+describe("parseEditorCommand", () => {
+  it("preserves quoted empty arguments", () => {
+    expect(
+      parseEditorCommand('env TERM=xterm-ghostty-direct emacsclient -nw -a ""'),
+    ).toEqual([
+      "env",
+      "TERM=xterm-ghostty-direct",
+      "emacsclient",
+      "-nw",
+      "-a",
+      "",
+    ]);
+  });
+
+  it("rejects unterminated quotes", () => {
+    expect(parseEditorCommand("emacsclient -a '")).toBeUndefined();
+  });
+});
 
 describe("openExternalEditor", () => {
   it("stops and restarts the TUI around the child process", async () => {
