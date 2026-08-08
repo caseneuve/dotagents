@@ -270,13 +270,23 @@ Contract details:
   - every gap:
     `{:kind ... :location location-or-nil
       :message "normalized actionable text"}`.
-  The quoted `-or-nil` placeholder means the EDN value is either a location map
-  or literal `nil`; the keys remain present in both cases. Gap ownership comes
-  only from the containing top-level or target `:gaps` collection.
-- Vectors are sorted by the first applicable tuple: target/var/macro identity,
-  owner, file, row, column, kind. Definitions sort by kind then location;
-  dispatch candidates by target, kind, dispatch value, then location; gaps by
-  kind, location, then message. Duplicate normalized records are removed.
+  A quoted `ns/var-or-nil`, `ns-or-nil`, or `printed-value-or-nil` placeholder
+  means the EDN value is either the indicated string form or literal `nil`.
+  `location-or-nil` means either a location map or literal `nil`; the keys
+  remain present in both cases. Gap ownership comes only from the containing
+  top-level or target `:gaps` collection.
+- For ordering, a location is compared by file, row, then column; literal `nil`
+  sorts before a location map. Vectors use these explicit lexical comparators:
+  - targets: target;
+  - definitions: kind, location;
+  - direct callers: caller, site;
+  - direct callees: callee, site;
+  - references and dispatch sites/outgoing: var, owner, namespace, site;
+  - macro boundaries: macro, owner, namespace, site;
+  - unattributed invocations: var, namespace, site;
+  - dispatch candidates: target, kind, dispatch value, location; and
+  - gaps: kind, location, message.
+  Duplicate normalized records are removed.
 - `:limits` has the fixed lexical order
   `[:clj-and-bb-only :no-higher-order-resolution
   :no-macro-expansion-proof :no-runtime-receiver-resolution :static-only]`.
