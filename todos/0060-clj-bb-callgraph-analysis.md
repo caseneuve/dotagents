@@ -382,9 +382,17 @@ target statuses.
       directly, while analyzer-backed fixture tests exercise the CLI through
       the pinned shared runner (containerized under `bb test`, direct under
       `bb test:ci`).
-- [ ] One shared callgraph test runner is used by both canonical paths: `bb
-      test` runs it in the container, while `bb test:ci` runs the same runner
-      directly in CI. Neither path writes to the host.
+- [ ] One shared callgraph test runner is used by both canonical paths: the
+      skill-local runner is direct and assumes its dependencies are available;
+      root `bb test` runs that runner inside the pinned test container, while
+      root `bb test:ci` runs the same runner directly in CI. No task reached
+      from inside the test container starts Podman, and neither path writes to
+      the host.
+- [ ] Callgraph-specific paths, fixtures, and task definitions live in the
+      skill-local `shared/skills/callgraph/bb.edn`. The root `bb.edn` retains its
+      existing test orchestration; any callgraph-specific additions are limited
+      to thin delegations that invoke the skill-local direct runner from the
+      existing `bb test` and `bb test:ci` boundaries.
 - [ ] `shared/skills/callgraph/SKILL.md` directs Clojure/Babashka analysis to
       this helper, and `languages/clojure.md` documents the CLI, EDN contract,
       trust boundary, guarantees, gap kinds, and limits. Both preserve the rule
@@ -399,11 +407,15 @@ target statuses.
 - `shared/skills/callgraph/SKILL.md` — replace the Clojure manual-pass exception
   with the canonical helper workflow.
 - `shared/skills/callgraph/test/` — pure tests, analyzer-backed tests, source
-  fixtures, and byte-stable expected EDN.
+  fixtures, the shared runner, and byte-stable expected EDN.
+- `shared/skills/callgraph/bb.edn` — skill-local direct test runner,
+  environment preflight, and CI tasks; this keeps callgraph-specific task
+  logic local and reduces coupling for a future extraction.
 - `test/Containerfile` — install the pinned kondo binary in the supported test
   image.
-- `bb.edn` — add a shared callgraph test runner; run it through the existing
-  container boundary in `test` and directly in `test:ci`.
+- `bb.edn` — retain the existing test orchestration; add only thin
+  callgraph-specific delegations so root `bb test` and `bb test:ci` invoke the
+  skill-local runner through the existing container/direct boundaries.
 
 ## Test Plan
 
@@ -455,6 +467,91 @@ before analysis
 
 AND incomplete but usable analysis exits `1` with `:partial` EDN, while fatal
 preflight/analyzer failures exit `2` with no graph on stdout.
+
+## Implementation Architecture and Slices
+
+The implementation should follow FCIS (functional core, imperative shell).
+Pure functions must cover target parsing, path predicates, path normalization,
+Kondo-record classification, gap/status reduction, sorting/deduplication, and
+canonical EDN formatting. I/O must remain at the boundary: filesystem
+discovery, Kondo version lookup, process execution, JSON parsing, stdout/stderr,
+and exit selection.
+
+The skill owns its local test workflow in `shared/skills/callgraph/bb.edn`.
+The repository root `bb.edn` retains its existing test orchestration. Any
+callgraph-specific additions to it must be thin delegations that invoke the
+skill-local direct runner from the existing `bb test` and `bb test:ci`
+boundaries. Callgraph test paths, fixtures, runner logic, and task definitions
+must remain skill-local. This keeps callgraph-specific task logic local and
+reduces coupling for a future extraction; the skill is not independently
+container-buildable until its image definition is also moved.
+
+### Slice 0 — Podman/Kondo integration probe
+
+During initial implementation, use a temporary minimal probe to verify Podman,
+the pinned test image, `clj-kondo v2026.01.19`, explicit `.clj` and `.bb`
+inputs, JSON analysis, `protocol-impls`, checked-in project configuration, and
+the read-only fixture mount. The probe may inspect raw Kondo JSON, but it is
+strictly temporary: it is not the canonical helper, must not be a parser
+fallback, and must be deleted or replaced by real analyzer-backed tests before
+completion.
+
+The durable Slice 0 deliverable is the runner/environment boundary, not a
+second analyzer implementation. The skill-local runner and its direct
+preflight assume dependencies are available. Root `bb test` is responsible for
+running the runner inside Podman; no task invoked inside that container starts
+nested Podman. Root `bb test:ci` runs the same runner directly with an equivalent
+preflight.
+
+### Slice 1 — Minimal canonical happy path
+
+Implement the complete shell-to-report path for target validation, explicit
+source discovery, Kondo invocation, local definitions, direct callers/callees,
+the canonical writer with its minimal schema, and exit `0`. Later slices add
+optional evidence fields and exhaustive ordering/omission fixtures through this
+same writer; they do not replace it.
+
+### Slice 2 — Discovery and CLI contract
+
+Add hidden-path and symlink exclusion, `.clj`/`.bb` scope, production-only
+filtering, root normalization, empty discovery, invalid roots/targets, target
+deduplication, and deterministic target ordering.
+
+### Slice 3 — Evidence classification
+
+Add aliases, `:refer` handling, qualified calls, lexical shadowing, references,
+function-as-data, `apply`, threading macros, macro boundaries, unattributed
+invocations, and unresolved invocation gaps.
+
+### Slice 4 — Dispatch evidence
+
+Add definition-kind mapping, missing/duplicate definitions, multimethod
+candidates, protocol implementation candidates, and runtime-dispatch-site
+classification.
+
+### Slice 5 — Analyzer failures and status propagation
+
+Add syntax/reader/configuration/hook failure handling, missing analysis sections,
+unexplained analyzer nonzero handling, ordinary lint-finding treatment, global
+versus target gap ownership, partial reports, and exit-code behavior.
+
+### Slice 6 — Deterministic contract and documentation
+
+Complete the exhaustive ordering, omission semantics, sorting and
+deduplication, and byte-stability fixtures for the canonical writer introduced
+in Slice 1. Add language-guide examples, trust-boundary text, and the callgraph
+skill workflow; do not replace the writer with a second formatting path.
+
+### Slice 7 — Shared test integration
+
+Finalize the skill-local direct runner and `bb.edn`, invoke that runner inside
+the pinned Podman test image from the existing root `bb test` orchestration,
+invoke the identical runner directly from the existing root `bb test:ci`
+orchestration, and add only thin callgraph-specific root delegations. No
+skill task invoked inside the test container starts Podman. The root
+`test/Containerfile` initially owns installation of the pinned Kondo binary;
+moving the image definition into the skill is a later extraction option, not a
+requirement for this implementation.
 
 ## Notes
 
