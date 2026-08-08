@@ -113,9 +113,10 @@ The same rules apply to `.clj` and `.bb` files. No other directories such as
   `clj-kondo v` prefix and records the remaining version string. If the version
   cannot be detected, preflight fails. Determinism is promised only for
   repeated runs with the same version.
-- Invoke kondo with JSON output, `--cache false`, `--repro`, and analysis that
-  includes `protocol-impls` in addition to the normal namespace/var definition
-  and usage sections.
+- Invoke kondo with JSON output, `--cache false`, `--repro`, `--fail-level
+  error`, and analysis that includes `protocol-impls` in addition to the normal
+  namespace/var definition and usage sections. The explicit fail level prevents
+  ordinary warnings from causing a nonzero analyzer exit.
 - Set the process working directory to `--root` and explicitly use
   `<root>/.clj-kondo` as the config directory, even when it does not yet exist.
   This preserves checked-in project config while preventing unrelated home or
@@ -179,6 +180,12 @@ definition. Dispatch candidates are evidence only:
 - protocol candidates come from matching `protocol-impls` records and include
   the implementation namespace, defining form, and location;
 - candidates are never reported as guaranteed callees.
+
+Dispatch classification is available only when scanned local definitions
+identify the invoked var as a protocol function or multimethod. A
+dependency-defined var may therefore remain a syntactically direct
+source-level invocation while being semantically unclassified; the language
+guide must state this limitation.
 
 If a target has no local definition, preserve any resolved usage evidence but
 mark the target partial because its kind and dispatch semantics cannot be
@@ -261,15 +268,15 @@ Contract details:
   - `:unattributed-invocations`:
     `{:var "ns/var" :namespace "ns" :site ...}`; and
   - every gap:
-    `{:kind ... :target "ns/var-or-nil" :location location-or-nil
+    `{:kind ... :location location-or-nil
       :message "normalized actionable text"}`.
-  The quoted `-or-nil` placeholders mean the EDN value is either a string or
-  literal `nil`; the keys remain present in both cases.
+  The quoted `-or-nil` placeholder means the EDN value is either a location map
+  or literal `nil`; the keys remain present in both cases. Gap ownership comes
+  only from the containing top-level or target `:gaps` collection.
 - Vectors are sorted by the first applicable tuple: target/var/macro identity,
   owner, file, row, column, kind. Definitions sort by kind then location;
   dispatch candidates by target, kind, dispatch value, then location; gaps by
-  kind, target, location, then message. Duplicate normalized records are
-  removed.
+  kind, location, then message. Duplicate normalized records are removed.
 - `:limits` has the fixed lexical order
   `[:clj-and-bb-only :no-higher-order-resolution
   :no-macro-expansion-proof :no-runtime-receiver-resolution :static-only]`.
@@ -302,13 +309,17 @@ Fatal failures include:
 - missing required analysis sections; or
 - an analyzer filename that cannot be normalized beneath root.
 
-A nonzero kondo exit with valid JSON and usable analysis is not automatically
-fatal. Normalize only soundness-relevant findings into global gaps: source
-parse/reader failures, configuration or hook failures, and failures that prove
-an included source was not analyzed. Ordinary error-level lint findings (for
-example unused vars or style/project-policy violations) do not affect graph
-status and are not copied into output. A nonzero exit not explained by a
-soundness-relevant gap adds an `:analyzer-nonzero` global gap.
+Kondo runs with `--fail-level error`, so ordinary warnings do not cause a
+nonzero analyzer exit. A nonzero kondo exit with valid JSON and usable analysis
+is not automatically fatal: it is accounted for when well-formed findings at
+the configured fail level explain it, even if those findings are intentionally
+not graph gaps. Normalize only soundness-relevant findings into global gaps:
+source parse/reader failures (at minimum the pinned kondo `:syntax` finding),
+configuration or hook failures, and failures that prove an included source was
+not analyzed. Ordinary error-level lint findings (for example unused vars or
+style/project-policy violations) do not affect graph status and are not copied
+into output. A nonzero exit with no recognized analyzer finding or diagnostic
+that accounts for it adds an `:analyzer-nonzero` global gap.
 
 A target with no local definition is partial, not fatal. A target is partial
 only for its own target gaps (such as missing/duplicate definition or an
@@ -329,8 +340,9 @@ target statuses.
 - [ ] `--production-only` applies the documented Clojure/Babashka path and
       basename rules before analysis; tests remain included by default.
 - [ ] Kondo runs reproducibly with cache disabled, root `.clj-kondo` config,
-      JSON analysis, and `protocol-impls`; a fixture proves project `:lint-as`
-      configuration is honored.
+      JSON analysis, `--fail-level error`, and `protocol-impls`; a fixture
+      proves project `:lint-as` configuration is honored and warning-only
+      findings do not make an otherwise complete graph partial.
 - [ ] The helper emits the documented sparse canonical EDN v1 shape with
       required identity fields, canonical omission of empty evidence,
       normalized locations, deterministic ordering, analyzer version, explicit
@@ -339,7 +351,9 @@ target statuses.
 - [ ] Fixtures demonstrate exact semantics for aliases, `:refer`, qualified
       calls, lexical shadowing, direct callees, a namespace-level unattributed
       call, threading macros, macro boundaries, function-as-data, `apply`,
-      multimethods, protocols, and dispatch candidates.
+      multimethods, protocols, and dispatch candidates. The language guide
+      documents that dependency-defined protocol/multimethod vars can remain
+      syntactically direct but semantically unclassified.
 - [ ] `.bb` definitions and usages are included despite kondo's directory-scan
       behavior.
 - [ ] Gap ownership is explicit: parse/reader/config/hook failures and other
@@ -347,10 +361,11 @@ target statuses.
       definitions and target-owned unresolved invocations are per-target gaps.
       Neither category can be silently omitted.
 - [ ] Ordinary lint findings, including error-level findings unrelated to
-      source-analysis completeness, do not make the graph partial. Valid
-      no-arity unknown-namespace declaration/binding usages do not create
-      false gaps; unexplained analyzer failures still follow the documented
-      partial/fatal and exit-code rules.
+      source-analysis completeness, do not make the graph partial. A nonzero
+      analyzer exit explained by well-formed findings is not an
+      `:analyzer-nonzero` gap. Valid no-arity unknown-namespace
+      declaration/binding usages do not create false gaps; unexplained analyzer
+      failures still follow the documented partial/fatal and exit-code rules.
 - [ ] Two identical runs and two target argument orders produce byte-identical
       EDN; the expected contract fixture contains no temporary absolute path.
 - [ ] Pure discovery/normalization/classification/formatting logic is tested
@@ -405,9 +420,9 @@ container for `bb test`, and directly in the equivalent CI environment for
   mislabeled as an owning var;
 - checked-in `:lint-as` config;
 - missing/duplicate targets, target-owned unresolved invocation, valid no-arity
-  unknown declaration/binding usages, parse/reader/config failures, unrelated
-  error-level lint findings, missing kondo, invalid root/target, and empty
-  discovery;
+  unknown declaration/binding usages, parse/reader/config failures,
+  warning-only and unrelated error-level lint findings, missing kondo, invalid
+  root/target, and empty discovery;
 - global versus target gap ownership, sparse expected EDN, canonical
   omitted-empty semantics, and exit codes; and
 - byte stability across repeat runs and target argument permutations.
