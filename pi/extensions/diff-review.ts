@@ -6,6 +6,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { openExternalEditor } from "./shared/external-editor";
 
 const COMMAND_NAME = "diff";
 
@@ -413,30 +414,6 @@ function renderCommentsForAgent(comments: ReviewComment[]): string {
   return lines.join("\n").trimEnd();
 }
 
-function openEditor(
-  editorCommand: string,
-  filePath: string,
-): { ok: true } | { ok: false; message: string } {
-  const [editor, ...editorArgs] = editorCommand.split(" ");
-  if (!editor) return { ok: false, message: "Invalid editor command" };
-
-  try {
-    const result = spawnSync(editor, [...editorArgs, filePath], {
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-    if (result.status && result.status !== 0) {
-      return { ok: false, message: `Editor exited with code ${result.status}` };
-    }
-    return { ok: true };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 export default function diffReviewExtension(pi: ExtensionAPI) {
   async function runDiffReview(
     args: string,
@@ -517,7 +494,11 @@ export default function diffReviewExtension(pi: ExtensionAPI) {
       writeFileSync(reviewPath, reviewBuffer, "utf8");
 
       ctx.ui.notify(`Opening ${reviewPath}`, "info");
-      const result = openEditor(editorCommand, reviewPath);
+      const result = await openExternalEditor(
+        ctx.ui,
+        editorCommand,
+        reviewPath,
+      );
       if (!result.ok) {
         ctx.ui.notify(`Failed to open editor: ${result.message}`, "error");
         return;

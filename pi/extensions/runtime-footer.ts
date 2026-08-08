@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -14,6 +14,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { openExternalEditor } from "./shared/external-editor";
 import {
   formatGitStatsPlain,
   formatGitStatsStyled,
@@ -1120,10 +1121,10 @@ function ensureConfigFile(pathname: string): void {
   }
 }
 
-function openConfigInEditor(pathname: string): {
-  ok: boolean;
-  message: string;
-} {
+async function openConfigInEditor(
+  ctx: ExtensionContext,
+  pathname: string,
+): Promise<{ ok: boolean; message: string }> {
   const editorCommand = process.env.VISUAL || process.env.EDITOR;
   if (!editorCommand) {
     return {
@@ -1131,28 +1132,15 @@ function openConfigInEditor(pathname: string): {
       message: `Set $VISUAL or $EDITOR. Config path: ${pathname}`,
     };
   }
-
-  const [editor, ...editorArgs] = editorCommand.split(" ");
-  if (!editor) {
+  if (!editorCommand.trim()) {
     return {
       ok: false,
       message: `Invalid editor command. Config path: ${pathname}`,
     };
   }
 
-  const result = spawnSync(editor, [...editorArgs, pathname], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
-
-  if (result.status && result.status !== 0) {
-    return {
-      ok: false,
-      message: `Editor exited with code ${result.status}`,
-    };
-  }
-
-  return { ok: true, message: `Updated ${pathname}` };
+  const result = await openExternalEditor(ctx.ui, editorCommand, pathname);
+  return result.ok ? { ok: true, message: `Updated ${pathname}` } : result;
 }
 
 export default function runtimeFooterExtension(pi: ExtensionAPI) {
@@ -1191,6 +1179,11 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
+      if (!ctx.hasUI) {
+        ctx.ui.notify(`/${COMMAND_NAME} requires interactive mode`, "error");
+        return;
+      }
+
       const modeRaw = args.trim();
       const mode =
         modeRaw === "" ? "global" : modeRaw === "project" ? "local" : modeRaw;
@@ -1208,7 +1201,7 @@ export default function runtimeFooterExtension(pi: ExtensionAPI) {
           : resolveGlobalConfigPath();
       ensureConfigFile(targetPath);
 
-      const opened = openConfigInEditor(targetPath);
+      const opened = await openConfigInEditor(ctx, targetPath);
       ctx.ui.notify(opened.message, opened.ok ? "info" : "warning");
 
       configCache = undefined;

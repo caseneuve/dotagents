@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { Key } from "@earendil-works/pi-tui";
@@ -6,11 +5,15 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { openExternalEditor } from "./shared/external-editor";
 
 type OpenResult =
   { ok: true; message: string } | { ok: false; message: string };
 
-function openEditorAtPath(targetPath: string): OpenResult {
+async function openEditorAtPath(
+  ctx: ExtensionContext,
+  targetPath: string,
+): Promise<OpenResult> {
   const editorCommand = process.env.VISUAL || process.env.EDITOR;
   if (!editorCommand) {
     return {
@@ -18,31 +21,17 @@ function openEditorAtPath(targetPath: string): OpenResult {
       message: "Set $VISUAL or $EDITOR before using /cwd-editor",
     };
   }
-
-  const [editor, ...editorArgs] = editorCommand.split(" ");
-  if (!editor) {
+  if (!editorCommand.trim()) {
     return {
       ok: false,
       message: "Invalid editor command in $VISUAL/$EDITOR",
     };
   }
 
-  const result = spawnSync(editor, [...editorArgs, targetPath], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
-
-  if (typeof result.status === "number" && result.status !== 0) {
-    return {
-      ok: false,
-      message: `Editor exited with code ${result.status}`,
-    };
-  }
-
-  return {
-    ok: true,
-    message: `Returned from editor (${targetPath})`,
-  };
+  const result = await openExternalEditor(ctx.ui, editorCommand, targetPath);
+  return result.ok
+    ? { ok: true, message: `Returned from editor (${targetPath})` }
+    : result;
 }
 
 function getPathArgumentCompletions(prefix: string, cwd: string) {
@@ -105,7 +94,7 @@ async function openCwdEditor(ctx: ExtensionContext, args = "") {
 
   const raw = args.trim();
   const targetPath = raw ? path.resolve(ctx.cwd, raw) : ctx.cwd;
-  const opened = openEditorAtPath(targetPath);
+  const opened = await openEditorAtPath(ctx, targetPath);
   ctx.ui.notify(opened.message, opened.ok ? "info" : "warning");
 }
 
