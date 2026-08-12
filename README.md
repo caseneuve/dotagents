@@ -122,6 +122,7 @@ shared skills from `shared/skills/` into both supported runtimes.
 | cicero | [Agents](agents/skills/cicero/SKILL.md) | No | Yes |
 | code-review | Runtime-specific ([Claude](claude/skills/code-review/SKILL.md), [Agents](agents/skills/code-review/SKILL.md)) | Yes | Yes |
 | dataflow | [Shared](shared/skills/dataflow/SKILL.md) | Yes | Yes |
+| invariants | [Shared](shared/skills/invariants/SKILL.md) | Yes | Yes |
 | journal | Runtime-specific ([Claude](claude/skills/journal/SKILL.md), [Agents](agents/skills/journal/SKILL.md)) | Yes | Yes |
 | linear | [Shared](shared/skills/linear/SKILL.md) | Yes | Yes |
 | linear-todo | [Shared](shared/skills/linear-todo/SKILL.md) | Yes | Yes |

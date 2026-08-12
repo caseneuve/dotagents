@@ -23,6 +23,7 @@ bootstrap installs for this runtime.
 | [agent-comms](../../shared/skills/agent-comms/SKILL.md) | Communicate with other agents through shared channels and backend-aware status. |
 | [callgraph](../../shared/skills/callgraph/SKILL.md) | Reconstruct call graphs and validate claims through concrete forward traces. |
 | [dataflow](../../shared/skills/dataflow/SKILL.md) | Visualize typed data flow and mark pure, side-effecting, and mixed boundaries. |
+| [invariants](../../shared/skills/invariants/SKILL.md) | Recover an evidence-backed change contract and audit a patch against its scope and preservation checks. |
 | [linear](../../shared/skills/linear/SKILL.md) | Manage Linear projects, issues, milestones, labels, and status updates through MCP. |
 | [linear-todo](../../shared/skills/linear-todo/SKILL.md) | Claim and finish repository todo work in Linear. |
 | [testmap](../../shared/skills/testmap/SKILL.md) | Statically check test presence and source/test placement without running tests. |

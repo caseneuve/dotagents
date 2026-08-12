@@ -37,6 +37,7 @@
                                    ["{home}/.codex/AGENTS.md" "{work}/agents/AGENTS.md"]
                                    ["{home}/.agents/skills/add-todo/src/todo/cli.clj" "{work}/shared/skills/add-todo/src/todo/cli.clj"]
                                    ["{home}/.agents/skills/linear-todo/SKILL.md" "{work}/shared/skills/linear-todo/SKILL.md"]
+                                   ["{home}/.agents/skills/invariants/SKILL.md" "{work}/shared/skills/invariants/SKILL.md"]
                                    ["{home}/.agents/skills/ux-review/SKILL.md" "{work}/shared/skills/ux-review/SKILL.md"]
                                    ;; #0022: ~/.local/bin/ag-* must link to the bash wrappers,
                                    ;; NOT the raw .clj files (bb needs cwd-bb.edn for classpath).
@@ -68,7 +69,9 @@
                                         ["{home}/.claude/settings.json"
                                          [:permissions :allow]
                                          "Bash(ag-tmux:*)"]]
-                        :symlinks [["{home}/.claude/skills/ux-review/SKILL.md"
+                        :symlinks [["{home}/.claude/skills/invariants/SKILL.md"
+                                    "{work}/shared/skills/invariants/SKILL.md"]
+                                   ["{home}/.claude/skills/ux-review/SKILL.md"
                                     "{work}/shared/skills/ux-review/SKILL.md"]]}]]}
 
    {:scenario :dry-run-makes-no-changes
