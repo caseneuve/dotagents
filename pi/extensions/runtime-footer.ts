@@ -594,12 +594,16 @@ function shortenProvider(raw: string): string {
  *   anthropic/claude-opus-4-20250514-v1:0       →  claude-opus-4
  *   eu.anthropic.claude-3-5-haiku-20241022-v1:0 →  claude-3-5-haiku
  *   gpt-4.1-2025-04-14                          →  gpt-4.1
+ *   openai.gpt-4.1-2025-04-14                   →  gpt-4.1
  */
-function shortenModelId(raw: string): string {
+export function shortenModelId(raw: string): string {
   let id = raw;
 
-  // Strip region+vendor dot-prefix  (e.g. "us.anthropic.")
+  // Strip region+vendor dot-prefix (e.g. "us.anthropic.")
   id = id.replace(/^[a-z]{2,4}\.[a-z]+\./, "");
+
+  // Strip OpenAI's dot-prefix (including the historical "opnai" spelling).
+  id = id.replace(/^(?:openai|opnai)\./, "");
 
   // Strip slash-prefix (e.g. "anthropic/")
   id = id.replace(/^[^/]+\//, "");
