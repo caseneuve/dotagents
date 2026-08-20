@@ -118,6 +118,7 @@ shared skills from `shared/skills/` into both supported runtimes.
 | ----- | ------ | ----------- | ----------- |
 | add-todo | Runtime-specific ([Claude](claude/skills/add-todo/SKILL.md), [Agents](agents/skills/add-todo/SKILL.md)) | Yes | Yes |
 | agent-comms | [Shared](shared/skills/agent-comms/SKILL.md) | Yes | Yes |
+| boundaries | [Shared](shared/skills/boundaries/SKILL.md) | Yes | Yes |
 | callgraph | [Shared](shared/skills/callgraph/SKILL.md) | Yes | Yes |
 | cicero | [Agents](agents/skills/cicero/SKILL.md) | No | Yes |
 | code-review | Runtime-specific ([Claude](claude/skills/code-review/SKILL.md), [Agents](agents/skills/code-review/SKILL.md)) | Yes | Yes |

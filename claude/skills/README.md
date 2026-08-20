@@ -21,6 +21,7 @@ bootstrap installs for this runtime.
 | Skill | Description |
 |-------|-------------|
 | [agent-comms](../../shared/skills/agent-comms/SKILL.md) | Communicate with other agents through shared channels and backend-aware status. |
+| [boundaries](../../shared/skills/boundaries/SKILL.md) | Design semantic contracts, independently provable refactoring seams, and safe cutovers. |
 | [callgraph](../../shared/skills/callgraph/SKILL.md) | Reconstruct call graphs and validate claims through concrete forward traces. |
 | [dataflow](../../shared/skills/dataflow/SKILL.md) | Visualize typed data flow and mark pure, side-effecting, and mixed boundaries. |
 | [invariants](../../shared/skills/invariants/SKILL.md) | Recover an evidence-backed change contract and audit a patch against its scope and preservation checks. |
