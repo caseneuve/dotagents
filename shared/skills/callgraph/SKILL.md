@@ -74,8 +74,14 @@ Language-specific instructions:
   for every symbol identified above, in one call. See `languages/python.md`
   for output format and the script's known blind spots (dynamic dispatch,
   decorators, cross-package boundaries) — those still need a manual read.
-- (Clojure and others: not yet supported — do a manual grep/read pass and
-  note this explicitly in the output's scope-limitations section.)
+- Clojure/Babashka: run, from this skill's directory:
+  ```bash
+  bb scripts/clj_callers.clj --root <repo_root> namespace/var [namespace/var ...]
+  ```
+  Add `--production-only` when test callers should be excluded. See
+  `languages/clojure.md` for the canonical EDN contract, evidence categories,
+  gap/status rules, and static-analysis limits. The helper supplies normalized
+  source-level evidence; it does not prove runtime reachability or dispatch.
 
 Record, per changed symbol: its direct callers, its direct callees, and any
 *other code path that computes or asserts the same fact* (e.g. two different

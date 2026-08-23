@@ -1,6 +1,25 @@
 FROM docker.io/babashka/babashka
+
+ARG CLJ_KONDO_VERSION=2026.01.19
+ARG CLJ_KONDO_AMD64_SHA256=4a4e7bde622b0bd8c4fd368d3a8584690faa007f3ce72255ae63d4090f0e7c92
+ARG CLJ_KONDO_AARCH64_SHA256=49b96cfe3d27528b50074226d10b3327412345e5b58d838157177bba45243f3a
+
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-      tmux git default-jdk-headless \
+      tmux git default-jdk-headless ca-certificates curl unzip \
+    && arch="$(dpkg --print-architecture)" \
+    && case "$arch" in \
+         amd64) kondo_arch=linux-amd64; kondo_sha="$CLJ_KONDO_AMD64_SHA256" ;; \
+         arm64) kondo_arch=linux-aarch64; kondo_sha="$CLJ_KONDO_AARCH64_SHA256" ;; \
+         *) echo "Unsupported container architecture: $arch" >&2; exit 1 ;; \
+       esac \
+    && kondo_zip="clj-kondo-${CLJ_KONDO_VERSION}-${kondo_arch}.zip" \
+    && curl -fsSL -o "/tmp/$kondo_zip" \
+         "https://github.com/clj-kondo/clj-kondo/releases/download/v${CLJ_KONDO_VERSION}/$kondo_zip" \
+    && echo "$kondo_sha  /tmp/$kondo_zip" | sha256sum -c - \
+    && unzip -q "/tmp/$kondo_zip" -d /usr/local/bin \
+    && chmod 0755 /usr/local/bin/clj-kondo \
+    && clj-kondo --version \
+    && rm -f "/tmp/$kondo_zip" \
     && rm -rf /var/lib/apt/lists/*
 # Pin dep cache locations so tests that override HOME still find them
 ENV DEPS_CLJ_TOOLS_DIR=/root/.deps.clj

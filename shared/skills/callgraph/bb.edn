@@ -1,0 +1,29 @@
+{:tasks
+ {test
+  {:doc "Run callgraph analyzer-backed tests"
+   :task (let [{:keys [exit out err]}
+               (try
+                 (babashka.process/shell {:out :string :err :string :continue true}
+                                          "clj-kondo" "--version")
+                 (catch Exception error
+                   {:exit 127 :out "" :err (.getMessage error)}))
+               version (clojure.string/trim (or out ""))]
+           (cond
+             (not (zero? exit))
+             (do
+               (binding [*out* *err*]
+                 (println "Callgraph preflight failed: clj-kondo v2026.01.19 is required.")
+                 (println (str "Run `clj-kondo --version` to verify the installation."
+                               (when (seq err) (str " Details: " err)))))
+               (System/exit 2))
+
+             (not= version "clj-kondo v2026.01.19")
+             (do
+               (binding [*out* *err*]
+                 (println (str "Callgraph preflight failed: expected clj-kondo v2026.01.19, got "
+                               (if (seq version) version "<no version>")))
+                 (println "Install or select clj-kondo v2026.01.19 before running this suite."))
+               (System/exit 2))
+
+             :else
+             (babashka.process/shell "bb" "shared/skills/callgraph/test/test_clj_callers.clj")))}}}

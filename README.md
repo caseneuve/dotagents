@@ -68,8 +68,13 @@ Tests run in podman so they do not touch the host environment.
 ```bash
 bb test
 bb test:unit
+bb test:callgraph
 bb test:e2e
 ```
+
+`bb test:callgraph` runs the deterministic Clojure/Babashka callgraph suite.
+Locally it runs inside the pinned Podman test image; CI uses the same skill-local
+runner directly after checking for `clj-kondo v2026.01.19`.
 
 Pi extension type-checking uses pinned Pi API packages from `package.json` so the repo records which Pi version the extensions are known to compile against:
 

@@ -1,6 +1,6 @@
 ---
 title: Add deterministic Clojure and Babashka callgraph evidence
-status: open
+status: done
 priority: medium
 type: feature
 labels: [skills, clojure]
