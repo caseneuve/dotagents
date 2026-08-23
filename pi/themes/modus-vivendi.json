@@ -1,17 +1,19 @@
 {
-  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
   "name": "modus-vivendi",
   "vars": {
-    "bg": "#000000",
-    "bgDim": "#1e1e1e",
-    "surface": "#303030",
-    "selection": "#2f447f",
+    "bg": "#0d0e1c",
+    "bgDim": "#1d2235",
+    "surface": "#2b3045",
+    "border": "#61647a",
+    "selection": "#483d8a",
 
     "fg": "#ffffff",
-    "fgSoft": "#e0e0e0",
-    "fgDim": "#b0b0b0",
-    "fgFaint": "#8f8f8f",
+    "fgSoft": "#c6daff",
+    "fgDim": "#989898",
+    "fgFaint": "#61647a",
 
+    "accent": "#00bcff",
     "blue": "#79a8ff",
     "cyan": "#00d3d0",
     "green": "#44bc44",
@@ -21,16 +23,16 @@
     "purple": "#b6a0ff",
     "warmDark": "#d2b580",
 
-    "selectedBg": "#2f447f",
-    "userMsgBg": "#2f3849",
+    "selectedBg": "#483d8a",
+    "userMsgBg": "#303a6f",
     "toolPendingBg": "#381d0f",
     "toolSuccessBg": "#092f1f",
     "toolErrorBg": "#3a0c14",
     "customMsgBg": "#2f0c3f"
   },
   "colors": {
-    "accent": "blue",
-    "border": "cyan",
+    "accent": "accent",
+    "border": "border",
     "borderAccent": "blue",
     "borderMuted": "surface",
     "success": "green",
@@ -42,6 +44,9 @@
     "thinkingText": "fgSoft",
 
     "selectedBg": "selectedBg",
+    "scrollbarThumb": "surface",
+    "searchMatchBg": "selection",
+    "searchMatchText": "fg",
     "userMessageBg": "userMsgBg",
     "userMessageText": "fg",
     "customMessageBg": "customMsgBg",
@@ -57,8 +62,8 @@
     "mdLink": "blue",
     "mdLinkUrl": "fgDim",
     "mdCode": "cyan",
-    "mdCodeBlock": "fgSoft",
-    "mdCodeBlockBorder": "surface",
+    "mdCodeBlock": "fg",
+    "mdCodeBlockBorder": "fgDim",
     "mdQuote": "fgSoft",
     "mdQuoteBorder": "surface",
     "mdHr": "surface",
@@ -68,7 +73,7 @@
     "toolDiffRemoved": "red",
     "toolDiffContext": "fgDim",
 
-    "syntaxComment": "#989898",
+    "syntaxComment": "#ff9f80",
     "syntaxKeyword": "#b6a0ff",
     "syntaxFunction": "#feacd0",
     "syntaxVariable": "#00d3d0",
@@ -84,12 +89,13 @@
     "thinkingMedium": "blue",
     "thinkingHigh": "purple",
     "thinkingXhigh": "magenta",
+    "thinkingMax": "magenta",
 
     "bashMode": "green"
   },
   "export": {
-    "pageBg": "#000000",
-    "cardBg": "#1e1e1e",
+    "pageBg": "#0d0e1c",
+    "cardBg": "#1d2235",
     "infoBg": "#242679"
   }
 }
