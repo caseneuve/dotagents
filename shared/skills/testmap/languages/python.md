@@ -20,8 +20,11 @@ mirrored `tests/<source-subdirectories>/test_<module>.py` at each ancestor
 `<app>/module/<module>.py` -> `<app>/tests/module/test_<module>.py`; the
 former continues to handle Django's flattened
 `<app>/management/commands/<module>.py` -> `<app>/tests/test_<module>.py`
-layout automatically. If flattened and mirrored candidates both exist below
-the same ancestor, the more specific mirrored candidate wins.
+layout automatically. A flattened candidate is used only when the reverse
+convention maps it back to the requested source; otherwise it is ambiguous
+with another same-named module and requires an explicit `--test-pattern`. If
+flattened and mirrored candidates both exist below the same ancestor, the more
+specific mirrored candidate wins.
 
 Example:
 
@@ -110,8 +113,10 @@ to filter on the path relative to `--root` instead.
   concatenations composed only of lexically visible literal-string constants,
   such as `MODULE = "billing.locks"` plus
   `@patch(f"{MODULE}.acquire_lock")`. Module and test-class constants are
-  supported, and a test-class decorator applies to every contained test method;
-  dynamic values, patch context managers, and `patch.object(...)` are out of
+  supported, and a test-class decorator applies to every contained test method.
+  The decorator must be a statically verified import from `unittest.mock` or
+  `mock` (including aliases), so an arbitrary `object.patch(...)` is ignored.
+  Dynamic values, patch context managers, and `patch.object(...)` are out of
   scope.
 - Dynamic dispatch (`getattr`, decorator-wrapped rebinding, DI containers)
   isn't resolved — same blind spot as `callgraph`'s helper.

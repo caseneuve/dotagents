@@ -106,8 +106,9 @@ Scenario 1, one of:
   `@patch("package.module.symbol")` target for the symbol but no direct call.
   This is an ownership signal, not proof the symbol itself is exercised. Only
   literal targets and f-strings composed of lexically visible literal-string
-  constants (module or test-class scope) are resolved. A test-class decorator
-  applies to every test method in that class.
+  constants (module or test-class scope) are resolved, and `patch` must be
+  statically imported from `unittest.mock` or `mock` (including aliases). A
+  test-class decorator applies to every test method in that class.
 - **`imported only`** — the expected test file imports the symbol but the
   script found no direct call to it there. Call this out, don't count it as
   tested.

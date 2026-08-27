@@ -411,14 +411,56 @@ def _static_string_value(node: ast.AST, bindings: dict[str, str]) -> str | None:
     return None
 
 
-def _patch_target_argument(call: ast.Call) -> ast.AST | None:
-    if isinstance(call.func, ast.Name) and call.func.id == "patch":
-        pass
-    elif isinstance(call.func, ast.Attribute) and call.func.attr == "patch":
-        pass
-    else:
-        return None
+_PATCH_MODULES = frozenset({"mock", "unittest.mock"})
 
+
+def _bound_names(statement: ast.stmt) -> list[str]:
+    if isinstance(statement, ast.Assign):
+        return [target.id for target in statement.targets if isinstance(target, ast.Name)]
+    if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+        return [statement.target.id]
+    if isinstance(statement, ast.Import):
+        return [alias.asname or alias.name.split(".")[0] for alias in statement.names]
+    if isinstance(statement, ast.ImportFrom):
+        return [alias.asname or alias.name for alias in statement.names]
+    if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return [statement.name]
+    return []
+
+
+def _clear_patch_bindings(names: list[str], patch_functions: set[str]) -> None:
+    for name in names:
+        patch_functions.difference_update(
+            function
+            for function in patch_functions.copy()
+            if function.split(".", 1)[0] == name
+        )
+
+
+def _update_patch_bindings(statement: ast.stmt, patch_functions: set[str]) -> None:
+    """Track verified unittest.mock/mock patch call expressions in source order."""
+    _clear_patch_bindings(_bound_names(statement), patch_functions)
+
+    if isinstance(statement, ast.Import):
+        for alias in statement.names:
+            if alias.name in _PATCH_MODULES:
+                expression = alias.asname or alias.name
+                patch_functions.add(f"{expression}.patch")
+    elif isinstance(statement, ast.ImportFrom):
+        module = statement.module or ""
+        for alias in statement.names:
+            local = alias.asname or alias.name
+            if module in _PATCH_MODULES and alias.name == "patch":
+                patch_functions.add(local)
+            elif module == "unittest" and alias.name == "mock":
+                patch_functions.add(f"{local}.patch")
+
+
+def _patch_target_argument(
+    call: ast.Call, patch_functions: set[str]
+) -> ast.AST | None:
+    if _dotted_name(call.func) not in patch_functions:
+        return None
     if call.args:
         return call.args[0]
     return next(
@@ -430,6 +472,7 @@ def _patch_target_argument(call: ast.Call) -> ast.AST | None:
 def _record_patch_targets(
     decorators: list[ast.expr],
     bindings: dict[str, str],
+    patch_functions: set[str],
     targets: list[StaticPatchTarget],
     class_name: str | None = None,
     applies_to_class: bool = False,
@@ -437,7 +480,7 @@ def _record_patch_targets(
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
             continue
-        argument = _patch_target_argument(decorator)
+        argument = _patch_target_argument(decorator, patch_functions)
         if argument is None:
             continue
         target = _static_string_value(argument, bindings)
@@ -463,51 +506,76 @@ def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> No
     value = (
         _static_string_value(statement.value, bindings) if statement.value else None
     )
-    assigned = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
-    for target in assigned:
-        if not isinstance(target, ast.Name):
-            continue
+    for name in _bound_names(statement):
         if value is None:
-            bindings.pop(target.id, None)
+            bindings.pop(name, None)
         else:
-            bindings[target.id] = value
+            bindings[name] = value
+
+
+def _clear_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> None:
+    for name in _bound_names(statement):
+        bindings.pop(name, None)
 
 
 def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
-    """Resolve simple lexical constants in ``@patch`` target strings.
+    """Resolve statically bound ``unittest.mock.patch`` decorator targets.
 
     This recognizes literal strings, names assigned a literal string, and
     f-strings/concatenation made solely from those names. Module and class
-    scopes are tracked in source order; code is never executed or inferred
-    from dynamic values.
+    scopes, including verified patch-import aliases, are tracked in source
+    order; code is never executed or inferred from dynamic values.
     """
     bindings: dict[str, str] = {}
+    patch_functions: set[str] = set()
     targets: list[StaticPatchTarget] = []
 
     for statement in tree.body:
-        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            _clear_static_bindings(statement, bindings)
+            _update_patch_bindings(statement, patch_functions)
+        elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
             _update_static_bindings(statement, bindings)
+            _update_patch_bindings(statement, patch_functions)
         elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _record_patch_targets(statement.decorator_list, bindings, targets)
+            _record_patch_targets(
+                statement.decorator_list,
+                bindings,
+                patch_functions,
+                targets,
+            )
+            _clear_static_bindings(statement, bindings)
+            _update_patch_bindings(statement, patch_functions)
         elif isinstance(statement, ast.ClassDef):
             _record_patch_targets(
                 statement.decorator_list,
                 bindings,
+                patch_functions,
                 targets,
                 statement.name,
                 applies_to_class=True,
             )
             class_bindings = bindings.copy()
+            class_patch_functions = patch_functions.copy()
             for member in statement.body:
-                if isinstance(member, (ast.Assign, ast.AnnAssign)):
+                if isinstance(member, (ast.Import, ast.ImportFrom)):
+                    _clear_static_bindings(member, class_bindings)
+                    _update_patch_bindings(member, class_patch_functions)
+                elif isinstance(member, (ast.Assign, ast.AnnAssign)):
                     _update_static_bindings(member, class_bindings)
+                    _update_patch_bindings(member, class_patch_functions)
                 elif isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     _record_patch_targets(
                         member.decorator_list,
                         class_bindings,
+                        class_patch_functions,
                         targets,
                         statement.name,
                     )
+                    _clear_static_bindings(member, class_bindings)
+                    _update_patch_bindings(member, class_patch_functions)
+            _clear_static_bindings(statement, bindings)
+            _update_patch_bindings(statement, patch_functions)
 
     return targets
 

@@ -36,6 +36,21 @@ from _common import (
 )
 
 
+def _flattened_candidate_targets_source(src: Path, app_dir: Path) -> bool:
+    """Whether the reverse convention maps an app-level test back to ``src``."""
+    naive = app_dir / src.name
+    if naive.is_file():
+        return naive == src
+
+    matches = [
+        path
+        for path in app_dir.rglob(src.name)
+        if not is_test_file(path)
+        and "tests" not in path.relative_to(app_dir).parts[:-1]
+    ]
+    return matches == [src]
+
+
 def default_expected_test_path(src: Path, root: Path) -> Path:
     """Find a flattened or mirrored test path below a source ancestor.
 
@@ -56,7 +71,7 @@ def default_expected_test_path(src: Path, root: Path) -> Path:
         # both exist under the same app directory.
         if mirrored.is_file():
             return mirrored
-        if candidate.is_file():
+        if candidate.is_file() and _flattened_candidate_targets_source(src, current):
             return candidate
 
         if current == root or current.parent == current:

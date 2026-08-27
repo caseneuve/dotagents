@@ -301,6 +301,41 @@ alias = target
 
         self.assertEqual(expected, mirrored)
 
+    def test_flattened_test_for_sibling_is_not_selected_for_nested_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sibling_source = root / "foo" / "blah.py"
+            sibling_source.parent.mkdir()
+            sibling_source.write_text("def sibling(): pass\n")
+            nested_source = root / "foo" / "module" / "blah.py"
+            nested_source.parent.mkdir()
+            nested_source.write_text("def nested(): pass\n")
+            flattened = root / "foo" / "tests" / "test_blah.py"
+            flattened.parent.mkdir()
+            flattened.write_text("def test_blah(): pass\n")
+
+            expected = expected_test_path(nested_source, root)
+            reversed_source = default_expected_source_path(flattened, root)
+
+        self.assertNotEqual(expected, flattened)
+        self.assertEqual(reversed_source, sibling_source)
+
+    def test_unambiguous_flattened_test_still_maps_to_nested_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "management" / "commands" / "blah.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("def target(): pass\n")
+            flattened = root / "foo" / "tests" / "test_blah.py"
+            flattened.parent.mkdir()
+            flattened.write_text("def test_blah(): pass\n")
+
+            expected = expected_test_path(source, root)
+            reversed_source = default_expected_source_path(flattened, root)
+
+        self.assertEqual(expected, flattened)
+        self.assertEqual(reversed_source, source)
+
     def test_relative_test_pattern_is_normalized_before_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -412,6 +447,34 @@ class TestBar:
             )
 
         self.assertEqual(status, "on-target (patched: target)")
+
+    def test_static_patch_target_accepts_import_alias_but_not_arbitrary_patch_method(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch as mock_patch
+
+class Helper:
+    def patch(self, target):
+        return target
+
+helper = Helper()
+
+@mock_patch("foo.bar.target")
+def test_alias(mock_target):
+    pass
+
+@helper.patch("foo.other.target")
+def test_unrelated_method():
+    pass
+"""
+        )
+
+        targets = static_patch_targets(tree)
+
+        self.assertEqual(
+            [(target.dotted_module, target.symbol) for target in targets],
+            [("foo.bar", "target")],
+        )
 
     def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
