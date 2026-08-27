@@ -29,4 +29,5 @@ bootstrap installs for this runtime.
 | [linear](../../shared/skills/linear/SKILL.md) | Manage Linear projects, issues, milestones, labels, and status updates through MCP. |
 | [linear-todo](../../shared/skills/linear-todo/SKILL.md) | Claim and finish repository todo work in Linear. |
 | [testmap](../../shared/skills/testmap/SKILL.md) | Statically check test presence and source/test placement without running tests. |
+| [to-skill](../../shared/skills/to-skill/SKILL.md) | Distill hard-won task context into a concise, portable local skill. |
 | [ux-review](../../shared/skills/ux-review/SKILL.md) | Review user-facing text with a two-pass check for wording and structural-context gaps. |

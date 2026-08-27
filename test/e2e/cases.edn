@@ -39,6 +39,7 @@
                                    ["{home}/.agents/skills/linear-todo/SKILL.md" "{work}/shared/skills/linear-todo/SKILL.md"]
                                    ["{home}/.agents/skills/boundaries/SKILL.md" "{work}/shared/skills/boundaries/SKILL.md"]
                                    ["{home}/.agents/skills/invariants/SKILL.md" "{work}/shared/skills/invariants/SKILL.md"]
+                                   ["{home}/.agents/skills/to-skill/SKILL.md" "{work}/shared/skills/to-skill/SKILL.md"]
                                    ["{home}/.agents/skills/ux-review/SKILL.md" "{work}/shared/skills/ux-review/SKILL.md"]
                                    ;; #0022: ~/.local/bin/ag-* must link to the bash wrappers,
                                    ;; NOT the raw .clj files (bb needs cwd-bb.edn for classpath).
@@ -74,6 +75,8 @@
                                     "{work}/shared/skills/boundaries/SKILL.md"]
                                    ["{home}/.claude/skills/invariants/SKILL.md"
                                     "{work}/shared/skills/invariants/SKILL.md"]
+                                   ["{home}/.claude/skills/to-skill/SKILL.md"
+                                    "{work}/shared/skills/to-skill/SKILL.md"]
                                    ["{home}/.claude/skills/ux-review/SKILL.md"
                                     "{work}/shared/skills/ux-review/SKILL.md"]]}]]}
 
