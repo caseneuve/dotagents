@@ -1,6 +1,6 @@
 ---
 title: fix testmap nested layout and static patch targets
-status: in_progress
+status: done
 priority: medium
 type: bug
 labels: []
@@ -19,12 +19,12 @@ targets, including f-strings built from a module-name constant.
 
 ## Acceptance Criteria
 
-- [ ] Forward and reverse mapping recognize mirrored directories below an app's
+- [x] Forward and reverse mapping recognize mirrored directories below an app's
   `tests/` directory, while retaining flattened Django-style discovery.
-- [ ] Relative `--test-pattern` paths are normalized before classification.
-- [ ] Literal and lexically visible f-string `@patch` targets appear as static
+- [x] Relative `--test-pattern` paths are normalized before classification.
+- [x] Literal and lexically visible f-string `@patch` targets appear as static
   references without being counted as direct calls.
-- [ ] Unit tests and skill documentation cover the new behavior and limits.
+- [x] Unit tests and skill documentation cover the new behavior and limits.
 
 ## Affected Files
 
