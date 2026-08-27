@@ -414,11 +414,26 @@ def _static_string_value(node: ast.AST, bindings: dict[str, str]) -> str | None:
 _PATCH_MODULES = frozenset({"mock", "unittest.mock"})
 
 
+def _target_names(target: ast.AST) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [name for element in target.elts for name in _target_names(element)]
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    if isinstance(target, ast.Attribute):
+        receiver = _dotted_name(target.value)
+        return [receiver.split(".", 1)[0]] if receiver else []
+    return []
+
+
 def _bound_names(statement: ast.stmt) -> list[str]:
     if isinstance(statement, ast.Assign):
-        return [target.id for target in statement.targets if isinstance(target, ast.Name)]
-    if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-        return [statement.target.id]
+        return [name for target in statement.targets for name in _target_names(target)]
+    if isinstance(statement, (ast.AnnAssign, ast.AugAssign)):
+        return _target_names(statement.target)
+    if isinstance(statement, ast.Delete):
+        return [name for target in statement.targets for name in _target_names(target)]
     if isinstance(statement, ast.Import):
         return [alias.asname or alias.name.split(".")[0] for alias in statement.names]
     if isinstance(statement, ast.ImportFrom):
@@ -426,6 +441,17 @@ def _bound_names(statement: ast.stmt) -> list[str]:
     if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return [statement.name]
     return []
+
+
+def _conservative_bound_names(statement: ast.stmt) -> list[str]:
+    """Names possibly rebound by a statement whose control flow is not modeled."""
+    return list(
+        {
+            node.id
+            for node in ast.walk(statement)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+        }
+    )
 
 
 def _clear_patch_bindings(names: list[str], patch_functions: set[str]) -> None:
@@ -500,11 +526,13 @@ def _record_patch_targets(
 
 
 def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> None:
-    if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+    if not isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
         return
 
     value = (
-        _static_string_value(statement.value, bindings) if statement.value else None
+        _static_string_value(statement.value, bindings)
+        if not isinstance(statement, ast.AugAssign) and statement.value
+        else None
     )
     for name in _bound_names(statement):
         if value is None:
@@ -534,7 +562,7 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             _clear_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
-        elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+        elif isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
             _update_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
         elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -561,7 +589,7 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                 if isinstance(member, (ast.Import, ast.ImportFrom)):
                     _clear_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
-                elif isinstance(member, (ast.Assign, ast.AnnAssign)):
+                elif isinstance(member, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
                     _update_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
                 elif isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -574,8 +602,18 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                     )
                     _clear_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
+                else:
+                    names = _conservative_bound_names(member)
+                    _clear_patch_bindings(names, class_patch_functions)
+                    for name in names:
+                        class_bindings.pop(name, None)
             _clear_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
+        else:
+            names = _conservative_bound_names(statement)
+            _clear_patch_bindings(names, patch_functions)
+            for name in names:
+                bindings.pop(name, None)
 
     return targets
 

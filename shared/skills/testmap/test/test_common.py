@@ -476,6 +476,22 @@ def test_unrelated_method():
             [("foo.bar", "target")],
         )
 
+    def test_destructuring_reassignment_clears_patch_and_string_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.expected"
+patch, TESTED_MODULE = fake_patch, "foo.other"
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(tree), [])
+
     def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
