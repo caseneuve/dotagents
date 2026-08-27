@@ -492,6 +492,57 @@ def test_target(mock_target):
 
         self.assertEqual(static_patch_targets(tree), [])
 
+    def test_star_import_and_pattern_capture_clear_static_bindings(self) -> None:
+        star_import_tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.expected"
+from unknown import *
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+        pattern_capture_tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.expected"
+match value:
+    case [TESTED_MODULE]:
+        pass
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(star_import_tree), [])
+        self.assertEqual(static_patch_targets(pattern_capture_tree), [])
+
+    def test_annotation_only_declaration_preserves_static_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.bar"
+TESTED_MODULE: str
+patch: object
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(
+            [(target.dotted_module, target.symbol) for target in static_patch_targets(tree)],
+            [("foo.bar", "target")],
+        )
+
     def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

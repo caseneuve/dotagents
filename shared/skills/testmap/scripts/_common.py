@@ -445,12 +445,24 @@ def _bound_names(statement: ast.stmt) -> list[str]:
 
 def _conservative_bound_names(statement: ast.stmt) -> list[str]:
     """Names possibly rebound by a statement whose control flow is not modeled."""
-    return list(
-        {
-            node.id
-            for node in ast.walk(statement)
-            if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
-        }
+    names = {
+        node.id
+        for node in ast.walk(statement)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+    }
+    for node in ast.walk(statement):
+        if isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            names.add(node.rest)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+    return list(names)
+
+
+def _has_star_import(statement: ast.stmt) -> bool:
+    return isinstance(statement, ast.ImportFrom) and any(
+        alias.name == "*" for alias in statement.names
     )
 
 
@@ -465,6 +477,12 @@ def _clear_patch_bindings(names: list[str], patch_functions: set[str]) -> None:
 
 def _update_patch_bindings(statement: ast.stmt, patch_functions: set[str]) -> None:
     """Track verified unittest.mock/mock patch call expressions in source order."""
+    if isinstance(statement, ast.AnnAssign) and statement.value is None:
+        return
+    if _has_star_import(statement):
+        patch_functions.clear()
+        return
+
     _clear_patch_bindings(_bound_names(statement), patch_functions)
 
     if isinstance(statement, ast.Import):
@@ -528,6 +546,8 @@ def _record_patch_targets(
 def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> None:
     if not isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
         return
+    if isinstance(statement, ast.AnnAssign) and statement.value is None:
+        return
 
     value = (
         _static_string_value(statement.value, bindings)
@@ -560,7 +580,10 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
 
     for statement in tree.body:
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
-            _clear_static_bindings(statement, bindings)
+            if _has_star_import(statement):
+                bindings.clear()
+            else:
+                _clear_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
         elif isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
             _update_static_bindings(statement, bindings)
@@ -587,7 +610,10 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
             class_patch_functions = patch_functions.copy()
             for member in statement.body:
                 if isinstance(member, (ast.Import, ast.ImportFrom)):
-                    _clear_static_bindings(member, class_bindings)
+                    if _has_star_import(member):
+                        class_bindings.clear()
+                    else:
+                        _clear_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
                 elif isinstance(member, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
                     _update_static_bindings(member, class_bindings)
