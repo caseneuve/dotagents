@@ -137,7 +137,11 @@ def classify_test_unit(
         for target in patch_targets
         if (
             target.lineno in call_lines
-            or (separator and target.class_name == class_name)
+            or (
+                separator
+                and target.applies_to_class
+                and target.class_name == class_name
+            )
         )
         and (resolved := resolve_module_to_path(root, target.dotted_module)) is not None
         and not is_test_file(resolved)

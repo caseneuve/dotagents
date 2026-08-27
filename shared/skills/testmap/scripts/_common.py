@@ -107,6 +107,7 @@ class StaticPatchTarget:
     symbol: str
     dotted_module: str
     class_name: str | None = None
+    applies_to_class: bool = False
 
 
 @dataclass
@@ -431,6 +432,7 @@ def _record_patch_targets(
     bindings: dict[str, str],
     targets: list[StaticPatchTarget],
     class_name: str | None = None,
+    applies_to_class: bool = False,
 ) -> None:
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
@@ -449,6 +451,7 @@ def _record_patch_targets(
                     symbol=symbol,
                     dotted_module=dotted_module,
                     class_name=class_name,
+                    applies_to_class=applies_to_class,
                 )
             )
 
@@ -492,6 +495,7 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                 bindings,
                 targets,
                 statement.name,
+                applies_to_class=True,
             )
             class_bindings = bindings.copy()
             for member in statement.body:

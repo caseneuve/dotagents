@@ -353,6 +353,38 @@ class SomeTests:
             [("foo.other", "target", "SomeTests")],
         )
 
+    def test_method_patch_target_does_not_apply_to_other_test_methods(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "bar.py"
+            source.parent.mkdir()
+            source.write_text("def target(): pass\n")
+            tree = ast.parse(
+                """
+from unittest.mock import patch
+
+class TestBar:
+    @patch("foo.bar.target")
+    def test_first(self, mock_target):
+        pass
+
+    def test_second(self):
+        pass
+"""
+            )
+
+            units = test_units(tree)
+            status = classify_test_unit(
+                units[1],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                {},
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "no production symbols called (fixture-only / trivial?)")
+
     def test_class_patch_target_applies_to_each_test_method_in_reverse_mapping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
