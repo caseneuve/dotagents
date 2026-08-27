@@ -346,9 +346,40 @@ class SomeTests:
         targets = static_patch_targets(tree)
 
         self.assertEqual(
-            [(target.dotted_module, target.symbol) for target in targets],
-            [("foo.other", "target")],
+            [
+                (target.dotted_module, target.symbol, target.class_name)
+                for target in targets
+            ],
+            [("foo.other", "target", "SomeTests")],
         )
+
+    def test_class_patch_target_applies_to_each_test_method_in_reverse_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "bar.py"
+            source.parent.mkdir()
+            source.write_text("def target(): pass\n")
+            tree = ast.parse(
+                """
+from unittest.mock import patch
+
+@patch("foo.bar.target")
+class TestBar:
+    def test_target(self, mock_target):
+        pass
+"""
+            )
+
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                {},
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "on-target (patched: target)")
 
     def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

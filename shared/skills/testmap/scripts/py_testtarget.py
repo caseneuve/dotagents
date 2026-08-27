@@ -131,10 +131,14 @@ def classify_test_unit(
         for call in resolved_calls
         if call.lineno in call_lines and call.dotted_module in paths_by_module
     }
+    class_name, separator, _method_name = unit.qualname.partition(".")
     patched_symbols = {
         (target.symbol, resolved)
         for target in patch_targets
-        if target.lineno in call_lines
+        if (
+            target.lineno in call_lines
+            or (separator and target.class_name == class_name)
+        )
         and (resolved := resolve_module_to_path(root, target.dotted_module)) is not None
         and not is_test_file(resolved)
     }

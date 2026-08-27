@@ -110,8 +110,9 @@ to filter on the path relative to `--root` instead.
   concatenations composed only of lexically visible literal-string constants,
   such as `MODULE = "billing.locks"` plus
   `@patch(f"{MODULE}.acquire_lock")`. Module and test-class constants are
-  supported; dynamic values, patch context managers, and `patch.object(...)`
-  are out of scope.
+  supported, and a test-class decorator applies to every contained test method;
+  dynamic values, patch context managers, and `patch.object(...)` are out of
+  scope.
 - Dynamic dispatch (`getattr`, decorator-wrapped rebinding, DI containers)
   isn't resolved — same blind spot as `callgraph`'s helper.
 - Module imports/rebindings are followed in source order. Calls inside a

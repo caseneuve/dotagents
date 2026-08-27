@@ -106,6 +106,7 @@ class StaticPatchTarget:
     lineno: int
     symbol: str
     dotted_module: str
+    class_name: str | None = None
 
 
 @dataclass
@@ -429,6 +430,7 @@ def _record_patch_targets(
     decorators: list[ast.expr],
     bindings: dict[str, str],
     targets: list[StaticPatchTarget],
+    class_name: str | None = None,
 ) -> None:
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
@@ -446,6 +448,7 @@ def _record_patch_targets(
                     lineno=decorator.lineno,
                     symbol=symbol,
                     dotted_module=dotted_module,
+                    class_name=class_name,
                 )
             )
 
@@ -484,7 +487,12 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
         elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             _record_patch_targets(statement.decorator_list, bindings, targets)
         elif isinstance(statement, ast.ClassDef):
-            _record_patch_targets(statement.decorator_list, bindings, targets)
+            _record_patch_targets(
+                statement.decorator_list,
+                bindings,
+                targets,
+                statement.name,
+            )
             class_bindings = bindings.copy()
             for member in statement.body:
                 if isinstance(member, (ast.Assign, ast.AnnAssign)):
@@ -494,6 +502,7 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                         member.decorator_list,
                         class_bindings,
                         targets,
+                        statement.name,
                     )
 
     return targets
