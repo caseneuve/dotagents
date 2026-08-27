@@ -541,6 +541,79 @@ def test_target(mock_target):
 
         self.assertEqual(static_patch_targets(tree), [])
 
+    def test_non_direct_assignments_do_not_create_static_string_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+MODULE, *rest = "foo.bar"
+holder.attr = "foo.other"
+
+@patch(f"{MODULE}.target")
+def test_destructured(mock_target):
+    pass
+
+@patch(f"{holder}.target")
+def test_attribute(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(tree), [])
+
+    def test_class_global_declaration_invalidates_outer_static_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.old"
+
+class Configuration:
+    global TESTED_MODULE, patch
+    TESTED_MODULE = "foo.new"
+    patch = fake_patch
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(tree), [])
+
+    def test_same_named_classes_do_not_share_class_patch_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "other.py"
+            source.parent.mkdir()
+            source.write_text("def target(): pass\n")
+            (root / "foo" / "expected.py").write_text("def target(): pass\n")
+            tree = ast.parse(
+                """
+from unittest.mock import patch
+
+@patch("foo.expected.target")
+class TestSame:
+    def test_first(self, mock_target):
+        pass
+
+class TestSame:
+    def test_second(self):
+        pass
+"""
+            )
+
+            status = classify_test_unit(
+                test_units(tree)[1],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                {},
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "no production symbols called (fixture-only / trivial?)")
+
     def test_annotation_only_declaration_preserves_static_bindings(self) -> None:
         tree = ast.parse(
             """

@@ -107,6 +107,7 @@ class StaticPatchTarget:
     symbol: str
     dotted_module: str
     class_name: str | None = None
+    class_lineno: int | None = None
     applies_to_class: bool = False
 
 
@@ -529,6 +530,7 @@ def _record_patch_targets(
     patch_functions: set[str],
     targets: list[StaticPatchTarget],
     class_name: str | None = None,
+    class_lineno: int | None = None,
     applies_to_class: bool = False,
 ) -> None:
     for decorator in decorators:
@@ -548,9 +550,20 @@ def _record_patch_targets(
                     symbol=symbol,
                     dotted_module=dotted_module,
                     class_name=class_name,
+                    class_lineno=class_lineno,
                     applies_to_class=applies_to_class,
                 )
             )
+
+
+def _direct_assignment_names(statement: ast.stmt) -> list[str]:
+    if isinstance(statement, ast.Assign) and all(
+        isinstance(target, ast.Name) for target in statement.targets
+    ):
+        return [target.id for target in statement.targets]
+    if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+        return [statement.target.id]
+    return []
 
 
 def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> None:
@@ -559,15 +572,18 @@ def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> No
     if isinstance(statement, ast.AnnAssign) and statement.value is None:
         return
 
+    # Every assignment may invalidate an existing binding, but only direct name
+    # assignments have simple enough semantics to establish a new string value.
+    for name in _bound_names(statement):
+        bindings.pop(name, None)
+
     value = (
         _static_string_value(statement.value, bindings)
         if not isinstance(statement, ast.AugAssign) and statement.value
         else None
     )
-    for name in _bound_names(statement):
-        if value is None:
-            bindings.pop(name, None)
-        else:
+    if value is not None:
+        for name in _direct_assignment_names(statement):
             bindings[name] = value
 
 
@@ -614,12 +630,16 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                 patch_functions,
                 targets,
                 statement.name,
+                statement.lineno,
                 applies_to_class=True,
             )
             class_bindings = bindings.copy()
             class_patch_functions = patch_functions.copy()
+            class_global_names: set[str] = set()
             for member in statement.body:
-                if isinstance(member, (ast.Import, ast.ImportFrom)):
+                if isinstance(member, ast.Global):
+                    class_global_names.update(member.names)
+                elif isinstance(member, (ast.Import, ast.ImportFrom)):
                     if _has_star_import(member):
                         class_bindings.clear()
                     else:
@@ -635,6 +655,7 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                         class_patch_functions,
                         targets,
                         statement.name,
+                        statement.lineno,
                     )
                     _clear_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
@@ -647,6 +668,16 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                         _clear_patch_bindings(names, class_patch_functions)
                         for name in names:
                             class_bindings.pop(name, None)
+
+                _clear_patch_bindings(
+                    list(class_global_names), class_patch_functions
+                )
+                for name in class_global_names:
+                    class_bindings.pop(name, None)
+
+            _clear_patch_bindings(list(class_global_names), patch_functions)
+            for name in class_global_names:
+                bindings.pop(name, None)
             _clear_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
         else:
@@ -687,6 +718,7 @@ class TestUnit:
     qualname: str  # "test_foo" or "SomeTestCase.test_foo"
     lineno: int
     node: ast.AST = field(repr=False)
+    class_lineno: int | None = None
 
 
 def test_units(tree: ast.Module) -> list[TestUnit]:
@@ -703,7 +735,10 @@ def test_units(tree: ast.Module) -> list[TestUnit]:
                 ):
                     units.append(
                         TestUnit(
-                            qualname=f"{node.name}.{sub.name}", lineno=sub.lineno, node=sub
+                            qualname=f"{node.name}.{sub.name}",
+                            lineno=sub.lineno,
+                            node=sub,
+                            class_lineno=node.lineno,
                         )
                     )
     return units

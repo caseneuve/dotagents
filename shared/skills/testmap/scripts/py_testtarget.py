@@ -131,7 +131,7 @@ def classify_test_unit(
         for call in resolved_calls
         if call.lineno in call_lines and call.dotted_module in paths_by_module
     }
-    class_name, separator, _method_name = unit.qualname.partition(".")
+    _class_name, separator, _method_name = unit.qualname.partition(".")
     patched_symbols = {
         (target.symbol, resolved)
         for target in patch_targets
@@ -140,7 +140,7 @@ def classify_test_unit(
             or (
                 separator
                 and target.applies_to_class
-                and target.class_name == class_name
+                and target.class_lineno == unit.class_lineno
             )
         )
         and (resolved := resolve_module_to_path(root, target.dotted_module)) is not None
