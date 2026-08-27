@@ -581,6 +581,26 @@ def test_target(mock_target):
 
         self.assertEqual(static_patch_targets(tree), [])
 
+    def test_conditional_class_global_invalidates_outer_static_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.old"
+
+class Configuration:
+    if enabled:
+        global TESTED_MODULE
+        TESTED_MODULE = "foo.new"
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(tree), [])
+
     def test_same_named_classes_do_not_share_class_patch_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

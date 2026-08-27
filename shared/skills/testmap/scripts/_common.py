@@ -592,6 +592,24 @@ def _clear_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> Non
         bindings.pop(name, None)
 
 
+def _class_suite_global_names(body: list[ast.stmt]) -> set[str]:
+    """Find class-body globals without treating nested scopes as class globals."""
+    names: set[str] = set()
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, ast.Global):
+            names.update(node.names)
+            return
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    for statement in body:
+        visit(statement)
+    return names
+
+
 def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
     """Resolve statically bound ``unittest.mock.patch`` decorator targets.
 
@@ -635,10 +653,13 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
             )
             class_bindings = bindings.copy()
             class_patch_functions = patch_functions.copy()
-            class_global_names: set[str] = set()
+            class_global_names = _class_suite_global_names(statement.body)
+            _clear_patch_bindings(list(class_global_names), class_patch_functions)
+            for name in class_global_names:
+                class_bindings.pop(name, None)
             for member in statement.body:
                 if isinstance(member, ast.Global):
-                    class_global_names.update(member.names)
+                    pass
                 elif isinstance(member, (ast.Import, ast.ImportFrom)):
                     if _has_star_import(member):
                         class_bindings.clear()
