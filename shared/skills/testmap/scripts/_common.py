@@ -451,6 +451,8 @@ def _conservative_bound_names(statement: ast.stmt) -> list[str]:
         if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
     }
     for node in ast.walk(statement):
+        if isinstance(node, ast.stmt):
+            names.update(_bound_names(node))
         if isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
             names.add(node.name)
         elif isinstance(node, ast.MatchMapping) and node.rest:
@@ -463,6 +465,14 @@ def _conservative_bound_names(statement: ast.stmt) -> list[str]:
 def _has_star_import(statement: ast.stmt) -> bool:
     return isinstance(statement, ast.ImportFrom) and any(
         alias.name == "*" for alias in statement.names
+    )
+
+
+def _contains_star_import(statement: ast.stmt) -> bool:
+    return any(
+        _has_star_import(node)
+        for node in ast.walk(statement)
+        if isinstance(node, ast.stmt)
     )
 
 
@@ -629,17 +639,25 @@ def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
                     _clear_static_bindings(member, class_bindings)
                     _update_patch_bindings(member, class_patch_functions)
                 else:
-                    names = _conservative_bound_names(member)
-                    _clear_patch_bindings(names, class_patch_functions)
-                    for name in names:
-                        class_bindings.pop(name, None)
+                    if _contains_star_import(member):
+                        class_bindings.clear()
+                        class_patch_functions.clear()
+                    else:
+                        names = _conservative_bound_names(member)
+                        _clear_patch_bindings(names, class_patch_functions)
+                        for name in names:
+                            class_bindings.pop(name, None)
             _clear_static_bindings(statement, bindings)
             _update_patch_bindings(statement, patch_functions)
         else:
-            names = _conservative_bound_names(statement)
-            _clear_patch_bindings(names, patch_functions)
-            for name in names:
-                bindings.pop(name, None)
+            if _contains_star_import(statement):
+                bindings.clear()
+                patch_functions.clear()
+            else:
+                names = _conservative_bound_names(statement)
+                _clear_patch_bindings(names, patch_functions)
+                for name in names:
+                    bindings.pop(name, None)
 
     return targets
 

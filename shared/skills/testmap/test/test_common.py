@@ -523,6 +523,24 @@ def test_target(mock_target):
         self.assertEqual(static_patch_targets(star_import_tree), [])
         self.assertEqual(static_patch_targets(pattern_capture_tree), [])
 
+    def test_conditional_import_and_assignment_clear_static_bindings(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.expected"
+if enabled:
+    from other import patch
+    TESTED_MODULE = "foo.other"
+
+@patch(f"{TESTED_MODULE}.target")
+def test_target(mock_target):
+    pass
+"""
+        )
+
+        self.assertEqual(static_patch_targets(tree), [])
+
     def test_annotation_only_declaration_preserves_static_bindings(self) -> None:
         tree = ast.parse(
             """
