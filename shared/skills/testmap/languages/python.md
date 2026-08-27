@@ -20,7 +20,8 @@ mirrored `tests/<source-subdirectories>/test_<module>.py` at each ancestor
 `<app>/module/<module>.py` -> `<app>/tests/module/test_<module>.py`; the
 former continues to handle Django's flattened
 `<app>/management/commands/<module>.py` -> `<app>/tests/test_<module>.py`
-layout automatically.
+layout automatically. If flattened and mirrored candidates both exist below
+the same ancestor, the more specific mirrored candidate wins.
 
 Example:
 
@@ -106,10 +107,11 @@ to filter on the path relative to `--root` instead.
   heuristically.
 - A `@patch` decorator target is reported as a static reference, never as a
   direct call. The resolver supports literal targets and f-strings or `+`
-  concatenations composed only of module-level literal-string constants, such
-  as `MODULE = "billing.locks"` plus `@patch(f"{MODULE}.acquire_lock")`.
-  Dynamic values, patch context managers, and `patch.object(...)` are out of
-  scope.
+  concatenations composed only of lexically visible literal-string constants,
+  such as `MODULE = "billing.locks"` plus
+  `@patch(f"{MODULE}.acquire_lock")`. Module and test-class constants are
+  supported; dynamic values, patch context managers, and `patch.object(...)`
+  are out of scope.
 - Dynamic dispatch (`getattr`, decorator-wrapped rebinding, DI containers)
   isn't resolved — same blind spot as `callgraph`'s helper.
 - Module imports/rebindings are followed in source order. Calls inside a

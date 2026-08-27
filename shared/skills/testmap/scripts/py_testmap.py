@@ -49,14 +49,15 @@ def default_expected_test_path(src: Path, root: Path) -> Path:
         return naive
     current = src.parent
     while True:
-        candidate = current / "tests" / f"test_{module_name}.py"
-        if candidate.is_file():
-            return candidate
-
         relative_parent = src.parent.relative_to(current)
         mirrored = current / "tests" / relative_parent / f"test_{module_name}.py"
+        candidate = current / "tests" / f"test_{module_name}.py"
+        # A mirrored path is more specific than the flattened fallback when
+        # both exist under the same app directory.
         if mirrored.is_file():
             return mirrored
+        if candidate.is_file():
+            return candidate
 
         if current == root or current.parent == current:
             break

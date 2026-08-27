@@ -22,8 +22,8 @@ targets, including f-strings built from a module-name constant.
 - [ ] Forward and reverse mapping recognize mirrored directories below an app's
   `tests/` directory, while retaining flattened Django-style discovery.
 - [ ] Relative `--test-pattern` paths are normalized before classification.
-- [ ] Literal and module-level-constant f-string `@patch` targets appear as
-  static references without being counted as direct calls.
+- [ ] Literal and lexically visible f-string `@patch` targets appear as static
+  references without being counted as direct calls.
 - [ ] Unit tests and skill documentation cover the new behavior and limits.
 
 ## Affected Files

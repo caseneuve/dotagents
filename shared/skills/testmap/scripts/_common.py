@@ -450,41 +450,51 @@ def _record_patch_targets(
             )
 
 
+def _update_static_bindings(statement: ast.stmt, bindings: dict[str, str]) -> None:
+    if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+        return
+
+    value = (
+        _static_string_value(statement.value, bindings) if statement.value else None
+    )
+    assigned = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+    for target in assigned:
+        if not isinstance(target, ast.Name):
+            continue
+        if value is None:
+            bindings.pop(target.id, None)
+        else:
+            bindings[target.id] = value
+
+
 def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
-    """Resolve simple module-level constants in ``@patch`` target strings.
+    """Resolve simple lexical constants in ``@patch`` target strings.
 
     This recognizes literal strings, names assigned a literal string, and
-    f-strings/concatenation made solely from those names. It intentionally does
-    not execute code or infer values assigned dynamically.
+    f-strings/concatenation made solely from those names. Module and class
+    scopes are tracked in source order; code is never executed or inferred
+    from dynamic values.
     """
     bindings: dict[str, str] = {}
     targets: list[StaticPatchTarget] = []
 
     for statement in tree.body:
         if isinstance(statement, (ast.Assign, ast.AnnAssign)):
-            value = (
-                _static_string_value(statement.value, bindings)
-                if statement.value
-                else None
-            )
-            assigned = (
-                statement.targets
-                if isinstance(statement, ast.Assign)
-                else [statement.target]
-            )
-            for target in assigned:
-                if isinstance(target, ast.Name):
-                    if value is None:
-                        bindings.pop(target.id, None)
-                    else:
-                        bindings[target.id] = value
+            _update_static_bindings(statement, bindings)
         elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             _record_patch_targets(statement.decorator_list, bindings, targets)
         elif isinstance(statement, ast.ClassDef):
             _record_patch_targets(statement.decorator_list, bindings, targets)
+            class_bindings = bindings.copy()
             for member in statement.body:
-                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    _record_patch_targets(member.decorator_list, bindings, targets)
+                if isinstance(member, (ast.Assign, ast.AnnAssign)):
+                    _update_static_bindings(member, class_bindings)
+                elif isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    _record_patch_targets(
+                        member.decorator_list,
+                        class_bindings,
+                        targets,
+                    )
 
     return targets
 

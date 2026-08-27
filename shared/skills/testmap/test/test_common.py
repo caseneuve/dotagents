@@ -284,6 +284,23 @@ alias = target
             "placed",
         )
 
+    def test_mirrored_test_path_wins_over_flattened_basename_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "bar.py"
+            source.parent.mkdir()
+            source.write_text("def target(): pass\n")
+            flattened = root / "tests" / "test_bar.py"
+            flattened.parent.mkdir()
+            flattened.write_text("def test_flattened(): pass\n")
+            mirrored = root / "tests" / "foo" / "test_bar.py"
+            mirrored.parent.mkdir()
+            mirrored.write_text("def test_mirrored(): pass\n")
+
+            expected = expected_test_path(source, root)
+
+        self.assertEqual(expected, mirrored)
+
     def test_relative_test_pattern_is_normalized_before_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -308,6 +325,29 @@ alias = target
         self.assertEqual(
             classify(str(expected), {str(test_file): references["target"]}),
             "placed",
+        )
+
+    def test_class_patch_target_uses_class_constant_not_module_constant(self) -> None:
+        tree = ast.parse(
+            """
+from unittest.mock import patch
+
+TESTED_MODULE = "foo.bar"
+
+class SomeTests:
+    TESTED_MODULE = "foo.other"
+
+    @patch(f"{TESTED_MODULE}.target")
+    def test_target(self, mock_target):
+        pass
+"""
+        )
+
+        targets = static_patch_targets(tree)
+
+        self.assertEqual(
+            [(target.dotted_module, target.symbol) for target in targets],
+            [("foo.other", "target")],
         )
 
     def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
