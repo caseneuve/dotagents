@@ -96,6 +96,18 @@ class ResolvedImportCall:
     dotted_module: str
 
 
+@dataclass(frozen=True)
+class StaticPatchTarget:
+    """A literal target supplied to a ``@patch(...)`` decorator.
+
+    This is a reference to a symbol, not an invocation of that symbol.
+    """
+
+    lineno: int
+    symbol: str
+    dotted_module: str
+
+
 @dataclass
 class _ImportScope:
     bound_names: set[str] = field(default_factory=set)
@@ -368,6 +380,113 @@ def resolve_import_calls(tree: ast.Module) -> list[ResolvedImportCall]:
     visitor = _ImportCallVisitor(tree)
     visitor.visit(tree)
     return visitor.calls
+
+
+def _static_string_value(node: ast.AST, bindings: dict[str, str]) -> str | None:
+    """Evaluate the deliberately small, static string subset used by patch targets."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return bindings.get(node.id)
+    if isinstance(node, ast.JoinedStr):
+        pieces: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                pieces.append(value.value)
+            elif isinstance(value, ast.FormattedValue):
+                formatted = _static_string_value(value.value, bindings)
+                if formatted is None or value.conversion != -1 or value.format_spec:
+                    return None
+                pieces.append(formatted)
+            else:
+                return None
+        return "".join(pieces)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _static_string_value(node.left, bindings)
+        right = _static_string_value(node.right, bindings)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+def _patch_target_argument(call: ast.Call) -> ast.AST | None:
+    if isinstance(call.func, ast.Name) and call.func.id == "patch":
+        pass
+    elif isinstance(call.func, ast.Attribute) and call.func.attr == "patch":
+        pass
+    else:
+        return None
+
+    if call.args:
+        return call.args[0]
+    return next(
+        (keyword.value for keyword in call.keywords if keyword.arg == "target"),
+        None,
+    )
+
+
+def _record_patch_targets(
+    decorators: list[ast.expr],
+    bindings: dict[str, str],
+    targets: list[StaticPatchTarget],
+) -> None:
+    for decorator in decorators:
+        if not isinstance(decorator, ast.Call):
+            continue
+        argument = _patch_target_argument(decorator)
+        if argument is None:
+            continue
+        target = _static_string_value(argument, bindings)
+        if target is None:
+            continue
+        dotted_module, separator, symbol = target.rpartition(".")
+        if separator and dotted_module and symbol:
+            targets.append(
+                StaticPatchTarget(
+                    lineno=decorator.lineno,
+                    symbol=symbol,
+                    dotted_module=dotted_module,
+                )
+            )
+
+
+def static_patch_targets(tree: ast.Module) -> list[StaticPatchTarget]:
+    """Resolve simple module-level constants in ``@patch`` target strings.
+
+    This recognizes literal strings, names assigned a literal string, and
+    f-strings/concatenation made solely from those names. It intentionally does
+    not execute code or infer values assigned dynamically.
+    """
+    bindings: dict[str, str] = {}
+    targets: list[StaticPatchTarget] = []
+
+    for statement in tree.body:
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            value = (
+                _static_string_value(statement.value, bindings)
+                if statement.value
+                else None
+            )
+            assigned = (
+                statement.targets
+                if isinstance(statement, ast.Assign)
+                else [statement.target]
+            )
+            for target in assigned:
+                if isinstance(target, ast.Name):
+                    if value is None:
+                        bindings.pop(target.id, None)
+                    else:
+                        bindings[target.id] = value
+        elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            _record_patch_targets(statement.decorator_list, bindings, targets)
+        elif isinstance(statement, ast.ClassDef):
+            _record_patch_targets(statement.decorator_list, bindings, targets)
+            for member in statement.body:
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    _record_patch_targets(member.decorator_list, bindings, targets)
+
+    return targets
 
 
 def imported_calls_in_scope(scope_node: ast.Module) -> set[tuple[str, str]]:

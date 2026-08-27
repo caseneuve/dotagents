@@ -12,12 +12,15 @@ python3 <path-to-this-skill>/scripts/py_testmap.py \
 
 `--test-pattern` overrides the default `<pkg>/tests/test_<module>.py`
 convention explicitly; it's relative to the source file's own directory and
-supports `{module}`. When no override is given, the default now walks up
-from the source file's directory looking for a `tests/test_<module>.py`
-sibling at each ancestor (stopping at `--root`) -- this handles Django's
-`<app>/management/commands/<module>.py` layout, where tests live at
-`<app>/tests/test_<module>.py` several directories above the source file,
-automatically, without needing `--test-pattern` for that specific case.
+supports `{module}`. Relative segments such as `..` are normalized before
+classification. When no override is given, the default walks up from the
+source file's directory looking for both `tests/test_<module>.py` and the
+mirrored `tests/<source-subdirectories>/test_<module>.py` at each ancestor
+(stopping at `--root`). The latter handles layouts such as
+`<app>/module/<module>.py` -> `<app>/tests/module/test_<module>.py`; the
+former continues to handle Django's flattened
+`<app>/management/commands/<module>.py` -> `<app>/tests/test_<module>.py`
+layout automatically.
 
 Example:
 
@@ -27,8 +30,8 @@ python3 ~/.agents/skills/testmap/scripts/py_testmap.py \
 ```
 
 Per top-level function/class: `placed` / `misplaced: <file>` /
-`imported only (...)` / `no reference found`. See the previous section of
-this doc's git history or `SKILL.md` step 3 for exact definitions.
+`patched only (...)` / `imported only (...)` / `no reference found`. See
+`SKILL.md` step 3 for exact definitions.
 
 ## Scenario 2 — reverse: does this test file's tests target their own module?
 
@@ -39,12 +42,15 @@ python3 <path-to-this-skill>/scripts/py_testtarget.py \
 
 `--expected-source` overrides the default `<pkg>/<module>.py` reversal
 explicitly (relative to `--root`). When no override is given, the default
-now also falls back to a recursive, unambiguous search under the app
-directory (`<pkg>/`) for a file named `<module>.py` outside any `tests/`
-dir -- this covers Django's `<app>/management/commands/<module>.py` layout
-automatically too. If that search finds zero or multiple matches, it falls
-back to the naive guess (reported as `MISSING`) rather than pick one
-arbitrarily -- pass `--expected-source` explicitly in that case.
+recognizes directories nested below `tests/` as mirrored source directories:
+`<app>/tests/module/test_<module>.py` maps to
+`<app>/module/<module>.py`. It also falls back to a recursive, unambiguous
+search under the app directory (`<pkg>/`) for a file named `<module>.py`
+outside any `tests/` dir -- this covers Django's flattened
+`<app>/management/commands/<module>.py` layout automatically too. If that
+search finds zero or multiple matches, it falls back to the naive guess
+(reported as `MISSING`) rather than pick one arbitrarily -- pass
+`--expected-source` explicitly in that case.
 
 Example:
 
@@ -55,14 +61,16 @@ python3 ~/.agents/skills/testmap/scripts/py_testtarget.py \
 
 For every top-level `test_*` function and every `test_*` method inside a
 `TestCase`-like class, resolves which imported, in-repo, non-test production
-symbols it actually calls, and reports:
-- `on-target (symbol, symbol, ...)` — every resolvable production call in
-  that test body belongs to the expected source module.
+symbols it directly calls and which ones it statically targets with a
+`@patch` decorator, and reports:
+- `on-target (symbol, patched: symbol, ...)` — every resolvable production
+  call or static patch target in that test body belongs to the expected source
+  module.
 - `⚠ off-target: symbol (path/to/other_module.py)` — at least one resolvable
-  call belongs to a different module.
+  call or static patch target belongs to a different module.
 - `no production symbols called (fixture-only / trivial?)` — nothing
-  resolvable was called; likely a pure-data/setup test, not necessarily a
-  problem.
+  resolvable was called or named in a static patch target; likely a
+  pure-data/setup test, not necessarily a problem.
 
 **Important gotcha, found while validating this tool against a real
 repo:** the naive reversal (`<pkg>/tests/test_<module>.py` →
@@ -96,10 +104,12 @@ to filter on the path relative to `--root` instead.
   flagged — stdlib, third-party, and framework imports (Django, pytest,
   `unittest.mock`) are out of scope by construction, not filtered
   heuristically.
-- `@patch(f"{MODULE}.symbol")` string targets are **not** counted as calls
-  (correct — patch targets aren't invocations of the real function). Only
-  literal `ast.Call` nodes count. Verify this against a `@patch(...)`-heavy
-  test file in your own project before trusting the result.
+- A `@patch` decorator target is reported as a static reference, never as a
+  direct call. The resolver supports literal targets and f-strings or `+`
+  concatenations composed only of module-level literal-string constants, such
+  as `MODULE = "billing.locks"` plus `@patch(f"{MODULE}.acquire_lock")`.
+  Dynamic values, patch context managers, and `patch.object(...)` are out of
+  scope.
 - Dynamic dispatch (`getattr`, decorator-wrapped rebinding, DI containers)
   isn't resolved — same blind spot as `callgraph`'s helper.
 - Module imports/rebindings are followed in source order. Calls inside a

@@ -34,12 +34,14 @@ This is **not** coverage. Real coverage (`coverage.py`, `pytest --cov`)
 proves a line *executed* during a real run and requires running the suite —
 exactly what this skill exists to avoid when tests are slow or need a remote
 environment. This skill proves something weaker and much cheaper: *some test
-file contains a reference to this symbol* (an import, a call, or both).
+file contains a static reference to this symbol* (an import, a direct call,
+or a statically resolvable `@patch` target).
 
 That gap matters and must stay visible in the output:
 - A symbol can be `referenced` here and still be untested in any meaningful
-  sense (imported only for mocking/patching, called with no assertion on its
-  result, called inside a fixture that's never itself exercised).
+  sense (imported only for mocking, named only in a `@patch` target, called
+  with no assertion on its result, called inside a fixture that's never itself
+  exercised).
 - A symbol can be fully covered by an *integration* or *functional* test
   that never mentions its name directly (calls it indirectly through a
   higher-level entry point) and this skill will report it as untested. This
@@ -100,9 +102,14 @@ Scenario 1, one of:
   Consider whether this is a genuine mislocation or a legitimate integration
   test that's expected to live elsewhere — don't auto-recommend moving it,
   just surface it.
+- **`patched only`** — the expected test file has a statically resolvable
+  `@patch("package.module.symbol")` target for the symbol but no direct call.
+  This is an ownership signal, not proof the symbol itself is exercised. Only
+  literal targets and f-strings composed of module-level literal-string
+  constants are resolved.
 - **`imported only`** — the expected test file imports the symbol but the
-  script found no direct call to it there. Usually means it's patched/mocked
-  rather than exercised directly — call this out, don't count it as tested.
+  script found no direct call to it there. Call this out, don't count it as
+  tested.
 - **`no reference found`** — nothing anywhere in the scanned tree references
   it. Strongest signal of a real gap, but still subject to the indirect-call
   false positive noted above — say so if the symbol is the kind of thing
@@ -111,16 +118,16 @@ Scenario 1, one of:
 
 Scenario 2, one of:
 
-- **`on-target`** — every resolvable production-code call in that test body
-  belongs to the expected source module.
-- **`off-target: symbol (other_module)`** — at least one resolvable call
-  reaches a different module. Could be genuine drift, or a legitimate
-  integration test / fixture setup (e.g. calling an ORM model from another
-  app to build test data) — read the flagged line before recommending a
-  move.
-- **`no production symbols called`** — the test doesn't call anything this
-  script can resolve to in-repo production code; not necessarily a problem
-  (could be a pure-data/parametrization test).
+- **`on-target`** — every resolvable production-code call or static `@patch`
+  target in that test belongs to the expected source module.
+- **`off-target: symbol (other_module)`** — at least one resolvable call or
+  static patch target reaches a different module. Could be genuine drift, or
+  a legitimate integration test / fixture setup (e.g. calling an ORM model
+  from another app to build test data) — read the flagged line before
+  recommending a move.
+- **`no production symbols called`** — the test has no production-code call
+  or static patch target this script can resolve in-repo; not necessarily a
+  problem (could be a pure-data/parametrization test).
 
 ### 4. Report
 
@@ -135,7 +142,7 @@ symbol                     expected test file                  status
 ------------------------------------------------------------------------------------
 acquire_lock               billing/tests/test_locks.py         placed
 release_lock               billing/tests/test_locks.py         placed
-get_lock_state             billing/tests/test_locks.py         no reference found
+get_lock_state             billing/tests/test_locks.py         patched only (no direct call found)
 _normalize_lock_key        billing/tests/test_locks.py         no reference found ⚠ private helper, may be covered indirectly
 is_locked                  billing/tests/test_locks.py         placed
 ```
@@ -153,9 +160,10 @@ Below the table, one line reminding the reader what this table does and
 doesn't prove:
 
 ```
-Note: static reference check only, no tests executed. "placed"/"no reference
-found"/"on-target"/"off-target" mean "referenced (or not) by name in test
-code" -- not proof of behavioral coverage or its absence, and not proof a
+Note: static reference check only, no tests executed. "placed"/"patched only"/
+"no reference found"/"on-target"/"off-target" mean "statically referenced (or
+not) in test code" -- not proof of behavioral coverage or its absence, and not
+proof a
 flagged off-target call is actually wrong (could be a legitimate fixture or
 integration test). Run the real suite, and read the flagged lines, for that.
 ```

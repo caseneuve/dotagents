@@ -5,10 +5,11 @@ something else?
 
 Static, no-execution check. Computes the expected source module from the
 test file's own path (reverse of py_testmap.py's convention: default
-<pkg>/tests/test_<module>.py -> <pkg>/<module>.py). For every test
-function/method in --test-src, resolves which of its imported, in-repo,
-non-test production symbols it actually calls, and reports whether those
-calls stay within the expected module or reach into another one.
+<pkg>/tests/test_<module>.py -> <pkg>/<module>.py, including nested mirrored
+test directories). For every test function/method in --test-src, resolves
+which in-repo, non-test production symbols it directly calls or names in a
+static @patch decorator, and reports whether those references stay within the
+expected module or reach into another one.
 
 Only symbols resolvable to a real .py file under --root that is not itself
 a test file are considered "production symbols" -- framework/stdlib/mock
@@ -24,7 +25,11 @@ from pathlib import Path
 
 from _common import (
     ImportedName,
+    ResolvedImportCall,
+    StaticPatchTarget,
+    TestUnit,
     resolve_import_calls,
+    static_patch_targets,
     is_test_file,
     parse_imports,
     resolve_module_to_path,
@@ -35,13 +40,21 @@ from _common import (
 def default_expected_source_path(test_src: Path, root: Path) -> Path | None:
     rel = test_src.relative_to(root)
     parts = list(rel.parts)
-    if len(parts) < 2 or parts[-2] != "tests":
-        return None
     name = parts[-1]
     if not name.startswith("test_"):
         return None
+    try:
+        tests_index = parts.index("tests")
+    except ValueError:
+        return None
+
     module_name = name[len("test_") :]
-    package_parts = parts[:-2]
+    package_parts = parts[:tests_index]
+    nested_parts = parts[tests_index + 1 : -1]
+    mirrored = root / Path(*package_parts, *nested_parts) / module_name
+    if mirrored.is_file():
+        return mirrored
+
     naive = root / Path(*package_parts) / module_name
     if naive.is_file():
         return naive
@@ -101,6 +114,66 @@ def build_production_import_map(
     return imports, paths_by_module
 
 
+def classify_test_unit(
+    unit: TestUnit,
+    resolved_calls: list[ResolvedImportCall],
+    patch_targets: list[StaticPatchTarget],
+    paths_by_module: dict[str, Path],
+    root: Path,
+    expected_source: Path,
+) -> str:
+    """Classify one test's direct calls and static ``@patch`` references."""
+    call_lines = {
+        node.lineno for node in ast.walk(unit.node) if isinstance(node, ast.Call)
+    }
+    called_symbols = {
+        (call.symbol, call.dotted_module)
+        for call in resolved_calls
+        if call.lineno in call_lines and call.dotted_module in paths_by_module
+    }
+    patched_symbols = {
+        (target.symbol, resolved)
+        for target in patch_targets
+        if target.lineno in call_lines
+        and (resolved := resolve_module_to_path(root, target.dotted_module)) is not None
+        and not is_test_file(resolved)
+    }
+
+    on_target: set[str] = set()
+    on_target_patches: set[str] = set()
+    off_target: dict[str, Path] = {}
+    off_target_patches: dict[str, Path] = {}
+    for name, module in called_symbols:
+        path = paths_by_module[module]
+        if path == expected_source:
+            on_target.add(name)
+        else:
+            off_target[name] = path
+    for name, path in patched_symbols:
+        if path == expected_source:
+            on_target_patches.add(name)
+        else:
+            off_target_patches[name] = path
+
+    if not called_symbols and not patched_symbols:
+        return "no production symbols called (fixture-only / trivial?)"
+    if off_target or off_target_patches:
+        direct_items = [
+            f"{name} ({path.relative_to(root)})" for name, path in off_target.items()
+        ]
+        patch_items = [
+            f"{name} ({path.relative_to(root)}; patched)"
+            for name, path in off_target_patches.items()
+        ]
+        return f"⚠ off-target: {', '.join([*direct_items, *patch_items])}"
+
+    items = [
+        *sorted(on_target),
+        *(f"patched: {name}" for name in sorted(on_target_patches)),
+    ]
+    return f"on-target ({', '.join(items)})"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
@@ -130,7 +203,8 @@ def main() -> None:
     if expected_source is None:
         print(
             "Could not derive expected source module from --test-src path "
-            "(expected <pkg>/tests/test_<module>.py) -- pass --expected-source explicitly.",
+            "(expected a test_<module>.py below <pkg>/tests/) -- pass "
+            "--expected-source explicitly.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -160,42 +234,28 @@ def main() -> None:
     print(f"{'test'.ljust(col1)}line  status")
     print("-" * (col1 + 60))
 
+    patch_targets = static_patch_targets(tree)
     any_off_target = False
     for unit in units:
-        call_lines = {
-            node.lineno for node in ast.walk(unit.node) if isinstance(node, ast.Call)
-        }
-        called_symbols = {
-            (call.symbol, call.dotted_module)
-            for call in resolved_calls
-            if call.lineno in call_lines and call.dotted_module in paths_by_module
-        }
-        on_target: set[str] = set()
-        off_target: dict[str, Path] = {}
-        for name, module in called_symbols:
-            path = paths_by_module[module]
-            if path == expected_source:
-                on_target.add(name)
-            else:
-                off_target[name] = path
-
-        if not called_symbols:
-            status = "no production symbols called (fixture-only / trivial?)"
-        elif off_target:
+        status = classify_test_unit(
+            unit,
+            resolved_calls,
+            patch_targets,
+            paths_by_module,
+            root,
+            expected_source,
+        )
+        if status.startswith("⚠ off-target:"):
             any_off_target = True
-            items = ", ".join(f"{n} ({p.relative_to(root)})" for n, p in off_target.items())
-            status = f"⚠ off-target: {items}"
-        else:
-            status = f"on-target ({', '.join(sorted(on_target))})"
 
         print(f"{unit.qualname.ljust(col1)}{str(unit.lineno).ljust(6)}{status}")
 
     print(
         "\nNOTE: static reference check only, no tests executed. 'on-target' means every\n"
-        "resolvable production-code call in that test body belongs to the expected source\n"
-        "module; it does not mean the test is otherwise correct. Calls to symbols this\n"
-        "script couldn't resolve to a file under --root (dynamic dispatch, external\n"
-        "packages) are silently excluded, not counted as on-target.",
+        "resolvable production-code call or static @patch target in that test body belongs\n"
+        "to the expected source module; it does not mean the test is otherwise correct.\n"
+        "Calls to symbols this script couldn't resolve under --root (dynamic dispatch,\n"
+        "external packages) are silently excluded, not counted as on-target.",
         file=sys.stderr,
     )
     if any_off_target:

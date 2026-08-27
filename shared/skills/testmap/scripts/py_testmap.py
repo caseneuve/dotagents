@@ -4,9 +4,10 @@ its expected test module?
 
 Static, no-execution check. For every top-level function/class in --src,
 computes the expected test file path (default: <pkg>/<module>.py ->
-<pkg>/tests/test_<module>.py), checks whether that file exists, and whether
-each symbol is referenced (imported and/or called) there. Falls back to a
-repo-wide scan of test_*.py / *_test.py files to catch tests that exist but
+<pkg>/tests/test_<module>.py, including mirrored nested test directories),
+checks whether that file exists, and whether each symbol is referenced
+(imported, called, and/or named in a static @patch target) there. Falls back
+to a repo-wide scan of test_*.py / *_test.py files to catch tests that exist but
 live in the "wrong" file per the convention.
 
 This proves "referenced by name in test code somewhere", not "meaningfully
@@ -27,6 +28,7 @@ from pathlib import Path
 
 from _common import (
     resolve_import_calls,
+    static_patch_targets,
     is_test_file,
     parse_imports,
     resolve_module_to_path,
@@ -35,11 +37,11 @@ from _common import (
 
 
 def default_expected_test_path(src: Path, root: Path) -> Path:
-    """<pkg>/<module>.py -> <pkg>/tests/test_<module>.py, walking up from
-    src's own directory until a `tests/` sibling is found (or root is
-    reached). Handles Django's `<app>/management/commands/<module>.py`
-    layout, where tests live at `<app>/tests/test_<module>.py` several
-    directories above the source file, not directly beside it.
+    """Find a flattened or mirrored test path below a source ancestor.
+
+    Supports both `<app>/tests/test_<module>.py` and
+    `<app>/tests/<source-subdirectories>/test_<module>.py`. The flattened
+    form preserves Django's `management/commands` convention.
     """
     module_name = src.stem
     naive = src.parent / "tests" / f"test_{module_name}.py"
@@ -50,17 +52,35 @@ def default_expected_test_path(src: Path, root: Path) -> Path:
         candidate = current / "tests" / f"test_{module_name}.py"
         if candidate.is_file():
             return candidate
+
+        relative_parent = src.parent.relative_to(current)
+        mirrored = current / "tests" / relative_parent / f"test_{module_name}.py"
+        if mirrored.is_file():
+            return mirrored
+
         if current == root or current.parent == current:
             break
         current = current.parent
     return naive
 
 
+def expected_test_path(
+    src: Path, root: Path, test_pattern: str | None = None
+) -> Path:
+    """Return the normalized expected test path for the selected convention."""
+    if test_pattern:
+        return (src.parent / test_pattern.format(module=src.stem)).resolve()
+    return default_expected_test_path(src, root).resolve()
+
+
 def scan_file_for_symbols(
     path: Path, root: Path, source: Path, targets: set[str]
 ) -> dict[str, dict[str, bool]]:
     """Return references that resolve to the specific source module."""
-    result = {t: {"imported": False, "called": False} for t in targets}
+    result = {
+        t: {"imported": False, "called": False, "patched": False}
+        for t in targets
+    }
     try:
         tree = ast.parse(path.read_text(), filename=str(path))
     except (SyntaxError, UnicodeDecodeError):
@@ -82,6 +102,13 @@ def scan_file_for_symbols(
         ):
             result[call.symbol]["imported"] = True
             result[call.symbol]["called"] = True
+
+    for target in static_patch_targets(tree):
+        if (
+            target.symbol in targets
+            and resolve_module_to_path(root, target.dotted_module, path) == source
+        ):
+            result[target.symbol]["patched"] = True
     return result
 
 
@@ -97,7 +124,7 @@ def scan_repo_for_symbols(
             continue
         refs = scan_file_for_symbols(path, root, source, targets)
         for symbol, flags in refs.items():
-            if flags["imported"] or flags["called"]:
+            if flags["imported"] or flags["called"] or flags["patched"]:
                 combined[symbol][str(path)] = flags
     return combined
 
@@ -107,15 +134,34 @@ def classify(expected_key: str, refs_by_file: dict[str, dict[str, bool]]) -> str
     if expected_refs and expected_refs["called"]:
         return "placed"
 
-    other_called = [f for f, flags in refs_by_file.items() if f != expected_key and flags["called"]]
+    other_called = [
+        file
+        for file, flags in refs_by_file.items()
+        if file != expected_key and flags["called"]
+    ]
     if other_called:
         extra = f" (+{len(other_called) - 1} more)" if len(other_called) > 1 else ""
         return f"misplaced: {other_called[0]}{extra}"
 
+    if expected_refs and expected_refs["patched"]:
+        return "patched only (no direct call found)"
+
+    other_patched = [
+        file
+        for file, flags in refs_by_file.items()
+        if file != expected_key and flags["patched"]
+    ]
+    if other_patched:
+        return f"patched only, elsewhere: {other_patched[0]}"
+
     if expected_refs and expected_refs["imported"]:
         return "imported only (no direct call found)"
 
-    other_imported = [f for f, flags in refs_by_file.items() if f != expected_key and flags["imported"]]
+    other_imported = [
+        file
+        for file, flags in refs_by_file.items()
+        if file != expected_key and flags["imported"]
+    ]
     if other_imported:
         return f"imported only, elsewhere: {other_imported[0]}"
 
@@ -143,11 +189,7 @@ def main() -> None:
         print(f"--src {src} is not a file", file=sys.stderr)
         sys.exit(1)
 
-    if args.test_pattern:
-        module_name = src.stem
-        expected = src.parent / args.test_pattern.format(module=module_name)
-    else:
-        expected = default_expected_test_path(src, root)
+    expected = expected_test_path(src, root, args.test_pattern)
 
     symbols = top_level_defs(src, args.include_private)
     if not symbols:
@@ -170,10 +212,10 @@ def main() -> None:
         print(f"{name.ljust(col1)}{str(lineno).ljust(6)}{status}")
 
     print(
-        "\nNOTE: static reference check only, no tests executed. 'placed'/'no reference\n"
-        "found' mean 'referenced/not referenced by name in test code' -- not proof of\n"
-        "behavioral coverage or its absence (indirect/integration-test coverage is a\n"
-        "known false negative here). Run the real suite for that.",
+        "\nNOTE: static reference check only, no tests executed. 'placed'/'patched only'/\n"
+        "'no reference found' mean 'statically referenced/not referenced in test code' --\n"
+        "not proof of behavioral coverage or its absence (indirect/integration-test\n"
+        "coverage is a known false negative here). Run the real suite for that.",
         file=sys.stderr,
     )
 

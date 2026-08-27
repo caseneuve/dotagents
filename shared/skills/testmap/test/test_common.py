@@ -11,9 +11,19 @@ from _common import (  # noqa: E402
     imported_calls_in_scope,
     resolve_import_calls,
     resolve_module_to_path,
+    static_patch_targets,
+    test_units,
 )
-from py_testmap import scan_file_for_symbols  # noqa: E402
-from py_testtarget import build_production_import_map  # noqa: E402
+from py_testmap import (  # noqa: E402
+    classify,
+    expected_test_path,
+    scan_file_for_symbols,
+)
+from py_testtarget import (  # noqa: E402
+    build_production_import_map,
+    classify_test_unit,
+    default_expected_source_path,
+)
 
 
 class ImportedCallsTest(unittest.TestCase):
@@ -161,11 +171,11 @@ def test_uses_other_target():
 
         self.assertEqual(
             unrelated_references,
-            {"target": {"imported": False, "called": False}},
+            {"target": {"imported": False, "called": False, "patched": False}},
         )
         self.assertEqual(
             references,
-            {"target": {"imported": True, "called": True}},
+            {"target": {"imported": True, "called": True, "patched": False}},
         )
 
     def test_reverse_mapping_indexes_from_imported_submodules(self) -> None:
@@ -208,7 +218,7 @@ def test_uses_other_target():
 
         self.assertEqual(
             references,
-            {"target": {"imported": True, "called": True}},
+            {"target": {"imported": True, "called": True, "patched": False}},
         )
 
     def test_forward_mapping_resolves_relative_imports(self) -> None:
@@ -231,7 +241,7 @@ def test_uses_other_target():
 
         self.assertEqual(
             references,
-            {"target": {"imported": True, "called": True}},
+            {"target": {"imported": True, "called": True, "patched": False}},
         )
 
     def test_does_not_count_an_imported_name_read_as_a_call(self) -> None:
@@ -243,6 +253,102 @@ alias = target
         )
 
         self.assertEqual(imported_calls_in_scope(tree), set())
+
+    def test_nested_test_layout_and_module_alias_are_placed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "module" / "blah.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("def target(): pass\n")
+            test_file = root / "foo" / "tests" / "module" / "test_blah.py"
+            test_file.parent.mkdir(parents=True)
+            test_file.write_text(
+                "import foo.module.blah as quux\n"
+                "\n"
+                "def test_target():\n"
+                "    quux.target()\n"
+            )
+
+            expected = expected_test_path(source, root)
+            references = scan_file_for_symbols(test_file, root, source, {"target"})
+            reversed_source = default_expected_source_path(test_file, root)
+
+        self.assertEqual(expected, test_file)
+        self.assertEqual(reversed_source, source)
+        self.assertEqual(
+            references,
+            {"target": {"imported": True, "called": True, "patched": False}},
+        )
+        self.assertEqual(
+            classify(str(expected), {str(test_file): references["target"]}),
+            "placed",
+        )
+
+    def test_relative_test_pattern_is_normalized_before_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "module" / "blah.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("def target(): pass\n")
+            test_file = root / "foo" / "tests" / "module" / "test_blah.py"
+            test_file.parent.mkdir(parents=True)
+            test_file.write_text(
+                "from foo.module.blah import target\n"
+                "\n"
+                "def test_target():\n"
+                "    target()\n"
+            )
+
+            expected = expected_test_path(
+                source, root, "../tests/module/test_{module}.py"
+            )
+            references = scan_file_for_symbols(test_file, root, source, {"target"})
+
+        self.assertEqual(expected, test_file)
+        self.assertEqual(
+            classify(str(expected), {str(test_file): references["target"]}),
+            "placed",
+        )
+
+    def test_static_fstring_patch_target_is_reported_without_counting_a_call(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "foo" / "bar.py"
+            source.parent.mkdir()
+            source.write_text("def target(): pass\n")
+            test_file = root / "foo" / "tests" / "test_bar.py"
+            test_file.parent.mkdir()
+            test_file.write_text(
+                "from unittest.mock import patch\n"
+                "\n"
+                "TESTED_MODULE = \"foo.bar\"\n"
+                "\n"
+                "@patch(f\"{TESTED_MODULE}.target\")\n"
+                "def test_target(mock_target):\n"
+                "    pass\n"
+            )
+
+            tree = ast.parse(test_file.read_text())
+            expected = expected_test_path(source, root)
+            references = scan_file_for_symbols(test_file, root, source, {"target"})
+            reverse_status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                {},
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            references,
+            {"target": {"imported": False, "called": False, "patched": True}},
+        )
+        self.assertEqual(
+            classify(str(expected), {str(test_file): references["target"]}),
+            "patched only (no direct call found)",
+        )
+        self.assertEqual(reverse_status, "on-target (patched: target)")
 
 
 if __name__ == "__main__":
