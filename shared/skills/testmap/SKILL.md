@@ -120,13 +120,17 @@ Scenario 1, one of:
 
 Scenario 2, one of:
 
-- **`on-target`** — every resolvable production-code call or static `@patch`
-  target in that test belongs to the expected source module.
-- **`off-target: symbol (other_module)`** — at least one resolvable call or
-  static patch target reaches a different module. Could be genuine drift, or
-  a legitimate integration test / fixture setup (e.g. calling an ORM model
-  from another app to build test data) — read the flagged line before
-  recommending a move.
+- **`on-target`** — one or more resolvable production-code calls or static
+  `@patch` targets belong to the expected source module, with no external
+  production behavior.
+- **`on-target (...); supporting refs: symbol (other_module)`** — an external
+  call occurs only as an argument nested inside an expected-source call, or its
+  directly assigned result is passed as that call's argument. It is likely input
+  construction, not a second behavior under test.
+- **`off-target: symbol (other_module); on-target: symbol`** — an external
+  production call outside an expected-source call, or an external static patch
+  target, remains visible even though the test also targets its expected module.
+  Read it before recommending a move: it may still be legitimate setup.
 - **`no production symbols called`** — the test has no production-code call
   or static patch target this script can resolve in-repo; not necessarily a
   problem (could be a pure-data/parametrization test).
@@ -155,6 +159,7 @@ Scenario 2:
 test                                          status
 ------------------------------------------------------------------------------------
 SomeTestCase.test_acquires_lock_for_existing_resource      on-target (acquire_lock)
+SomeTestCase.test_builds_lock_input                          on-target (acquire_lock); supporting refs: LockInput (billing/domain.py)
 SomeTestCase.test_expires_stale_locks                       ⚠ off-target: get_lock_state (billing/locks.py)
 ```
 

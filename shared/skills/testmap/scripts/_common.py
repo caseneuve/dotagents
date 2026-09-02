@@ -92,6 +92,9 @@ def _dotted_name(node: ast.AST) -> str | None:
 @dataclass
 class ResolvedImportCall:
     lineno: int
+    col_offset: int
+    end_lineno: int
+    end_col_offset: int
     symbol: str
     dotted_module: str
 
@@ -375,7 +378,15 @@ class _ImportCallVisitor(ast.NodeVisitor):
             if module:
                 resolved = (node.func.attr, module)
         if resolved:
-            self.calls.append(ResolvedImportCall(node.lineno, *resolved))
+            self.calls.append(
+                ResolvedImportCall(
+                    node.lineno,
+                    node.col_offset,
+                    node.end_lineno,
+                    node.end_col_offset,
+                    *resolved,
+                )
+            )
         self.generic_visit(node)
 
 

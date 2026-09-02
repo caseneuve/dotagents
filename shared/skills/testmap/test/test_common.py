@@ -1,4 +1,5 @@
 import ast
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -23,6 +24,7 @@ from py_testtarget import (  # noqa: E402
     build_production_import_map,
     classify_test_unit,
     default_expected_source_path,
+    resolve_path_from_root,
 )
 
 
@@ -177,6 +179,461 @@ def test_uses_other_target():
             references,
             {"target": {"imported": True, "called": True, "patched": False}},
         )
+
+    def test_reverse_cli_paths_resolve_relative_to_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative_path = Path("package/tests/test_module.py")
+
+            resolved = resolve_path_from_root(root, relative_path)
+
+        self.assertEqual(resolved, root / relative_path)
+
+    def test_reverse_mapping_keeps_target_when_constructing_external_domain_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("class Input: pass\n")
+            tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n"
+                "\n"
+                "def test_compose():\n"
+                "    value = Input()\n"
+                "    compose(value)\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "on-target (compose); supporting refs: Input (package/domain.py)")
+
+    def test_reverse_mapping_tracks_inputs_for_assigned_and_asserted_target_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(value): pass\n")
+            domain.write_text("class Input: pass\n")
+            assigned_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n    value = Input()\n    result = compose(value)\n"
+            )
+            asserted_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n    value = Input()\n    assert compose(value)\n"
+            )
+            _imports, paths = build_production_import_map(
+                assigned_tree, root, root / "test_scanner.py"
+            )
+
+            assigned_status = classify_test_unit(
+                test_units(assigned_tree)[0],
+                resolve_import_calls(assigned_tree),
+                static_patch_targets(assigned_tree),
+                paths,
+                root,
+                source,
+            )
+            asserted_status = classify_test_unit(
+                test_units(asserted_tree)[0],
+                resolve_import_calls(asserted_tree),
+                static_patch_targets(asserted_tree),
+                paths,
+                root,
+                source,
+            )
+
+        expected_status = "on-target (compose); supporting refs: Input (package/domain.py)"
+        self.assertEqual(assigned_status, expected_status)
+        self.assertEqual(asserted_status, expected_status)
+
+    def test_reverse_mapping_reports_external_class_without_target_as_off_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("class Input: pass\n")
+            tree = ast.parse(
+                "from package.domain import Input\n\n"
+                "def test_compose():\n    Input()\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "⚠ off-target: Input (package/domain.py)")
+
+    def test_reverse_mapping_reports_unrelated_class_beside_target_as_off_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("class Input: pass\n")
+            tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n    Input()\n    compose()\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            status,
+            "⚠ off-target: Input (package/domain.py); on-target: compose",
+        )
+
+    def test_reverse_mapping_distinguishes_nested_call_direction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(value): pass\n")
+            domain.write_text("def unrelated(value=None): pass\n")
+            input_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import unrelated\n\n"
+                "def test_compose():\n    compose(unrelated())\n"
+            )
+            wrapper_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import unrelated\n\n"
+                "def test_compose():\n    unrelated(compose())\n"
+            )
+            _imports, paths = build_production_import_map(input_tree, root, root / "test_scanner.py")
+
+            input_status = classify_test_unit(
+                test_units(input_tree)[0],
+                resolve_import_calls(input_tree),
+                static_patch_targets(input_tree),
+                paths,
+                root,
+                source,
+            )
+            wrapper_status = classify_test_unit(
+                test_units(wrapper_tree)[0],
+                resolve_import_calls(wrapper_tree),
+                static_patch_targets(wrapper_tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            input_status,
+            "on-target (compose); supporting refs: unrelated (package/domain.py)",
+        )
+        self.assertEqual(
+            wrapper_status,
+            "⚠ off-target: unrelated (package/domain.py); on-target: compose",
+        )
+
+    def test_reverse_mapping_invalidates_compound_and_destructuring_rebindings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(value): pass\n")
+            domain.write_text("class Input: pass\n")
+            loop_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n"
+                "    value = Input()\n"
+                "    for value in values:\n"
+                "        compose(value)\n"
+            )
+            destructuring_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n"
+                "    value = Input()\n"
+                "    [value] = [1]\n"
+                "    compose(value)\n"
+            )
+            exception_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input\n\n"
+                "def test_compose():\n"
+                "    value = Input()\n"
+                "    try:\n"
+                "        pass\n"
+                "    except Exception as value:\n"
+                "        compose(value)\n"
+            )
+            _imports, paths = build_production_import_map(loop_tree, root, root / "test_scanner.py")
+
+            loop_status = classify_test_unit(
+                test_units(loop_tree)[0],
+                resolve_import_calls(loop_tree),
+                static_patch_targets(loop_tree),
+                paths,
+                root,
+                source,
+            )
+            destructuring_status = classify_test_unit(
+                test_units(destructuring_tree)[0],
+                resolve_import_calls(destructuring_tree),
+                static_patch_targets(destructuring_tree),
+                paths,
+                root,
+                source,
+            )
+            exception_status = classify_test_unit(
+                test_units(exception_tree)[0],
+                resolve_import_calls(exception_tree),
+                static_patch_targets(exception_tree),
+                paths,
+                root,
+                source,
+            )
+
+        expected_status = "⚠ off-target: Input (package/domain.py); on-target: compose"
+        self.assertEqual(loop_status, expected_status)
+        self.assertEqual(destructuring_status, expected_status)
+        self.assertEqual(exception_status, expected_status)
+
+    def test_reverse_mapping_tracks_the_reaching_assignment_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(value): pass\n")
+            domain.write_text("def first(): pass\ndef second(): pass\n")
+            reassigned_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import first, second\n\n"
+                "def test_compose():\n"
+                "    value = first()\n"
+                "    compose(value)\n"
+                "    value = second()\n"
+            )
+            overwritten_tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import first\n\n"
+                "def test_compose():\n"
+                "    value = first()\n"
+                "    value = 1\n"
+                "    compose(value)\n"
+            )
+            _imports, paths = build_production_import_map(
+                reassigned_tree, root, root / "test_scanner.py"
+            )
+
+            reassigned_status = classify_test_unit(
+                test_units(reassigned_tree)[0],
+                resolve_import_calls(reassigned_tree),
+                static_patch_targets(reassigned_tree),
+                paths,
+                root,
+                source,
+            )
+            overwritten_status = classify_test_unit(
+                test_units(overwritten_tree)[0],
+                resolve_import_calls(overwritten_tree),
+                static_patch_targets(overwritten_tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            reassigned_status,
+            "⚠ off-target: second (package/domain.py); on-target: compose; "
+            "supporting refs: first (package/domain.py)",
+        )
+        self.assertEqual(
+            overwritten_status,
+            "⚠ off-target: first (package/domain.py); on-target: compose",
+        )
+
+    def test_reverse_mapping_distinguishes_chained_call_spans(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("def unrelated(): pass\n")
+            tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import unrelated\n\n"
+                "def test_compose():\n    compose().method(unrelated())\n"
+            )
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            status,
+            "⚠ off-target: unrelated (package/domain.py); on-target: compose",
+        )
+
+    def test_reverse_mapping_reports_mixed_unrelated_calls_as_off_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("def Input(): pass\ndef unrelated(): pass\n")
+            tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from package.domain import Input, unrelated\n"
+                "\n"
+                "def test_compose():\n"
+                "    compose(Input())\n"
+                "    unrelated()\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            status,
+            "⚠ off-target: unrelated (package/domain.py); on-target: compose; "
+            "supporting refs: Input (package/domain.py)",
+        )
+
+    def test_reverse_mapping_reports_mixed_external_patches_as_off_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("def unrelated(): pass\n")
+            tree = ast.parse(
+                "from package.scanner import compose\n"
+                "from unittest.mock import patch\n"
+                "\n"
+                "@patch('package.domain.unrelated')\n"
+                "def test_compose(mock_unrelated):\n"
+                "    compose()\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(
+            status,
+            "⚠ off-target: unrelated (package/domain.py; patched); on-target: compose",
+        )
+
+    def test_reverse_mapping_reports_external_calls_without_target_as_off_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "package" / "scanner.py"
+            domain = root / "package" / "domain.py"
+            source.parent.mkdir()
+            source.write_text("def compose(): pass\n")
+            domain.write_text("def unrelated(): pass\n")
+            tree = ast.parse(
+                "from package.domain import unrelated\n"
+                "\n"
+                "def test_compose():\n"
+                "    unrelated()\n"
+            )
+
+            _imports, paths = build_production_import_map(tree, root, root / "test_scanner.py")
+            status = classify_test_unit(
+                test_units(tree)[0],
+                resolve_import_calls(tree),
+                static_patch_targets(tree),
+                paths,
+                root,
+                source,
+            )
+
+        self.assertEqual(status, "⚠ off-target: unrelated (package/domain.py)")
+
+    def test_reverse_cli_resolves_both_relative_paths_from_outside_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"
+            source = root / "package" / "scanner.py"
+            test_file = root / "package" / "tests" / "test_scanner.py"
+            source.parent.mkdir(parents=True)
+            test_file.parent.mkdir(parents=True)
+            source.write_text("def compose(): pass\n")
+            test_file.write_text(
+                "from package.scanner import compose\n\n"
+                "def test_compose():\n    compose()\n"
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "py_testtarget.py"),
+                    "--root",
+                    str(root),
+                    "--test-src",
+                    "package/tests/test_scanner.py",
+                    "--expected-source",
+                    "package/scanner.py",
+                ],
+                cwd=root.parent,
+                capture_output=True,
+                check=True,
+                text=True,
+            )
+
+        self.assertIn("expected source module: package/scanner.py  (exists)", result.stdout)
+        self.assertIn("on-target (compose)", result.stdout)
 
     def test_reverse_mapping_indexes_from_imported_submodules(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
