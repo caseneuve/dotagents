@@ -37,6 +37,11 @@ from _common import (
 )
 
 
+def resolve_path_from_root(root: Path, path: Path) -> Path:
+    """Resolve CLI paths relative to the configured import root."""
+    return path.resolve() if path.is_absolute() else (root / path).resolve()
+
+
 def default_expected_source_path(test_src: Path, root: Path) -> Path | None:
     rel = test_src.relative_to(root)
     parts = list(rel.parts)
@@ -114,6 +119,74 @@ def build_production_import_map(
     return imports, paths_by_module
 
 
+def _call_span(node: ast.Call) -> tuple[int, int, int, int]:
+    return node.lineno, node.col_offset, node.end_lineno, node.end_col_offset
+
+
+def _nested_call_spans(call: ast.Call) -> set[tuple[int, int, int, int]]:
+    return {
+        _call_span(nested_call)
+        for argument in [*call.args, *(keyword.value for keyword in call.keywords)]
+        for nested_call in ast.walk(argument)
+        if isinstance(nested_call, ast.Call)
+    }
+
+
+def _bound_names(node: ast.AST) -> set[str]:
+    names = {
+        child.id
+        for child in ast.walk(node)
+        if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del))
+    }
+    for child in ast.walk(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(child.name)
+        elif isinstance(child, ast.ExceptHandler) and child.name:
+            names.add(child.name)
+        elif isinstance(child, ast.Import):
+            names.update(alias.asname or alias.name.split(".", 1)[0] for alias in child.names)
+        elif isinstance(child, ast.ImportFrom):
+            names.update(alias.asname or alias.name for alias in child.names)
+        elif isinstance(child, (ast.MatchAs, ast.MatchStar)) and child.name:
+            names.add(child.name)
+        elif isinstance(child, ast.MatchMapping) and child.rest:
+            names.add(child.rest)
+    return names
+
+
+def _assigned_call_spans_used_by(
+    unit: TestUnit,
+    target_call_spans: set[tuple[int, int, int, int]],
+) -> set[tuple[int, int, int, int]]:
+    bindings: dict[str, tuple[int, int, int, int] | None] = {}
+    supporting_spans: set[tuple[int, int, int, int]] = set()
+
+    for statement in unit.node.body:
+        if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            for name in _bound_names(statement):
+                bindings[name] = None
+
+        target_calls = [
+            call
+            for call in ast.walk(statement)
+            if isinstance(call, ast.Call) and _call_span(call) in target_call_spans
+        ]
+        for target_call in target_calls:
+            for argument in [*target_call.args, *(keyword.value for keyword in target_call.keywords)]:
+                if isinstance(argument, ast.Name):
+                    value_span = bindings.get(argument.id)
+                    if value_span is not None:
+                        supporting_spans.add(value_span)
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            assignment_targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            bound_names = set().union(*(_bound_names(target) for target in assignment_targets))
+            value_span = _call_span(statement.value) if isinstance(statement.value, ast.Call) else None
+            for name in bound_names:
+                bindings[name] = value_span
+
+    return supporting_spans
+
+
 def classify_test_unit(
     unit: TestUnit,
     resolved_calls: list[ResolvedImportCall],
@@ -123,20 +196,33 @@ def classify_test_unit(
     expected_source: Path,
 ) -> str:
     """Classify one test's direct calls and static ``@patch`` references."""
-    call_lines = {
-        node.lineno for node in ast.walk(unit.node) if isinstance(node, ast.Call)
+    call_spans = {
+        _call_span(node) for node in ast.walk(unit.node) if isinstance(node, ast.Call)
     }
-    called_symbols = {
-        (call.symbol, call.dotted_module)
+    resolved_unit_calls = [
+        call
         for call in resolved_calls
-        if call.lineno in call_lines and call.dotted_module in paths_by_module
+        if (call.lineno, call.col_offset, call.end_lineno, call.end_col_offset) in call_spans
+        and call.dotted_module in paths_by_module
+    ]
+    called_symbols = {(call.symbol, call.dotted_module) for call in resolved_unit_calls}
+    target_call_spans = {
+        (call.lineno, call.col_offset, call.end_lineno, call.end_col_offset)
+        for call in resolved_unit_calls
+        if paths_by_module[call.dotted_module] == expected_source
     }
+    supporting_call_spans = {
+        nested_span
+        for call in ast.walk(unit.node)
+        if isinstance(call, ast.Call) and _call_span(call) in target_call_spans
+        for nested_span in _nested_call_spans(call)
+    } | _assigned_call_spans_used_by(unit, target_call_spans)
     _class_name, separator, _method_name = unit.qualname.partition(".")
     patched_symbols = {
         (target.symbol, resolved)
         for target in patch_targets
         if (
-            target.lineno in call_lines
+            target.lineno in {node.lineno for node in ast.walk(unit.node) if isinstance(node, ast.Call)}
             or (
                 separator
                 and target.applies_to_class
@@ -149,14 +235,19 @@ def classify_test_unit(
 
     on_target: set[str] = set()
     on_target_patches: set[str] = set()
-    off_target: dict[str, Path] = {}
+    supporting_references: dict[str, Path] = {}
+    off_target_references: dict[str, Path] = {}
     off_target_patches: dict[str, Path] = {}
-    for name, module in called_symbols:
+    for call in resolved_unit_calls:
+        name, module = call.symbol, call.dotted_module
         path = paths_by_module[module]
+        span = call.lineno, call.col_offset, call.end_lineno, call.end_col_offset
         if path == expected_source:
             on_target.add(name)
+        elif span in supporting_call_spans:
+            supporting_references[name] = path
         else:
-            off_target[name] = path
+            off_target_references[name] = path
     for name, path in patched_symbols:
         if path == expected_source:
             on_target_patches.add(name)
@@ -165,21 +256,32 @@ def classify_test_unit(
 
     if not called_symbols and not patched_symbols:
         return "no production symbols called (fixture-only / trivial?)"
-    if off_target or off_target_patches:
-        direct_items = [
-            f"{name} ({path.relative_to(root)})" for name, path in off_target.items()
-        ]
-        patch_items = [
-            f"{name} ({path.relative_to(root)}; patched)"
-            for name, path in off_target_patches.items()
-        ]
-        return f"⚠ off-target: {', '.join([*direct_items, *patch_items])}"
 
-    items = [
+    target_items = [
         *sorted(on_target),
         *(f"patched: {name}" for name in sorted(on_target_patches)),
     ]
-    return f"on-target ({', '.join(items)})"
+    supporting_items = [
+        *(f"{name} ({path.relative_to(root)})" for name, path in supporting_references.items()),
+    ]
+    off_target_items = [
+        *(f"{name} ({path.relative_to(root)})" for name, path in off_target_references.items()),
+        *(
+            f"{name} ({path.relative_to(root)}; patched)"
+            for name, path in off_target_patches.items()
+        ),
+    ]
+    if off_target_items:
+        target_summary = f"; on-target: {', '.join(target_items)}" if target_items else ""
+        supporting_summary = (
+            f"; supporting refs: {', '.join(supporting_items)}" if supporting_items else ""
+        )
+        return f"⚠ off-target: {', '.join(off_target_items)}{target_summary}{supporting_summary}"
+    if not target_items:
+        return "no production symbols called (fixture-only / trivial?)"
+    if not supporting_items:
+        return f"on-target ({', '.join(target_items)})"
+    return f"on-target ({', '.join(target_items)}); supporting refs: {', '.join(supporting_items)}"
 
 
 def main() -> None:
@@ -195,7 +297,7 @@ def main() -> None:
     args = parser.parse_args()
 
     root = args.root.resolve()
-    test_src = args.test_src.resolve()
+    test_src = resolve_path_from_root(root, args.test_src)
     if not root.is_dir():
         print(f"--root {root} is not a directory", file=sys.stderr)
         sys.exit(1)
@@ -218,9 +320,7 @@ def main() -> None:
         sys.exit(1)
 
     tree = ast.parse(test_src.read_text(), filename=str(test_src))
-    _production_imports, paths_by_module = build_production_import_map(
-        tree, root, test_src
-    )
+    _production_imports, paths_by_module = build_production_import_map(tree, root, test_src)
     resolved_calls = resolve_import_calls(tree)
 
     units = test_units(tree)
@@ -259,9 +359,11 @@ def main() -> None:
         print(f"{unit.qualname.ljust(col1)}{str(unit.lineno).ljust(6)}{status}")
 
     print(
-        "\nNOTE: static reference check only, no tests executed. 'on-target' means every\n"
-        "resolvable production-code call or static @patch target in that test body belongs\n"
-        "to the expected source module; it does not mean the test is otherwise correct.\n"
+        "\nNOTE: static reference check only, no tests executed. 'on-target' means one or\n"
+        "more expected-source calls or static @patch targets were found. 'supporting refs'\n"
+        "are calls nested inside target calls, or whose directly assigned result reaches\n"
+        "a target call; other external calls and patches remain off-target. This does not\n"
+        "prove behavioral coverage.\n"
         "Calls to symbols this script couldn't resolve under --root (dynamic dispatch,\n"
         "external packages) are silently excluded, not counted as on-target.",
         file=sys.stderr,

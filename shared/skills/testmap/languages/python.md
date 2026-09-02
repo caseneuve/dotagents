@@ -44,8 +44,9 @@ python3 <path-to-this-skill>/scripts/py_testtarget.py \
   --root <repo_root> --test-src <path/to/test_module.py> [--expected-source PATH]
 ```
 
-`--expected-source` overrides the default `<pkg>/<module>.py` reversal
-explicitly (relative to `--root`). When no override is given, the default
+`--test-src` and `--expected-source` paths are relative to `--root` unless
+absolute. `--expected-source` overrides the default `<pkg>/<module>.py`
+reversal explicitly. When no override is given, the default
 recognizes directories nested below `tests/` as mirrored source directories:
 `<app>/tests/module/test_<module>.py` maps to
 `<app>/module/<module>.py`. It also falls back to a recursive, unambiguous
@@ -67,11 +68,16 @@ For every top-level `test_*` function and every `test_*` method inside a
 `TestCase`-like class, resolves which imported, in-repo, non-test production
 symbols it directly calls and which ones it statically targets with a
 `@patch` decorator, and reports:
-- `on-target (symbol, patched: symbol, ...)` — every resolvable production
-  call or static patch target in that test body belongs to the expected source
-  module.
-- `⚠ off-target: symbol (path/to/other_module.py)` — at least one resolvable
-  call or static patch target belongs to a different module.
+- `on-target (symbol, patched: symbol, ...)` — resolvable calls or static
+  patch targets include expected-source symbols and no external production
+  references.
+- `on-target (...); supporting refs: symbol (path/to/other_module.py)` — the
+  test directly targets its expected module and calls the external symbol as an
+  argument nested inside that target call, or passes its directly assigned result
+  to that target call. Treat it as input construction, not drift.
+- `⚠ off-target: symbol (path/to/other_module.py); on-target: symbol` — an
+  external production call outside an expected-source call, or any external
+  static patch target, remains visible even when the test also calls its target.
 - `no production symbols called (fixture-only / trivial?)` — nothing
   resolvable was called or named in a static patch target; likely a
   pure-data/setup test, not necessarily a problem.
@@ -126,10 +132,9 @@ to filter on the path relative to `--root` instead.
   need a manual check.
 - Class namespaces are not modeled separately, so class-local imports can be
   attributed to module scope. Inspect class-body findings manually.
-- A model/fixture class from another module used only to *set up* test data
-  (e.g. a shared `AuditLog` or `Session` record) will show as off-target in
-  scenario 2 even though the test is legitimately about the expected module
-  — read the flagged line before treating it as evidence of drift, don't
-  auto-move it.
+- Production calls nested as arguments inside an expected-source call, or whose
+  directly assigned result is passed to that call, are supporting references.
+  Other external calls in separate statements and external static patches remain
+  off-target, even when the test also calls its expected source module.
 - Indirect/integration coverage is still a false negative for scenario 1,
   same as documented in `SKILL.md`.

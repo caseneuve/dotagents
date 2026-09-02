@@ -29,6 +29,7 @@
     (def podman-test (str podman-args test-image))
     (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
     (def callgraph-runner "bb --config shared/skills/callgraph/bb.edn test")
+    (def testmap-runner "python3 -m unittest shared.skills.testmap.test.test_common")
     (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj"))
     ;; ── Relay config ──
     ;; Temporary compatibility wrappers delegate to the extracted package.
@@ -40,9 +41,10 @@
    :task (shell "podman build -t dotagents-test -f test/Containerfile .")}
 
   test
-  {:doc "Run unit, callgraph, and E2E tests in isolated podman containers"
+  {:doc "Run unit, testmap, callgraph, and E2E tests in isolated podman containers"
    :task (do
            (run 'test:unit)
+           (run 'test:testmap)
            (run 'test:callgraph)
            (println)
            (run 'test:e2e))}
@@ -50,6 +52,10 @@
   test:unit
   {:doc "Run pure unit tests in isolated podman container"
    :task (shell (str podman-test " " unit-runner))}
+
+  test:testmap
+  {:doc "Run testmap Python unit tests in an isolated container"
+   :task (shell (str podman-args " python:3.13-slim " testmap-runner))}
 
   test:callgraph
   {:doc "Run callgraph analyzer-backed tests in isolated podman container"
@@ -93,6 +99,7 @@
              (println "Use 'bb test' locally to run in isolated podman")
              (System/exit 1))
            (shell unit-runner)
+           (shell testmap-runner)
            (shell callgraph-runner)
            (println)
            (shell (str e2e-runner
