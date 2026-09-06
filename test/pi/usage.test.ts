@@ -221,7 +221,7 @@ describe("normalizeChatGptSnapshot reset credits", () => {
     null,
     {},
     3,
-    [],
+    [[]],
     { applicable_available_count: 3 },
     ...[
       null,

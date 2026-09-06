@@ -44,6 +44,10 @@ type ChatGptWhamUsageResponse = {
   plan_type: string;
   rate_limit: UsageRateLimit | null;
   code_review_rate_limit: UsageRateLimit | null;
+  rate_limit_reset_credits?: {
+    available_count?: number | null;
+    applicable_available_count?: number | null;
+  } | null;
   additional_rate_limits: unknown;
   credits: UsageCredits | null;
   promo: unknown;
@@ -349,8 +353,13 @@ function formatCurrency(value: number | null | undefined): string {
   return `$${Number(value).toFixed(2)}`;
 }
 
-function normalizeChatGptSnapshot(
+function isResetCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function normalizeChatGptSnapshot(
   response: ChatGptWhamUsageResponse,
+  fetchedAt: number,
 ): BackendSnapshot {
   const cards: UsageCard[] = [];
 
@@ -381,6 +390,21 @@ function normalizeChatGptSnapshot(
         displayMode: "remaining",
       },
       tone: toneForWindow(response.rate_limit.secondary_window),
+    });
+  }
+
+  const resetCredits = response.rate_limit_reset_credits;
+  const availableResets = resetCredits?.available_count;
+  const applicableResets = resetCredits?.applicable_available_count;
+  if (isResetCount(availableResets)) {
+    cards.push({
+      title: "Usage limit resets",
+      value: `${availableResets} available`,
+      subtitle:
+        isResetCount(applicableResets) && applicableResets <= availableResets
+          ? `Currently applicable: ${applicableResets}`
+          : undefined,
+      tone: availableResets > 0 ? "accent" : "muted",
     });
   }
 
@@ -415,7 +439,7 @@ function normalizeChatGptSnapshot(
       response.rate_limit?.allowed === false ? COLOR_ERROR : COLOR_SUCCESS,
     cards,
     notes: [],
-    fetchedAt: Date.now(),
+    fetchedAt,
   };
 }
 
@@ -618,7 +642,7 @@ const chatGptBackend: UsageBackend = {
     }
 
     const data = (await response.json()) as ChatGptWhamUsageResponse;
-    return normalizeChatGptSnapshot(data);
+    return normalizeChatGptSnapshot(data, Date.now());
   },
 };
 
