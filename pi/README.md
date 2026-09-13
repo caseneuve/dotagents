@@ -456,6 +456,8 @@ What it does:
 - reads the ChatGPT subscription token from `~/.codex/auth.json`
 - calls the ChatGPT usage endpoint currently used by the local Codex script
 - renders usage as compact cards inspired by the web balance view
+- shows Codex **Usage limit resets** separately from timed usage windows and add-on credits
+- displays the total available resets and, when reported, how many are currently applicable
 - highlights the backend that matches the currently active Pi model
 - is structured around pluggable backends so additional usage endpoints can be added later
 
@@ -470,8 +472,13 @@ Keybindings:
 
 Notes:
 
-- the first backend implementation covers the ChatGPT subscription / `wham/usage` endpoint only
+- backends cover ChatGPT subscription `/wham/usage` and OpenRouter `/key` plus `/credits`
+- reset counts come from `rate_limit_reset_credits.available_count` and `applicable_available_count`; for example, `3 available` with `Currently applicable: 0`
+- valid zero counts are shown; missing or malformed reset data is omitted, not treated as zero
+- opening and refreshing the overlay are read-only: neither consumes a reset nor adds a reset action
 - model-to-backend matching is heuristic for now and can be refined as more backends are added
+
+Regression tests: `bun test test/pi/usage.test.ts` (mocked HTTP and credentials; no real resets used).
 
 ### `extensions/herdr-pi-session-name.ts`
 
