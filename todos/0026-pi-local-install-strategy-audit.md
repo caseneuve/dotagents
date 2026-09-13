@@ -42,5 +42,5 @@ This item is intentionally standalone and not part of extraction epic `0027`.
 - Agreed initial distribution order: local paths first, immutable Git refs second, npm later (`0051`).
 - Repositories are public and owned by `caseneuve`; `@earendil-works/*` identifies the supported Pi API dependencies, not repository/package ownership.
 - Agreed global defaults: agent-channel, runtime UI, conversation tools, and dotagents resources.
-- Playwright is project-local by default; workbench and provider extras are selective.
+- Playwright is project-local by default; workbench and usage are selective.
 - This item defines policy; todo `0046` performs the destructive bootstrap/settings cutover.

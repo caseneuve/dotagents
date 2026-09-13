@@ -20,7 +20,7 @@ by `caseneuve`, with one repository per logical package under `~/git/pi/`:
 3. `caseneuve/pi-runtime-ui`
 4. `caseneuve/pi-conversation-tools`
 5. `caseneuve/pi-workbench`
-6. `caseneuve/pi-provider-extras`
+6. `caseneuve/pi-usage`
 7. `caseneuve/pi-dotagents-resources`
 
 This epic is a move-only reorganization. Preserve existing behavior, commands, tools, shortcuts,
@@ -52,7 +52,7 @@ publication is follow-up `0051`.
 - `0027.4`: move runtime-ui package
 - `0027.5`: define minimal package conventions/checklist
 - `0027.6`: move Playwright package
-- `0027.7`: move provider-extras package
+- `0027.7`: move usage package
 - `0027.8`: move dotagents-resources package
 - `0027.9`: validate the extracted package set
 
