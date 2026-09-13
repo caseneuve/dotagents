@@ -11,7 +11,7 @@ All repositories are public on GitHub, owned by `caseneuve`, and use `master` as
 - https://github.com/caseneuve/pi-runtime-ui → `~/git/pi/pi-runtime-ui`
 - https://github.com/caseneuve/pi-conversation-tools → `~/git/pi/pi-conversation-tools`
 - https://github.com/caseneuve/pi-workbench → `~/git/pi/pi-workbench`
-- https://github.com/caseneuve/pi-provider-extras → `~/git/pi/pi-provider-extras`
+- https://github.com/caseneuve/pi-usage → `~/git/pi/pi-usage`
 - https://github.com/caseneuve/pi-dotagents-resources → `~/git/pi/pi-dotagents-resources`
 
 Repository/package names are the unscoped names above (for example `pi-agent-channel`). Do not reserve an npm scope; publication is follow-up 0051.
