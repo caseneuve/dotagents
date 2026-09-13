@@ -59,114 +59,190 @@ function resetCard(resetCredits: unknown) {
   );
 }
 
+// Inspect terminal cells, not just text: spaces can paint dark rectangles too.
+function backgroundGaps(lines: string[]) {
+  const gaps: Array<{ row: number; column: number; text: string }> = [];
+  for (const [row, line] of lines.entries()) {
+    let white = false;
+    let column = 0;
+    for (const token of line.split(/(\x1b\[[0-9;]*m)/g)) {
+      const sgr = /^\x1b\[([0-9;]*)m$/.exec(token);
+      if (!sgr) {
+        if (token && !white) gaps.push({ row, column, text: token });
+        column += visibleWidth(token);
+        continue;
+      }
+      const codes = sgr[1]!.split(";").map(Number);
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i]!;
+        if (code === 38 || code === 48) {
+          const mode = codes[i + 1];
+          const size = mode === 2 ? 3 : 1;
+          const color = codes.slice(i + 2, i + 2 + size);
+          if (code === 48) {
+            white =
+              mode === 2 && color.length === 3 && color.every((v) => v === 255);
+          }
+          i += size + 1; // RGB/palette components aren't independent SGR codes.
+        } else if (
+          code === 0 ||
+          code === 49 ||
+          (code >= 40 && code <= 47) ||
+          (code >= 100 && code <= 107)
+        ) {
+          white = false;
+        }
+      }
+    }
+  }
+  return gaps;
+}
+
 afterEach(() => mock.restore());
 
 describe("/usage reset credits", () => {
-  test("the registered command renders and refreshes reset counts using only GET requests", async () => {
-    let available = 3;
-    const requests: Array<{ url: string; method: string }> = [];
-    spyOn(fs, "readFile").mockImplementation(async (file) => {
-      if (String(file).endsWith("/.codex/auth.json")) {
-        return JSON.stringify({ tokens: { access_token: "test-codex-token" } });
-      }
-      if (String(file).endsWith("/.pi/agent/auth.json")) {
-        return JSON.stringify({ openrouter: { key: "test-openrouter-key" } });
-      }
-      throw new Error(`Unexpected file read: ${file}`);
-    });
-    spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      requests.push({ url, method: init?.method ?? "GET" });
-      expect(init?.signal).toBeInstanceOf(AbortSignal);
-      if (url === "https://chatgpt.com/backend-api/wham/usage") {
-        return Response.json({
-          ...responseFixture,
-          rate_limit_reset_credits: {
-            available_count: available,
-            applicable_available_count: 0,
-          },
-        });
-      }
-      if (url === "https://openrouter.ai/api/v1/key") {
-        return Response.json({ data: { usage_daily: 0, is_free_tier: false } });
-      }
-      if (url === "https://openrouter.ai/api/v1/credits") {
-        return Response.json({ data: { total_credits: 10, total_usage: 2 } });
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    });
-
-    let handler!: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
-    usage.default({
-      registerCommand(name, command) {
-        expect(name).toBe("usage");
-        handler = command.handler;
-      },
-    } as ExtensionAPI);
-
-    let component!: Component;
-    let ready!: () => void;
-    const nextReadyRender = () =>
-      new Promise<void>((resolve) => {
-        ready = resolve;
+  test.each([
+    ["even card count", false, false, false],
+    ["odd card count and unequal heights", true, false, false],
+    ["screenshot layout with wrapped OpenRouter error", true, true, false],
+    ["truncated account label", true, false, true],
+  ])(
+    "the command renders white rows and refreshes with GET only: %s",
+    async (_name, primaryOnly, openRouterError, longEmail) => {
+      let available = 3;
+      const requests: Array<{ url: string; method: string }> = [];
+      spyOn(fs, "readFile").mockImplementation(async (file) => {
+        if (String(file).endsWith("/.codex/auth.json")) {
+          return JSON.stringify({
+            tokens: { access_token: "test-codex-token" },
+          });
+        }
+        if (String(file).endsWith("/.pi/agent/auth.json")) {
+          return JSON.stringify({ openrouter: { key: "test-openrouter-key" } });
+        }
+        throw new Error(`Unexpected file read: ${file}`);
       });
-    const theme = {
-      fg: (_tone: string, text: string) => text,
-      bold: (text: string) => text,
-    } as Theme;
-    let closed = false;
-    await handler("", {
-      hasUI: true,
-      model: { provider: "openai-codex", id: "gpt-5" },
-      ui: {
-        async custom(factory) {
-          const loaded = nextReadyRender();
-          component = factory(
-            {
-              requestRender() {
-                if (component?.render(120).join("\n").includes("Fetched")) {
-                  ready();
-                }
-              },
+      spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = String(input);
+        requests.push({ url, method: init?.method ?? "GET" });
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        if (url === "https://chatgpt.com/backend-api/wham/usage") {
+          return Response.json({
+            ...responseFixture,
+            email: longEmail
+              ? `${"long-".repeat(40)}@example.invalid`
+              : responseFixture.email,
+            rate_limit: {
+              ...responseFixture.rate_limit,
+              secondary_window: primaryOnly
+                ? null
+                : responseFixture.rate_limit.secondary_window,
             },
-            theme,
-            undefined,
-            () => {
-              closed = true;
+            rate_limit_reset_credits: {
+              available_count: available,
+              applicable_available_count: 0,
             },
-          );
-          await loaded;
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/key") {
+          if (openRouterError) {
+            return new Response(null, {
+              status: 403,
+              statusText:
+                "Forbidden: account credentials are unavailable. ".repeat(4),
+            });
+          }
+          return Response.json({
+            data: { usage_daily: 0, is_free_tier: false },
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/credits") {
+          return Response.json({ data: { total_credits: 10, total_usage: 2 } });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      let handler!: (
+        args: string,
+        ctx: ExtensionCommandContext,
+      ) => Promise<void>;
+      usage.default({
+        registerCommand(name, command) {
+          expect(name).toBe("usage");
+          handler = command.handler;
         },
-      },
-    } as ExtensionCommandContext);
+      } as ExtensionAPI);
 
-    for (const width of [80, 120]) {
-      const lines = component.render(width);
-      const text = lines.join("\n");
-      expect(text).toContain("Usage limit resets");
-      expect(text).toContain("3 available");
-      expect(text).toContain("Currently applicable: 0");
-      expect(text).toContain("Credits remaining");
-      expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
-    }
+      let component!: Component;
+      let ready!: () => void;
+      const nextReadyRender = () =>
+        new Promise<void>((resolve) => {
+          ready = resolve;
+        });
+      const theme = {
+        fg: (_tone: string, text: string) =>
+          `\x1b[38;2;0;100;200m${text}\x1b[39m`,
+        bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
+      } as Theme;
+      let closed = false;
+      await handler("", {
+        hasUI: true,
+        model: { provider: "openai-codex", id: "gpt-5" },
+        ui: {
+          async custom(factory) {
+            const loaded = nextReadyRender();
+            component = factory(
+              {
+                requestRender() {
+                  if (component?.render(120).join("\n").includes("Fetched")) {
+                    ready();
+                  }
+                },
+              },
+              theme,
+              undefined,
+              () => {
+                closed = true;
+              },
+            );
+            expect(backgroundGaps(component.render(120))).toEqual([]);
+            await loaded;
+          },
+        },
+      } as ExtensionCommandContext);
 
-    available = 2;
-    const refreshed = nextReadyRender();
-    component.handleInput?.("r");
-    await refreshed;
-    expect(component.render(120).join("\n")).toContain("2 available");
-    expect(component.render(120).join("\n")).not.toContain("3 available");
-    expect(requests).toHaveLength(6);
-    expect(requests.every((request) => request.method === "GET")).toBe(true);
-    expect(
-      requests.filter((request) => request.url.includes("chatgpt.com")),
-    ).toEqual([
-      { url: "https://chatgpt.com/backend-api/wham/usage", method: "GET" },
-      { url: "https://chatgpt.com/backend-api/wham/usage", method: "GET" },
-    ]);
-    component.handleInput?.("q");
-    expect(closed).toBe(true);
-  });
+      for (const width of [80, 91, 120, 180, 240]) {
+        const lines = component.render(width);
+        const text = lines.join("\n");
+        expect(text).toContain("Usage limit resets");
+        expect(text).toContain("3 available");
+        expect(text).toContain("Currently applicable: 0");
+        expect(text).toContain("Credits remaining");
+        expect(lines.every((line) => visibleWidth(line) === width)).toBe(true);
+        expect(text).toContain("\x1b[38;2;0;100;200m");
+        expect(backgroundGaps(lines).slice(0, 5)).toEqual([]);
+        expect(lines.every((line) => line.endsWith("\x1b[49m"))).toBe(true);
+      }
+
+      available = 2;
+      const refreshed = nextReadyRender();
+      component.handleInput?.("r");
+      await refreshed;
+      expect(component.render(120).join("\n")).toContain("2 available");
+      expect(component.render(120).join("\n")).not.toContain("3 available");
+      expect(backgroundGaps(component.render(120))).toEqual([]);
+      expect(requests).toHaveLength(openRouterError ? 4 : 6);
+      expect(requests.every((request) => request.method === "GET")).toBe(true);
+      expect(
+        requests.filter((request) => request.url.includes("chatgpt.com")),
+      ).toEqual([
+        { url: "https://chatgpt.com/backend-api/wham/usage", method: "GET" },
+        { url: "https://chatgpt.com/backend-api/wham/usage", method: "GET" },
+      ]);
+      component.handleInput?.("q");
+      expect(closed).toBe(true);
+    },
+  );
 });
 
 describe("normalizeChatGptSnapshot reset credits", () => {

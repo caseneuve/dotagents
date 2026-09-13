@@ -241,7 +241,9 @@ function wrapLines(text: string, width: number): string[] {
 }
 
 function withWhiteBackground(text: string): string {
-  return `${BG_WHITE}${text}${BG_RESET}`;
+  // Truncation can emit SGR resets inside a row; restore only its background.
+  const content = text.replace(/\u001b\[(?:0|49)?m/g, `$&${BG_WHITE}`);
+  return `${BG_WHITE}${content}${BG_RESET}`;
 }
 
 function colorize(theme: Theme, tone: UsageCardTone, text: string): string {
@@ -326,7 +328,7 @@ function boxLines(
   }
 
   lines.push(bottom);
-  return lines.map((line) => withWhiteBackground(padRight(line, width)));
+  return lines.map((line) => padRight(line, width));
 }
 
 function hJoinBlocks(left: string[], right: string[], gap: number): string[] {
@@ -808,11 +810,8 @@ class UsageOverlayComponent {
     const fullWidth = Math.max(48, width);
     const contentWidth = Math.max(40, fullWidth - 2);
     const borderFg = (text: string) => this.theme.fg(COLOR_ACCENT, text);
-    const frameBg = (text: string) => withWhiteBackground(text);
     const frameLine = (content: string) =>
-      frameBg(
-        `${borderFg("┃")}${padRight(content, contentWidth)}${borderFg("┃")}`,
-      );
+      `${borderFg("┃")}${padRight(content, contentWidth)}${borderFg("┃")}`;
     const borderLine = (
       left: string,
       fill: string,
@@ -821,9 +820,7 @@ class UsageOverlayComponent {
     ) => {
       const safeLabel = truncateToWidth(label, contentWidth, "");
       const fillWidth = Math.max(0, contentWidth - visibleWidth(safeLabel));
-      return frameBg(
-        `${borderFg(left)}${safeLabel}${borderFg(fill.repeat(fillWidth))}${borderFg(right)}`,
-      );
+      return `${borderFg(left)}${safeLabel}${borderFg(fill.repeat(fillWidth))}${borderFg(right)}`;
     };
 
     const body: string[] = [];
@@ -959,7 +956,7 @@ class UsageOverlayComponent {
       ),
       ...body.map((line) => frameLine(line)),
       borderLine("┗", "━", "┛"),
-    ].map((line) => truncateToWidth(line, fullWidth));
+    ].map((line) => withWhiteBackground(truncateToWidth(line, fullWidth)));
   }
 }
 

@@ -455,7 +455,7 @@ What it does:
 - fetches usage only on demand when `/usage` is opened
 - reads the ChatGPT subscription token from `~/.codex/auth.json`
 - calls the ChatGPT usage endpoint currently used by the local Codex script
-- renders usage as compact cards inspired by the web balance view
+- renders usage as compact cards on a continuous white background, including gutters and empty card slots
 - shows Codex **Usage limit resets** separately from timed usage windows and add-on credits
 - displays the total available resets and, when reported, how many are currently applicable
 - highlights the backend that matches the currently active Pi model
