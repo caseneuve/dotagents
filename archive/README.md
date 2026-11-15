@@ -37,15 +37,20 @@ Only tracked files moved. No ignored dependency tree, secret, settings, cache,
 session, untracked review artifact or dirty user work was swept into the archive.
 Git history and original refs remain; the index is not a backup of untracked work.
 
-## Separate soak-gated preparation — NOT LANDABLE
+## User-authorized reversible Pi retirement (#0069.2)
 
-**This is that separate #0069.1 PREPARED branch, NOT LANDABLE YET.** The
-manifest-excluded `pi/extensions/`, `pi/themes/` and `test/pi/` files are archived
-here; they remain at original paths in the approved landable core
-`2dc662c7f1f8ae250266490822b0fac5bf800def`, which is an ancestor of this branch.
-[`pi/retirement-index.json`](pi/retirement-index.json) records all 49 original
+This candidate builds on independently reviewed #0069.1 preparation
+c46016aca34051c3855d51ada9c0764cb1aeab21, with approved core
+2dc662c7f1f8ae250266490822b0fac5bf800def as ancestor. The entire active `pi/`
+root is absent, with no empty directory or compatibility link.
+[`pi/retirement-index.json`](pi/retirement-index.json) records all 50 original
 paths/Git blobs/modes, destinations and explicit canonical package/path/reviewed
-ref (or null). Conversation/workbench/runtime/theme entries are historical
+ref (or null): 49 unchanged reviewed payloads including seven historical tests,
+plus the exact CURRENT live master2dc662c README bytes/mode under
+[`pi/README.master-2dc662c.historical-pointer.md`](pi/README.master-2dc662c.historical-pointer.md).
+The README row overrides source_ref to master2dc662c; its relative links and old
+policy are historical, not instructions. The earlier full README under legacy/
+is a distinct unchanged historical payload. Conversation/workbench/runtime/theme entries are historical
 predecessors, not claimed byte-identical to maintained successors. Shared helper
 ownership can name both workbench/runtime copies explicitly. Playwright and
 Tree-sitter experiments have no maintained replacement; their unfinished work,
@@ -55,14 +60,19 @@ Only inventoried tracked files move; no ignored dependencies/secrets/local work.
 The active native manifest, all canonical skills/helpers/prompts and the three
 previously archived helper sources remain unchanged. Historical tests move with
 their implementations and are not active runner inputs. `bb test:native` now
-also verifies all 49 prepared blobs/modes and the unchanged, unwaived gate.
+also verifies all 50 blobs/modes, unique rows, absence of every original and
+entire pi root, plus explicit waiver/soak metadata.
 
-The original requirement remains: at least **seven calendar days AND five normal
-sessions across two projects per active OS**, including startup/reload,
-representative and selective/project-local use, followed by explicit exact-scope
-approval. Cutover began 2026-11-15T16:20:48Z, so the earliest calendar date is
-2026-11-22T16:20:48Z, not automatic eligibility. No completed soak is asserted.
-A prepared/reviewed archive commit is not authorization to land it.
+After being told nothing active remains in dotagents/pi, the user explicitly
+approved archiving that entire directory and removing it. Per lead t16, this reply
+waives the old **seven calendar days AND five normal sessions across two projects
+per active OS** gate only for this reversible scope. `waived:true` and
+`completed:false` are intentional; tests/previews are not ordinary-use evidence.
+Original cutover2026-11-15T16:20:48Z and earliest-calendar2026-11-22T16:20:48Z
+are retained as historical gate metadata, not a completed eligibility claim.
+#0069.1 remains historical preparation; exact-final review and lead-owned
+integration/host verification remain required. No live adoption, product/API or
+publication completion is certified by this source candidate.
 
 The [three previously approved helper archives](pi/README.md) remain unchanged.
 That approval does not establish general retirement or equivalent native behavior.

@@ -1,7 +1,7 @@
 {
   "source_ref": "7a592f9c9290b6f670eda23662da2f52f60187bc",
   "landable_parent": "2dc662c7f1f8ae250266490822b0fac5bf800def",
-  "scope": "PREPARED ONLY. NOT LANDABLE until existing soak gate AND explicit exact-scope approval.",
+  "scope": "User-authorized reversible source retirement of entire dotagents/pi plus historical test/pi. Candidate for lead adoption after exact-ref review; soak waived for this scope, not completed.",
   "gate": {
     "calendar_days": 7,
     "normal_sessions": 5,
@@ -9,9 +9,25 @@
     "cutover": "2026-11-15T16:20:48Z",
     "earliest_calendar": "2026-11-22T16:20:48Z",
     "completed": false,
-    "waived": false
+    "waived": true,
+    "authorization": {
+      "by": "user",
+      "scope": "reversible retirement of entire dotagents/pi and historical test/pi",
+      "basis": "Explicit approval to archive the entire directory and remove it after being told nothing active remains; conveyed by lead t16. This reply waives the old soak gate only for this reversible scope, not evidence of soak completion.",
+      "soak_completed": false
+    }
   },
   "files": [
+    {
+      "original": "pi/README.md",
+      "source_ref": "2dc662c7f1f8ae250266490822b0fac5bf800def",
+      "blob": "5076f917e222a6e453c2053ac998f80452737a9c",
+      "mode": "100644",
+      "archive": "archive/pi/README.master-2dc662c.historical-pointer.md",
+      "owner": "dotagents",
+      "replacement": null,
+      "disposition": "Exact live master2dc662c retired guidance pointer preserved as history, not current policy; current guidance is root README.md and archive guides. Relative links and old gate text are historical."
+    },
     {
       "original": "pi/extensions/agent-journal.ts",
       "blob": "d2c0c72c021ea191f40fc4cefa49dda7407de803",

@@ -13,9 +13,9 @@ Typesafe is separately owned and stays untouched.
 - `test/`: maintained skill/helper/native resource tests.
 - `archive/`: inactive history; consult `archive/index.json` for source blob/mode,
   original path and replacement. Historical instructions are not current policy.
-- `pi/`: retired guidance pointer. This #0069.1 PREPARED branch moves legacy
-  sources to `archive/pi/` but is NOT LANDABLE before its separate soak gate.
-  The approved core still keeps them at original paths. No new code goes here.
+- No active `pi/` root remains, not even an empty directory or compatibility link.
+  `archive/pi/retirement-index.json` covers 50 preserved source/theme/test/pointer
+  files; the master2dc662c README pointer is historical, not current guidance.
 - `todos/`: durable task history; archival never means unfinished work shipped.
 
 Read the relevant **installed Pi documentation and examples in full** before
@@ -64,12 +64,15 @@ node_modules, secrets, local settings, sessions or untracked/dirty user work.
 Never register archive directories as resources. Preserve unfinished testmap,
 review/Linear and other product work honestly; do not mark those todos done.
 
-This is the distinct #0069.1 prepared retirement branch: legacy `pi/extensions`,
-`pi/themes` and their tests moved to `archive/pi/` with a recovery index. Preparation
-is not adoption; it is **not landable** before the existing seven-day AND
-five-normal-session/two-project-per-active-OS gate plus explicit approval. Tests
-and preview sessions do not count as ordinary-use soak. The three approved helper
-archives are already separate; their approval does not waive the general gate.
+For #0069.2 the user explicitly approved archiving the entire dotagents/pi and
+removing it after being told nothing active remains. Per lead t16, that reply
+waives the old seven-day AND five-normal-session/two-project-per-active-OS gate
+ONLY for this reversible source-retirement scope. Index flags are `waived:true`,
+`completed:false`; tests/previews do not prove ordinary-use soak. #0069.1 remains
+historical completed preparation. The 49 reviewed payloads plus exact live
+master2dc662c README pointer have recovery rows; the entire pi root must be absent.
+Earlier helper archives and unfinished product/API/publication work remain unchanged.
+Exact-ref review is still required; lead alone integrates and verifies the host.
 
 ## Work tracking and commits
 
@@ -109,4 +112,4 @@ No subagent spawning when the task forbids it.
 Before finishing, verify one canonical implementation, current docs, actual native
 and helper proof, unchanged historical payloads/user work, honest unfinished/gated
 scope, exact-ref approval and a bounded lead handoff. Clearly separate landable-now
-source changes from soak-gated archive preparation.
+source candidates from historical preparation, actual live adoption and uncompleted soak.

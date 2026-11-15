@@ -18,16 +18,23 @@ obsolete Claude/Agents/bootstrap/unused shared resources. All five canonical
 skills/helpers and five prompts stay active, not migrated duplicates. Workbench
 skill duplicates were already removed during the earlier reviewed ownership handoff.
 
-Remaining `pi/extensions/`, `pi/themes/` and their historical `test/pi/` sources
-are a DISTINCT prepared archive branch/commit, not part of landable #0069.
-That branch needs its own exact tracked-file blob/mode/owner inventory and review.
-The seven-calendar-day AND five-normal-session/two-project-per-active-OS gate is
-NOT waived. Cutover was 2026-11-15T16:20:48Z; earliest calendar eligibility is
-2026-11-22T16:20:48Z, with actual use evidence and explicit scope approval still
-required. Three approved #0047.1 helper archives remain unchanged.
+#0069.1 completed historical preparation and independent review of 49 exact
+source/theme/test archives; its original not-landable narrative remains intact.
+Subsequently the user explicitly approved archiving entire dotagents/pi and
+removing it after being told nothing active remains. Per lead t16 that reply
+waives the old seven-calendar-day AND five-normal-session/two-project-per-active-OS
+gate ONLY for this reversible retirement scope. #0069.2 builds on exact reviewed
+c46016a: unchanged49 payloads plus exact CURRENT live master2dc662c pi/README.md
+bytes/mode as historical pointer, all50 recovery rows including seven old tests,
+and no remaining pi root or compatibility directory. Index `waived:true` /
+`completed:false`: no ordinary-use soak completion is claimed. Original cutover
+2026-11-15T16:20:48Z/earliest2026-11-22T16:20:48Z remain historical gate metadata.
+Three approved #0047.1 helper archives and earlier historical payloads are unchanged.
 
-Do not mark this general retirement item done for source layout cleanup, a
-preview or archive preparation. Preserve experiments and unfinished skill/product
+This general retirement item stays OPEN; #0069.2 DONE covers only the authorized
+reversible source candidate/review/handoff, not general soak, product/API work,
+publication, lead integration or final live host verification. Do not infer those
+outcomes from source layout cleanup, a preview or archive preparation. Preserve experiments and unfinished skill/product
 work without false completion claims. Verification uses native Pi packages and
 real helpers; bootstrap is retired. Current recovery policy is archive/README.md.
 

@@ -11,7 +11,6 @@ skills/   # canonical SKILL.md files, bundled helpers, tests and fixtures
 prompts/  # canonical five Markdown prompt templates
 test/     # layout, native loading and helper regression checks
 archive/  # inactive historical sources and exact recovery index
-pi/       # retired guidance pointer; prepared archive gate described below
 todos/    # work history, including unfinished and transferred work
 ```
 
@@ -124,12 +123,20 @@ old dotagents implementations should be loaded alongside them.
 
 [Archive index and recovery](archive/README.md) preserve obsolete Claude/Agents,
 bootstrap and unused shared resources, including unfinished skills/product work.
-**This is the separate #0069.1 PREPARED archive branch, NOT LANDABLE YET.**
-The 49 excluded legacy extension/theme/test files are moved byte/mode-exact into
-`archive/pi/`, indexed by [retirement-index.json](archive/pi/retirement-index.json).
-The approved core branch keeps those files at their original paths. Landing this
-prepared branch still requires seven calendar days AND five normal sessions across
-two projects per active OS, then explicit exact-scope approval. Neither completion
-nor a waiver is recorded. The three previously approved helper archives and all
-canonical skill/helper/prompt bytes remain unchanged. No soak completion,
-publication, live handoff or experiment/product delivery is inferred.
+**#0069.2 is the user-authorized reversible source-retirement candidate.**
+The entire `pi/` directory is absent, with no compatibility directory or link.
+[retirement-index.json](archive/pi/retirement-index.json) verifies all 50 archived
+files: the 49 previously reviewed extension/theme/test payloads (seven old tests)
+plus the exact live master2dc662c `pi/README.md`, preserved as a clearly named
+[historical pointer](archive/pi/README.master-2dc662c.historical-pointer.md).
+Its old links/gate text are history, not current guidance.
+
+After being told nothing active remains there, the user explicitly approved
+archiving the entire directory and removing it. That reply waives the old
+seven-day/five-session/two-project-per-active-OS gate **only for this reversible
+scope** (`waived:true`, `completed:false`). No ordinary-use soak completion is
+claimed. #0069.1 remains the completed historical preparation, not retroactive
+adoption. The three previously approved helper archives, all earlier historical
+payloads and canonical skills/helpers/prompts/manifest remain unchanged. Lead
+alone integrates the exact reviewed candidate and verifies the host. No product,
+API, publication, authenticated-provider or live-adoption completion is inferred.

@@ -1,25 +1,33 @@
-# Historical Pi sources — prepared retirement branch
+# Historical Pi sources — user-authorized reversible retirement
 
-**#0069.1 PREPARED ONLY; NOT LANDABLE before the separate soak gate and explicit
-scope approval.** This is not an installation package. Nothing here is exposed by
+**#0069.2 source-retirement candidate; exact review and lead adoption required.**
+This is not an installation package. Nothing here is exposed by
 the native manifest or executed by active tasks. No source/API modernization is
 part of the archive moves.
 
-## Remaining 49 files
+## All 50 retirement entries
 
 [`retirement-index.json`](retirement-index.json) records source snapshot
 7a592f9c9290b6f670eda23662da2f52f60187bc, approved core parent
-2dc662c7f1f8ae250266490822b0fac5bf800def, all 49 original paths/blobs/modes and
+2dc662c7f1f8ae250266490822b0fac5bf800def, all 50 original paths/blobs/modes and
 archive destinations, and canonical successor package/path/reviewed-ref where one
-exists. Historical source is NOT asserted byte-identical to maintained successors.
+exists. The 49 reviewed payload rows (including seven old tests) are unchanged.
+The added [historical README pointer](README.master-2dc662c.historical-pointer.md)
+preserves exact CURRENT live master2dc662c pi/README.md bytes/mode, with a per-row
+source_ref override. It is distinct from the older full README under legacy/;
+its relative links and old gate statements are historical, not current policy.
+The entire active pi root is absent, including any empty compatibility directory. Historical source is NOT asserted byte-identical to maintained successors.
 Playwright/Tree-sitter sources and tests have no maintained replacement; unfinished
 work, design/lockfile bytes and history remain preserved, not falsely DONE.
 
-The files stay at original paths on the approved core branch. Landing this
-prepared descendant requires at least seven calendar days AND five normal sessions
-across two projects per active OS, followed by explicit exact-scope approval.
-Cutover:2026-11-15T16:20:48Z; earliest calendar date:2026-11-22T16:20:48Z.
-`completed:false` and `waived:false` are intentional. Tests/previews do not prove soak.
+After being told nothing active remains in dotagents/pi, the user explicitly
+approved archiving the entire directory and removing it. Per lead t16, this reply
+waives the old seven-calendar-day AND five-normal-session/two-project-per-active-OS
+gate only for this reversible scope. `completed:false` and `waived:true` are
+intentional; tests/previews do not prove ordinary-use soak. Original cutover
+2026-11-15T16:20:48Z/earliest-calendar2026-11-22T16:20:48Z remain historical metadata.
+#0069.1 remains completed historical preparation; source review is not a claim
+of lead integration, live adoption, product/API delivery or publication.
 
 ## Three previously approved helper archives (UNCHANGED)
 
