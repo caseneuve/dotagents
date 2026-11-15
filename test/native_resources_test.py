@@ -61,18 +61,32 @@ class NativeResourcesTest(unittest.TestCase):
             self.assertIn("replacement", row)
             self.assertIn("disposition", row)
 
-    def test_prepared_retirement_inventory_is_exact_and_still_gated(self):
+    def test_authorized_retirement_preserves_all_50_and_removes_entire_pi_root(self):
         index = json.loads((ROOT / "archive/pi/retirement-index.json").read_text())
         self.assertEqual("2dc662c7f1f8ae250266490822b0fac5bf800def", index["landable_parent"])
-        self.assertEqual(49, len(index["files"]))
+        self.assertEqual(50, len(index["files"]))
+        self.assertEqual(50, len({row["original"] for row in index["files"]}))
+        self.assertEqual(50, len({row["archive"] for row in index["files"]}))
+        self.assertEqual(7, sum(row["original"].startswith("test/pi/")
+                                for row in index["files"]))
         self.assertFalse(index["gate"]["completed"])
-        self.assertFalse(index["gate"]["waived"])
+        self.assertTrue(index["gate"]["waived"])
+        self.assertEqual("user", index["gate"]["authorization"]["by"])
+        self.assertEqual("reversible retirement of entire dotagents/pi and historical test/pi",
+                         index["gate"]["authorization"]["scope"])
+        readme = next(row for row in index["files"] if row["original"] == "pi/README.md")
+        self.assertEqual((index["landable_parent"],
+                          "5076f917e222a6e453c2053ac998f80452737a9c", "100644",
+                          "archive/pi/README.master-2dc662c.historical-pointer.md"),
+                         (readme["source_ref"], readme["blob"], readme["mode"], readme["archive"]))
         self.assertEqual((7, 5, 2), (index["gate"]["calendar_days"],
                                      index["gate"]["normal_sessions"],
                                      index["gate"]["projects_per_active_os"]))
-        for path in ("pi/extensions", "pi/themes", "test/pi"):
-            self.assertFalse((ROOT / path).exists(), path)
+        for path in ("pi", "test/pi"):
+            self.assertFalse(os.path.lexists(ROOT / path), path)
         for row in index["files"]:
+            self.assertFalse(os.path.lexists(ROOT / row["original"]), row["original"])
+            self.assertEqual(40, len(row.get("source_ref", index["source_ref"])))
             path = ROOT / row["archive"]
             data = path.read_bytes()
             blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
