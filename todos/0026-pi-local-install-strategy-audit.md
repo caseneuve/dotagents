@@ -1,6 +1,6 @@
 ---
 title: dotagents pi local install strategy audit
-status: in_progress
+status: done
 priority: medium
 type: chore
 labels: [pi, packaging]
