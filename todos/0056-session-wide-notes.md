@@ -1,6 +1,6 @@
 ---
 title: Make session notes session-wide
-status: open
+status: closed
 priority: medium
 type: bug
 labels: []
@@ -9,6 +9,23 @@ parent: null
 blocked-by: []
 blocks: []
 ---
+
+
+## Closed: transferred, NOT fixed (2026-11-15)
+
+Canonical unfinished product work is tracked in
+`pi-conversation-tools/todos/0002-session-wide-notes.md` at
+`6d357a27a25a1fc06357ba1ab576266b492df01b`.
+The exact existing destination was read and remains OPEN. This dotagents copy is
+closed as transferred/superseded, not done: migration smoke/compatibility checks
+do not establish that this bug/redesign's complete criteria passed.
+
+Evidence: destination todo's explicit source pointer; destination extraction
+todo0005; `~/.cache/pi-migration/evidence/conversation-tools/{handoff,review}.md`.
+Original acceptance criteria remain unchecked below. Do not duplicate implementation
+in the dormant dotagents copy or close the destination without its own evidence.
+
+## Historical transferred product criteria (still unfinished at destination)
 
 ## Context
 

@@ -10,6 +10,24 @@ blocked-by: [0027.9]
 blocks: []
 ---
 
+## Current release gate (2026-11-15)
+
+Remains OPEN. Approved local compatibility/native composition is not publication,
+remote GitHub availability, authenticated API validation or cross-platform
+certification. No pushes/tags/npm releases are authorized by this closeout.
+This existing item also owns the explicitly separated remote immutable-ref
+release-validation gate; no new release epic is created.
+
+- [ ] After explicit distribution approval, validate clean remote Git installation
+      of the exact reviewed immutable published refs for retained packages and
+      record provenance/results separately from local/loopback Git tests.
+- [ ] Keep remote Git release validation distinct from npm publication, live
+      settings adoption and all-OS/real-provider claims; preserve disabled selections.
+
+Evidence of bounded local delivery:
+`~/.cache/pi-migration/evidence/composition/final-review.md` and per-package
+reviews. Local native proof does not satisfy the remote release criterion above.
+
 ## Context
 
 The initial distribution strategy is local paths plus public Git repositories owned by `caseneuve`.

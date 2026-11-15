@@ -1,6 +1,6 @@
 ---
 title: adopt native Pi independent resources and extracted packages
-status: open
+status: in_progress
 priority: high
 type: chore
 labels: [pi, packaging, bootstrap]
@@ -10,7 +10,30 @@ blocked-by: [0026, 0027.9]
 blocks: [0047]
 ---
 
-## Current policy and tranche boundary (2026-11-15)
+## Current adoption status (2026-11-15)
+
+IN PROGRESS, not completed cutover. Independent native-resource/archive review
+and user-authorized source integration are delivered: dotagents7610d05,
+runtime8b3d4de and workbench60fd4a6 exactly match reviewed trees. Lead reports
+fresh runtime dependencies installed without lifecycle scripts and verify132 PASS.
+Source integration/authorization does not by itself verify global package selections.
+
+- [x] Exact-SHA independent review and approved source integration.
+- [ ] Lead's actual settings mapping/proof: preserve disabled entries and unrelated
+      user resources, reconcile old loaders, verify actual active provenance.
+- [ ] Record final tested package refs, active scope/theme, cutover date/platform,
+      rollback baseline and explicit soak start after successful settings proof.
+
+Fresh lead rollback baseline:
+`~/.cache/pi-migration/preservation/cutover-20261115T161304Z`.
+Proof references: `evidence/dotagents-native/review.md`,
+`evidence/legacy-helper-archive/review.md`,
+`evidence/workbench-skill-handoff/review.md` and
+`evidence/composition/final-review.md` under the migration root.
+This ledger update does not read/write user settings or claim final cutover.
+#0047 soak/retirement and #0051 publication remain open.
+
+## Earlier staging policy (historical snapshot; current status above)
 
 The former custom Pi bootstrap/settings-reconciliation plan below is superseded:
 there is NO Pi bootstrap or replacement custom installer. #0046.1 removes Pi
@@ -23,7 +46,7 @@ live-setup approval; #0046 stays open until that integration and package-selecti
 verification is authorized and complete. Do not clean up broad user loaders,
 set themes, remove workbench copies, or start soak implicitly.
 
-## Remaining adoption acceptance criteria
+## Earlier adoption checklist (historical snapshot; delivered/pending status above)
 
 - [ ] Independently review #0046.1's exact SHA and isolated native handoff.
 - [ ] Obtain explicit approval for active-root integration/live setup.
