@@ -26,7 +26,8 @@
 
 (defn journal-dir []
   (or (System/getenv "ORG_JOURNAL_HOME")
-      "~/org/agent-journal"))
+      (str (fs/path (or (System/getenv "HOME") (str (fs/home)))
+                    "org" "agent-journal"))))
 
 (defn sh [& args]
   (try

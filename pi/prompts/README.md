@@ -1,8 +1,9 @@
-# pi/prompts
+# Independent Pi prompt templates
 
-Project-local Pi prompt templates.
+Canonical native commands: `/ans`, `/be-concise`, `/handoff`, `/speak-human`,
+`/style`. Install the repository root with `pi install [-l] /absolute/path`.
+The explicit root manifest excludes this README and the preserved comms-coupled
+`ask-for-review` and `implement-todo` templates. There is no Pi bootstrap.
 
-Bootstrap wires this directory into `~/.pi/agent/settings.json` under `prompts`,
-so templates are discoverable without copying files.
-
-Add templates as `*.md` files. Example command name: `review.md` -> `/review`.
+Arguments use Pi's native interpolation (`$@`, `$ARGUMENTS`, `$1`, `${@:2}`).
+See [../README.md](../README.md) for trust, filtering, ownership and archive gates.

@@ -10,6 +10,15 @@ blocked-by: []
 blocks: []
 ---
 
+## Current tranche policy (2026-11-15)
+
+#0046.1 implements native independent resources in an isolated worktree only.
+No Pi bootstrap or custom settings reconciler; use native `pi install [-l]`.
+Independent prompts stay dotagents-owned; themes live in pi-dotagents-resources.
+Archive decisions supersede the historical agent-channel/Playwright defaults below.
+Live-user adoption, publication and source retirement remain separately gated.
+The historical criteria below are not authority to perform those actions.
+
 ## Context
 
 Reorganize the existing dotagents Pi extensions and resources into seven public repositories owned

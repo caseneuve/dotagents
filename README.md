@@ -7,7 +7,7 @@ below is LLM-generated.
 
 ---
 
-Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, shared helper implementations under `shared/`, and Pi extensions/themes under `pi/`.
+Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, shared helper implementations under `shared/`, and independent Pi prompts plus preserved legacy sources under `pi/`.
 
 ## Contents
 
@@ -20,7 +20,7 @@ scripts/  # Repo-local Babashka scripts (e.g. bootstrap)
 test/     # Unit and E2E tests
 ```
 
-The `pi/` tree includes focused TUI extensions such as repo todo browsing, agent-journal browsing, and an assistant-response outline viewer for navigating long markdown answers.
+The native Pi package exposes only five independent skills and five prompts. Legacy TUI/experiment/theme sources remain preserved but excluded; retained extensions and themes live in separate packages. See [pi/README.md](pi/README.md) for scope, filtering and archive gates.
 
 The `agents/` tree includes:
 
@@ -28,7 +28,7 @@ The `agents/` tree includes:
 - `hooks/smart-lint.sh`
 - `skills/` with ports of all repo skills
 
-The `shared/` tree holds common skills, helper scripts, and hooks so supported agent runtimes use one implementation. Shared skills include `linear-todo`, which keeps repository todo files canonical while recording claims and completion traces in Linear through a minimal set of MCP calls.
+The `shared/` tree holds common skills, helper scripts, and hooks so supported agent runtimes use one implementation. Claude/Agents retain their existing skill selection. Native Pi exposure is a separate explicit allowlist; archived/dropped resources are not implicitly exposed.
 
 ## Installation
 
@@ -48,8 +48,7 @@ Modes:
 
 - `bb bootstrap claude` links the Claude setup into `~/.claude/` and merges Claude settings fragments into `~/.claude/settings.json`
 - `bb bootstrap agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
-- `bb bootstrap pi` writes Pi resource paths into `~/.pi/agent/settings.json` and sets the theme to `modus-operandi`
-- `bb bootstrap` defaults to `all`
+- `bb bootstrap` defaults to `all` (Claude + Agents only); `pi` is not a supported mode
 - all modes accept `--force` to overwrite existing non-symlink files
 - all modes accept `--dry-run` to print planned changes without writing
 
@@ -59,7 +58,16 @@ Behavior:
 - skip already-correct links
 - replace stale symlinks
 - avoid overwriting regular files unless forced
-- configure Pi via `~/.pi/agent/settings.json` instead of symlinking Pi extensions/themes
+- never read or write Pi settings, including in default/all mode
+
+Install independent Pi resources natively, without bootstrap:
+
+```bash
+pi install /absolute/path/to/dotagents      # personal
+pi install -l /absolute/path/to/dotagents   # current project; requires trust
+```
+
+No live configuration migration or active-root cutover is performed automatically.
 
 ## Testing
 
@@ -70,25 +78,17 @@ bb test
 bb test:unit
 bb test:callgraph
 bb test:e2e
+bb test:native
 ```
 
 `bb test:callgraph` runs the deterministic Clojure/Babashka callgraph suite.
 Locally it runs inside the pinned Podman test image; CI uses the same skill-local
 runner directly after checking for `clj-kondo v2026.01.19`.
 
-Pi extension type-checking uses pinned Pi API packages from `package.json` so the repo records which Pi version the extensions are known to compile against:
-
-```bash
-bb check:pi-extensions
-```
-
-Before upgrading the installed Pi runtime, first update the pinned Pi API packages and run the check:
-
-```bash
-bb check:pi-extensions:upgrade 0.75.0
-```
-
-If that passes, commit the dependency/lockfile update and any required extension fixes, then upgrade the actual Pi runtime. The check currently covers top-level `pi/extensions/*.ts` files; nested extension directories and Bun-specific tests are outside this first TypeScript check scope.
+The native resource package needs no npm/TypeScript toolchain. Legacy extension
+sources/tests are retained as preservation material, not maintained by root Pi
+upgrade tasks. `bb test:native` validates the allowlist and actual portable
+helpers; rebuild the test image first after dependency changes.
 
 E2E tests live in `test/e2e/cases.edn` and use the declarative `end2edn` authoring format:
 

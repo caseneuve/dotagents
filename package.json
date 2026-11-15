@@ -1,13 +1,24 @@
 {
+  "name": "dotagents",
   "private": true,
   "type": "module",
-  "scripts": {
-    "check:pi-extensions": "tsc --noEmit -p tsconfig.pi-extensions.json"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0",
-    "@earendil-works/pi-tui": "^0.74.0",
-    "typescript": "^5.9.3"
+  "description": "Independent cross-runtime skills and Pi prompt templates",
+  "pi": {
+    "extensions": [],
+    "themes": [],
+    "skills": [
+      "shared/skills/callgraph",
+      "shared/skills/dataflow",
+      "shared/skills/add-todo",
+      "shared/skills/org-journal",
+      "shared/skills/to-skill"
+    ],
+    "prompts": [
+      "pi/prompts/ans.md",
+      "pi/prompts/be-concise.md",
+      "pi/prompts/handoff.md",
+      "pi/prompts/speak-human.md",
+      "pi/prompts/style.md"
+    ]
   }
 }

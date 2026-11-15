@@ -20,6 +20,10 @@ Items stored in `./todos/`. All commands print `key=value` on stdout.
 
 ## Commands
 
+If `ag-todo` is not on PATH, resolve it beside this SKILL.md and invoke it
+by absolute path from the target project (or use `--dir`). Its skill-local
+config requires no Git checkout or Pi bootstrap.
+
 | Command | Usage |
 |---------|-------|
 | `ag-todo next-id [--dir DIR] [PARENT]` | `ag-todo next-id` → `0005`, `ag-todo next-id 0001` → `0001.4` |

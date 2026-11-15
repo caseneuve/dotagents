@@ -13,7 +13,7 @@
 ;; - execute link/copy/merge actions against the filesystem
 
 (def cli-spec
-  {:spec {:mode {:desc "Bootstrap target: claude | agents | pi | all"
+  {:spec {:mode {:desc "Bootstrap target: claude | agents | all"
                  :default "all"}
           :force {:alias :f
                   :coerce :boolean
@@ -27,11 +27,11 @@
    :args->opts [:mode]
    :restrict [:mode :force :dry-run :help]})
 
-(def valid-modes #{:claude :agents :pi :all})
+(def valid-modes #{:claude :agents :all})
 
 (defn usage []
   (str
-   "Usage: bb bootstrap [claude|agents|pi|all] [--force] [--dry-run]\n\n"
+   "Usage: bb bootstrap [claude|agents|all] [--force] [--dry-run]\n\n"
    (cli/format-opts {:spec (:spec cli-spec)
                      :order [:mode :force :dry-run :help]})))
 
@@ -59,11 +59,9 @@
      :claude-src (str (fs/path root "claude"))
      :agents-src (str (fs/path root "agents"))
      :shared-src (str (fs/path root "shared"))
-     :pi-src (str (fs/path root "pi"))
      :claude-dst (str (fs/path home ".claude"))
      :agents-dst (str (fs/path home ".agents"))
      :codex-dst (str (fs/path home ".codex"))
-     :pi-dst (str (fs/path home ".pi" "agent"))
      :hooks-json (str (fs/path root "settings-hooks.json"))
      :perms-json (str (fs/path root "settings-permissions.json"))}))
 
@@ -144,13 +142,9 @@
   {:op :section :title title})
 
 (defn bin-ops
-  "Symlink ops for ~/.local/bin/ CLI entry points.
-   Installed by claude and agents modes, not pi (pi is extensions/themes only).
-
-   Targets are thin bash wrappers (shared/skills/<skill>/ag-<name>), not raw
-   .clj files. The wrappers resolve the dotagents repo root via `git
-   rev-parse --show-toplevel` and exec bb with the root bb.edn as config,
-   so the CLI classpath is available from any cwd (see todo #0022)."
+  "Symlink ops for Claude/Agents ~/.local/bin/ CLI entry points.
+   Targets are bash wrappers, not raw .clj files. ag-todo uses its skill-local
+   config; the other wrappers retain their repository config (#0022)."
   [shared-src home]
   (let [bin-dir (str (fs/path home ".local" "bin"))]
     [{:op :link
@@ -170,7 +164,9 @@
   (concat
    [(section "Claude")]
    (tree-ops {:src (:claude-src p) :dst (:claude-dst p) :mode :link})
-   (tree-ops {:src (:shared-src p) :dst (:claude-dst p) :mode :link})
+   (tree-ops {:src (:shared-src p) :dst (:claude-dst p) :mode :link
+             :include? #(not (contains? #{"skills/add-todo/SKILL.md"
+                                         "skills/org-journal/SKILL.md"} %))})
    [{:op :merge-claude-settings
      :target-dir (:claude-dst p)
      :hooks-json (:hooks-json p)
@@ -195,29 +191,19 @@
    (skill-ops {:src (str (fs/path (:agents-src p) "skills"))
                :dst (str (fs/path (:agents-dst p) "skills"))
                :markdown-mode :copy})
-   (skill-ops {:src (str (fs/path (:shared-src p) "skills"))
-               :dst (str (fs/path (:agents-dst p) "skills"))
-               :markdown-mode :link})
+   (remove #(contains? #{"add-todo/SKILL.md" "org-journal/SKILL.md"} (:label %))
+           (skill-ops {:src (str (fs/path (:shared-src p) "skills"))
+                       :dst (str (fs/path (:agents-dst p) "skills"))
+                       :markdown-mode :link}))
    [(section "CLI binaries")]
    (bin-ops (:shared-src p) (:home p))))
-
-(defn plan-pi [p]
-  [{:op :section :title "Pi"}
-   {:op :merge-pi-settings
-    :target-dir (:pi-dst p)
-    :extensions [(str (fs/path (:pi-src p) "extensions"))]
-    :themes [(str (fs/path (:pi-src p) "themes"))]
-    :prompts [(str (fs/path (:pi-src p) "prompts"))]
-    :theme "modus-operandi/modus-vivendi"}])
 
 (defn plan [p {:keys [mode]}]
   (case mode
     :claude (plan-claude p)
     :agents (plan-agents p)
-    :pi (plan-pi p)
     :all (concat (plan-claude p)
-                 (plan-agents p)
-                 (plan-pi p))))
+                 (plan-agents p))))
 
 (defn slurp-json [path]
   (when (fs/exists? path)
@@ -276,21 +262,6 @@
         hooks (some-> hooks-json slurp-json)
         perms (some-> perms-json slurp-json)]
     (merge-claude-settings base hooks perms home)))
-
-(defn merge-pi-settings [base {:keys [extensions themes prompts theme]}]
-  (cond-> (or base {})
-    (seq extensions) (update :extensions merge-distinct-vec extensions)
-    (seq themes) (update :themes merge-distinct-vec themes)
-    (seq prompts) (update :prompts merge-distinct-vec prompts)
-    theme (assoc :theme theme)))
-
-(defn merge-pi-settings-data [{:keys [target-dir extensions themes prompts theme]}]
-  (let [settings-file (str (fs/path target-dir "settings.json"))
-        base (or (slurp-json settings-file) {})]
-    (merge-pi-settings base {:extensions extensions
-                             :themes themes
-                             :prompts prompts
-                             :theme theme})))
 
 (defn say [dry-run? live-msg dry-msg]
   (println (if dry-run? dry-msg live-msg)))
@@ -396,15 +367,7 @@
            (str "Merging Claude settings: " settings-file)
            (str "Would merge Claude settings: " settings-file))
       (when-not dry-run?
-        (spit-json! settings-file (merge-claude-settings-data action home))))
-
-    :merge-pi-settings
-    (let [settings-file (str (fs/path (:target-dir action) "settings.json"))]
-      (say dry-run?
-           (str "Merging Pi settings: " settings-file)
-           (str "Would merge Pi settings: " settings-file))
-      (when-not dry-run?
-        (spit-json! settings-file (merge-pi-settings-data action))))))
+        (spit-json! settings-file (merge-claude-settings-data action home))))))
 
 (defn validate! [p {:keys [mode]}]
   (letfn [(require-dir! [path label]
@@ -417,17 +380,9 @@
                   (require-dir! (:shared-src p) "shared"))
       :agents (do (require-dir! (:agents-src p) "agents")
                   (require-dir! (:shared-src p) "shared"))
-      :pi (do (require-dir! (:pi-src p) "pi")
-              (require-dir! (str (fs/path (:pi-src p) "extensions")) "pi/extensions")
-              (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes")
-              (require-dir! (str (fs/path (:pi-src p) "prompts")) "pi/prompts"))
       :all (do (require-dir! (:claude-src p) "claude")
                (require-dir! (:agents-src p) "agents")
-               (require-dir! (:shared-src p) "shared")
-               (require-dir! (:pi-src p) "pi")
-               (require-dir! (str (fs/path (:pi-src p) "extensions")) "pi/extensions")
-               (require-dir! (str (fs/path (:pi-src p) "themes")) "pi/themes")
-               (require-dir! (str (fs/path (:pi-src p) "prompts")) "pi/prompts")))))
+               (require-dir! (:shared-src p) "shared")))))
 
 (defn announce [p {:keys [mode force? dry-run?]}]
   (let [force-line (when force? ["Force mode: enabled"])
@@ -453,20 +408,6 @@
                             "Targets:"
                             (str "  - " (:agents-dst p))
                             (str "  - " (fs/path (:codex-dst p) "AGENTS.md"))
-                            ""]
-                           force-line
-                           dry-run-line
-                           [""])]
-        (println line))
-
-      :pi
-      (doseq [line (concat ["Bootstrapping Pi resources..."
-                            "Sources:"
-                            (str "  - " (fs/path (:pi-src p) "extensions"))
-                            (str "  - " (fs/path (:pi-src p) "themes"))
-                            (str "  - " (fs/path (:pi-src p) "prompts"))
-                            "Target:"
-                            (str "  - " (:pi-dst p))
                             ""]
                            force-line
                            dry-run-line

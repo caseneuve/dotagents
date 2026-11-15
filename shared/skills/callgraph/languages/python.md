@@ -12,10 +12,10 @@ manual pass described below.
 python3 <path-to-this-skill>/scripts/py_callers.py --root <repo_root> SYMBOL [SYMBOL ...]
 ```
 
-Example (skill installed under `~/.agents/skills/callgraph`):
+Example (skill installed under `<resolved-skill-directory>`):
 
 ```bash
-python3 ~/.agents/skills/callgraph/scripts/py_callers.py \
+python3 <resolved-skill-directory>/scripts/py_callers.py \
   --root src \
   release_lock get_lock_state
 ```
@@ -24,7 +24,7 @@ By default the report includes production and test files. To exclude conventiona
 tests, add `--production-only`:
 
 ```bash
-python3 ~/.agents/skills/callgraph/scripts/py_callers.py \
+python3 <resolved-skill-directory>/scripts/py_callers.py \
   --root src \
   --production-only \
   release_lock get_lock_state

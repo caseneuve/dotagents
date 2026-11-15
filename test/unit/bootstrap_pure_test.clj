@@ -30,25 +30,6 @@
     (is (= ["a" "b" "c"]
            (sut/merge-permission-allows ["a" "b"] ["b" "c"])))))
 
-(deftest merge-pi-settings-test
-  (let [base {:theme "dark"
-              :extensions ["/existing/ext"]
-              :custom {:nested true}}
-        merged (sut/merge-pi-settings base {:extensions ["/existing/ext" "/repo/pi/extensions"]
-                                            :themes ["/repo/pi/themes"]
-                                            :theme "modus-operandi"})]
-    (testing "preserves unrelated base settings"
-      (is (= {:nested true} (:custom merged))))
-
-    (testing "merges extension and theme search paths"
-      (is (= ["/existing/ext" "/repo/pi/extensions"]
-             (:extensions merged)))
-      (is (= ["/repo/pi/themes"]
-             (:themes merged))))
-
-    (testing "sets the configured Pi theme"
-      (is (= "modus-operandi" (:theme merged))))))
-
 (deftest merge-claude-settings-test
   (let [base {:model "keep-me"
               :permissions {:allow ["Bash(/tmp/existing:*)"
@@ -93,22 +74,15 @@
                 ops)
           "should include linear-todo shared skill"))))
 
-(deftest plan-pi-settings
-  (testing "plan-pi includes single extensions dir"
-    (let [p {:pi-src "/repo/pi"
-             :pi-dst "/home/.pi/agent"}
-          ops (sut/plan-pi p)
-          settings-op (first (filter #(= (:op %) :merge-pi-settings) ops))]
-      (is (= ["/repo/pi/extensions"]
-             (:extensions settings-op)))))
-
-  (testing "plan-pi includes themes dir"
-    (let [p {:pi-src "/repo/pi"
-             :pi-dst "/home/.pi/agent"}
-          ops (sut/plan-pi p)
-          settings-op (first (filter #(= (:op %) :merge-pi-settings) ops))]
-      (is (= ["/repo/pi/themes"]
-             (:themes settings-op))))))
+(deftest bootstrap-excludes-pi
+  (is (= #{:claude :agents :all} sut/valid-modes))
+  (is (= :all (:mode (sut/parse-cli []))))
+  (is (not-any? #(clojure.string/includes? (str %) ".pi")
+                (vals (sut/paths "/repo"))))
+  (with-redefs [sut/plan-claude (constantly [{:op :claude}])
+                sut/plan-agents (constantly [{:op :agents}])]
+    (is (= [{:op :claude} {:op :agents}]
+           (vec (sut/plan {} {:mode :all}))))))
 
 (deftest bin-ops-test
   (testing "produces symlink ops for CLI tools"
@@ -146,18 +120,6 @@
       (is (some #(= "~/.local/bin/ag-sandbox" (:label %)) bin-links))
       (is (some #(= "~/.local/bin/ag-todo" (:label %)) bin-links))
       (is (some #(= "~/.local/bin/ag-tmux" (:label %)) bin-links)))))
-
-(deftest plan-pi-excludes-bin-ops
-  (testing "plan-pi does not include ~/.local/bin/ links"
-    (let [p {:pi-src "/repo/pi"
-             :pi-dst "/home/.pi/agent"
-             :home "/home"}
-          ops (sut/plan-pi p)
-          bin-links (filter #(and (= (:op %) :link)
-                                 (some-> (:label %) (clojure.string/includes? "local/bin")))
-                            ops)]
-      (is (zero? (count bin-links))
-          "pi bootstrap should not install CLI binaries"))))
 
 (defn -main [& _]
   (let [{:keys [fail error]} (t/run-tests 'unit.bootstrap-pure-test)]

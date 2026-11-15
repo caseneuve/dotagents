@@ -1,41 +1,106 @@
-# pi
+# Pi resources in dotagents
 
-Pi-specific themes, extensions, and prompt templates for this dotagents repo.
+The root `package.json` exposes **only independent skills and prompts**.
+No Pi bootstrap, custom installer, dependency installation, extensions, or
+themes are part of this package. Local paths load in place.
 
-## Contents
+## Native installation
 
-- `extensions/` — small focused extensions following a composable, Unix-style philosophy
-- `themes/` — custom themes
-- `prompts/` — reusable prompt templates (`/name`) for Pi
+Review the source, then choose a scope (replace the example path):
 
-These resources are intended to be loaded directly from this repo by entries in `~/.pi/agent/settings.json`:
-
-- `"extensions": ["/path/to/dotagents/pi/extensions"]`
-- `"themes": ["/path/to/dotagents/pi/themes"]`
-- `"prompts": ["/path/to/dotagents/pi/prompts"]`
-- `"theme": "modus-operandi/modus-vivendi"` (auto light/dark pair; pi syncs live with terminal color-scheme changes)
-
-The repo bootstrap maintains those settings instead of symlinking files into `~/.pi/agent/extensions/`, `~/.pi/agent/themes/`, or `~/.pi/agent/prompts/`.
-
-## Type-checking and Pi upgrades
-
-Pi extensions are type-checked against pinned Pi API packages declared in the repo root `package.json`, not against whatever global Pi runtime happens to be installed. This records the Pi version these extensions are known to compile against.
-
-Run the normal check with:
-
-```bash
-bb check:pi-extensions
+```sh
+pi install /absolute/path/to/dotagents       # personal agent settings
+pi install -l /absolute/path/to/dotagents    # current project's .pi/settings.json
 ```
 
-Before upgrading Pi itself, first try the new API version here:
+Project settings/resources load only after Pi project trust. Review before
+trusting; trust is not an OS sandbox. Absolute local paths are personal machine
+references, not portable committed team configuration. No Git/npm publication
+or active-user cutover is implied by this tranche.
 
-```bash
-bb check:pi-extensions:upgrade 0.75.0
+Use `pi list`, `pi config` (Tab switches scope), `/reload`, and
+`pi remove <source>` to inspect, narrow, reload, or remove an installation.
+Local checkouts load in place: update the checkout deliberately. `pi update`
+without a target updates Pi itself; package reconciliation is
+`pi update --extensions` or a specific source.
+
+## Retained independent resources
+
+- Skills: `callgraph`, `dataflow`, `add-todo`, `org-journal`.
+- Meta-skills: `to-skill`. Review/UX meta-skills are prospective follow-ups,
+  not the existing runtime-specific review workflows relabeled.
+- Prompts (canonical copies in `pi/prompts/`): `ans`, `be-concise`,
+  `handoff`, `speak-human`, `style`.
+
+Helpers remain canonical under `shared/skills/`. Resolve scripts relative to
+the discovered SKILL.md, not a fixed HOME/Git layout. `add-todo/ag-todo` uses
+its skill-local Babashka config, works outside Git, and requires no bootstrap
+or root dependencies. Callgraph/dataflow require Python 3; the Clojure
+callgraph analyzer also requires the pinned clj-kondo documented in its skill.
+Org journal requires Babashka and Emacs/Org; set `ORG_JOURNAL_AGENT=pi`
+explicitly for metadata. `ORG_JOURNAL_HOME` overrides the metadata helper;
+the unchanged Emacs index helper defaults to `~/org/agent-journal/` (or its
+explicit `shared-journal-base-dir`). Do not point a test at the real journal.
+
+Optional object-form filter in the chosen Pi settings:
+
+```json
+{
+  "packages": [{
+    "source": "/absolute/path/to/dotagents",
+    "extensions": [],
+    "themes": [],
+    "skills": ["shared/skills/add-todo"],
+    "prompts": ["pi/prompts/ans.md"]
+  }]
+}
 ```
 
-That task updates the pinned `@earendil-works/pi-*` dev dependencies, refreshes `package-lock.json`, and runs the extension type-check. If it passes, commit the dependency update and any extension compatibility fixes, then upgrade the installed Pi runtime. If it fails, fix the extensions before upgrading runtime Pi.
+Filters narrow the explicit manifest; they cannot re-enable legacy entries.
+Omitting a type loads its manifest resources; `[]` disables that type.
+Avoid loading this package alongside old broad dotagents resource paths or
+workbench's temporary duplicate skills. Pi keeps the first duplicate skill
+name and warns; it does not guarantee canonical ownership by package order.
+Lead coordinates removal of workbench duplicates only after this handoff passes.
 
-Current scope: the check covers top-level `pi/extensions/*.ts` files. Nested extension directories and Bun-specific extension tests are intentionally outside this first check.
+## Excluded, preserved, and deferred
+
+All legacy source directories remain physically present, **not exposed by
+this native manifest**. Themes are owned by `pi-dotagents-resources`.
+Retained executable capabilities are owned by the extracted conversation-tools,
+workbench, runtime-ui, usage, and emacs-bridge packages; select those separately.
+
+`ask-for-review` depends on archived agent-channel; `implement-todo` calls
+`channel_status`. Both prompt sources remain, excluded pending archive/meta-skill
+follow-up. Linear/linear-todo and agent-comms are archive targets; sandbox and
+pk-tmux are dropped from native exposure. Invariants/boundaries and all other
+unlisted skills are excluded, not deleted. Testmap awaits future PA migration,
+not redesign here. Playwright, Tree-sitter and subagent experiments remain
+preserved archive candidates, not upgrade targets.
+
+`bb bootstrap` / `bb boot` now set up Claude/Agents only, including default
+`all`; `pi` is rejected without writes. Existing user Pi settings are neither
+migrated nor cleaned up. Integrating this branch into the active root checkout
+and changing live selections requires later explicit live-setup approval.
+No source retirement is authorized: #0047's preservation/soak gate remains
+(at least seven days and five sessions over two projects per active OS),
+followed by separately approved archive/removal planning. Independent prompts
+are not retired copies.
+
+## Verification
+
+`bb test:unit`, `bb test:e2e`, and `bb test:native` run in isolated containers.
+Rebuild with `bb build:test-image` after test-image dependencies change.
+The native test uses temporary HOME/non-Git copies, exercises the actual shared
+helpers, and validates exact manifest membership. No npm toolchain is needed;
+legacy Pi extension/test sources are preserved without upgrading them here.
+
+## Historical source reference (not installation guidance)
+
+Everything below describes preserved legacy implementations, not the native
+package surface. Do not use old direct-loader or archive-package commands as
+current setup instructions. Consult each retained extracted package for current
+behavior and compatibility.
 
 ## Extensions
 

@@ -1,5 +1,5 @@
 ---
-title: cut over dotagents Pi bootstrap to extracted package set
+title: adopt native Pi independent resources and extracted packages
 status: open
 priority: high
 type: chore
@@ -9,6 +9,31 @@ parent: null
 blocked-by: [0026, 0027.9]
 blocks: [0047]
 ---
+
+## Current policy and tranche boundary (2026-11-15)
+
+The former custom Pi bootstrap/settings-reconciliation plan below is superseded:
+there is NO Pi bootstrap or replacement custom installer. #0046.1 removes Pi
+actions (including implicit default/all writes) and exposes independent skills
+and prompts via the root native manifest in a dedicated worktree.
+Use native `pi install [-l] <path>` only.
+
+Live adoption into the active checkout and user settings requires later explicit
+live-setup approval; #0046 stays open until that integration and package-selection
+verification is authorized and complete. Do not clean up broad user loaders,
+set themes, remove workbench copies, or start soak implicitly.
+
+## Remaining adoption acceptance criteria
+
+- [ ] Independently review #0046.1's exact SHA and isolated native handoff.
+- [ ] Obtain explicit approval for active-root integration/live setup.
+- [ ] Select native personal/project-local package declarations and remove duplicate
+      broad loaders using the approved native workflow, preserving unrelated settings.
+- [ ] Verify resource ownership, trust, filters, no duplicates and chosen theme.
+- [ ] Record exact package refs, cutover date/platforms and explicit soak start.
+- [ ] Retain all source/history until separately approved #0047 archive work.
+
+## Historical proposal (superseded; do not execute)
 
 ## Context
 

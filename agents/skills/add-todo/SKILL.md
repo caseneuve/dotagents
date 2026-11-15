@@ -11,6 +11,10 @@ Use this skill when the user wants to create, split, or update work items stored
 
 ## Commands
 
+If `ag-todo` is not on PATH, resolve it beside this SKILL.md and invoke it
+by absolute path from the target project (or use `--dir`). Its skill-local
+config requires no Git checkout or Pi bootstrap.
+
 ```
 todo next-id [--dir DIR] [PARENT]
 todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]

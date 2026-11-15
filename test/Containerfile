@@ -5,7 +5,7 @@ ARG CLJ_KONDO_AMD64_SHA256=4a4e7bde622b0bd8c4fd368d3a8584690faa007f3ce72255ae63d
 ARG CLJ_KONDO_AARCH64_SHA256=49b96cfe3d27528b50074226d10b3327412345e5b58d838157177bba45243f3a
 
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-      tmux git default-jdk-headless ca-certificates curl unzip \
+      tmux git python3 emacs-nox default-jdk-headless ca-certificates curl unzip \
     && arch="$(dpkg --print-architecture)" \
     && case "$arch" in \
          amd64) kondo_arch=linux-amd64; kondo_sha="$CLJ_KONDO_AMD64_SHA256" ;; \

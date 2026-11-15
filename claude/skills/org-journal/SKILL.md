@@ -13,6 +13,12 @@ Entries stored in `~/org/agent-journal/YYYY/MM/dd/HHMM-<project>.org`.
 
 ## Process
 
+Resolve `new-entry.bb` and `update-index.el` beside this SKILL.md when not
+using the installed paths below. Helpers need no Pi bootstrap. Keep the
+runtime identity explicit with `ORG_JOURNAL_AGENT=claude` when invoking
+through a shared source path. `ORG_JOURNAL_HOME` overrides the metadata
+helper only; the index defaults to `~/org/agent-journal/`.
+
 1. **Get metadata** — run helper script:
    ```bash
    bb ~/.claude/skills/org-journal/new-entry.bb [--mkdir] [project-name]

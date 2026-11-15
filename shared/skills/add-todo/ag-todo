@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 # ag-todo — cwd-independent wrapper for the add-todo skill CLI.
 #
-# Resolves its own real path through any symlinks, locates the dotagents
-# repo root via `git rev-parse --show-toplevel`, and execs bb with the
-# root bb.edn as config. The root bb.edn declares :paths (covering every
-# skill's src/test) and :deps (mux-bb), so the CLI's :require clauses
-# all resolve regardless of the user's cwd.
-#
-# See todos/0022-ag-wrappers-cwd-fix.md for rationale.
+# Resolves its own real path through any symlinks, then execs bb with the
+# skill-local config. No Git checkout, root config, or bootstrap is needed.
 
 set -euo pipefail
 
@@ -19,13 +14,7 @@ while [ -L "$src" ]; do
 done
 script_dir="$(cd -P "$(dirname "$src")" && pwd)"
 
-if ! repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"; then
-  echo "ag-todo: could not locate dotagents repo root from $script_dir" >&2
-  echo "  (expected this wrapper to live inside a git checkout)" >&2
-  exit 2
-fi
-
 exec bb \
-  --config "$repo_root/bb.edn" \
-  --deps-root "$repo_root" \
+  --config "$script_dir/bb.edn" \
+  --deps-root "$script_dir" \
   -m todo.cli -- "$@"

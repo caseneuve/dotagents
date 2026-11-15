@@ -14,7 +14,7 @@ python3 <path-to-this-skill>/scripts/py_typeflow.py --root <repo_root> SYMBOL [S
 Example:
 
 ```bash
-python3 ~/.agents/skills/dataflow/scripts/py_typeflow.py \
+python3 <resolved-skill-directory>/scripts/py_typeflow.py \
   --root src \
   process_order fetch_inventory decide_shipping_method
 ```

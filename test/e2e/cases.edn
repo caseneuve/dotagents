@@ -3,24 +3,40 @@
   :given {:vars {:work "/work"
                   :fixtures-dir "test/fixtures"}}
   :cases
-  [{:scenario :pi-writes-settings-for-extensions-themes-and-theme-name
+  [{:scenario :pi-mode-is-rejected-without-writes
     :given {:vars {:root "/tmp/dotagents-e2e-pi"
                    :home "/tmp/dotagents-e2e-pi/home"}
-             :fixtures [[:remove "{root}"]
-                        [:dir "{home}"]]}
+             :fixtures [[:remove "{root}"] [:dir "{home}"]]}
     :cleanup {:fixtures [[:remove "{root}"]]}
-    :when {:cwd "{work}"
-           :env {"HOME" "{home}"}
+    :when {:cwd "{work}" :env {"HOME" "{home}"}
            :run ["bb" "bootstrap" "pi"]}
+    :then [[:exit-code 1]
+           [:stderr-contains "Invalid mode: pi"]
+           [:fs-layout {:missing ["{home}/.pi" "{home}/.claude" "{home}/.agents"]}]]}
+
+   {:scenario :default-only-installs-claude-and-agents
+    :given {:vars {:root "/tmp/dotagents-e2e-default"
+                   :home "/tmp/dotagents-e2e-default/home"}
+             :fixtures [[:remove "{root}"] [:dir "{home}"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}" :env {"HOME" "{home}"}
+           :run ["bb" "bootstrap"]}
     :then [[:exit-code 0]
-           [:stdout-contains "== Pi =="]
-           [:stdout-contains "Merging Pi settings"]
-           [:fs-layout {:json-equals [["{home}/.pi/agent/settings.json" [:theme] "modus-operandi"]
-                                      ["{home}/.pi/agent/settings.json" [:extensions] ["{work}/pi/extensions"]]
-                                      ["{home}/.pi/agent/settings.json" [:themes] ["{work}/pi/themes"]]]
-                        :missing ["{home}/.pi/agent/extensions"
-                                  "{home}/.pi/agent/themes"
-                                  "{home}/.pi/agent/justfile"]}]]}
+           [:fs-layout {:regular-files ["{home}/.claude/settings.json"]
+                        :symlinks [["{home}/.codex/AGENTS.md" "{work}/agents/AGENTS.md"]]
+                        :missing ["{home}/.pi"]}]]}
+
+   {:scenario :all-preserves-existing-pi-state
+    :given {:vars {:root "/tmp/dotagents-e2e-all"
+                   :home "/tmp/dotagents-e2e-all/home"}
+             :fixtures [[:remove "{root}"] [:dir "{home}/.pi/agent"]
+                        [:copy "{fixtures-dir}/claude-settings.json" "{home}/.pi/agent/settings.json"]]}
+    :cleanup {:fixtures [[:remove "{root}"]]}
+    :when {:cwd "{work}" :env {"HOME" "{home}"}
+           :run ["bb" "bootstrap" "all"]}
+    :then [[:exit-code 0]
+           [:fs-layout {:json-equals [["{home}/.pi/agent/settings.json" [:model] "keep-me"]]
+                        :missing ["{home}/.pi/agent/extensions" "{home}/.pi/agent/themes"]}]]}
 
    {:scenario :agents-copies-docs-and-links-helpers
     :given {:vars {:root "/tmp/dotagents-e2e-agents"
@@ -46,6 +62,7 @@
                                    ["{home}/.local/bin/ag-todo"    "{work}/shared/skills/add-todo/ag-todo"]
                                    ["{home}/.local/bin/ag-tmux"    "{work}/shared/skills/pk-tmux/ag-tmux"]
                                    ["{home}/.local/bin/ag-sandbox" "{work}/shared/skills/sandbox/ag-sandbox"]]
+                        :contains [["{home}/.agents/skills/add-todo/SKILL.md" "# Add Todo"]]
                         :regular-files ["{home}/.agents/skills/add-todo/SKILL.md"]}]]}
 
    {:scenario :claude-merges-settings
@@ -71,7 +88,10 @@
                                         ["{home}/.claude/settings.json"
                                          [:permissions :allow]
                                          "Bash(ag-tmux:*)"]]
-                        :symlinks [["{home}/.claude/skills/boundaries/SKILL.md"
+                        :contains [["{home}/.claude/skills/add-todo/SKILL.md" "# `add-todo`"]]
+                        :symlinks [["{home}/.claude/skills/add-todo/SKILL.md"
+                                    "{work}/claude/skills/add-todo/SKILL.md"]
+                                   ["{home}/.claude/skills/boundaries/SKILL.md"
                                     "{work}/shared/skills/boundaries/SKILL.md"]
                                    ["{home}/.claude/skills/invariants/SKILL.md"
                                     "{work}/shared/skills/invariants/SKILL.md"]
@@ -92,7 +112,6 @@
     :then [[:exit-code 0]
            [:stdout-contains "Dry run: enabled"]
            [:stdout-contains "Would merge Claude settings"]
-           [:stdout-contains "Would merge Pi settings"]
            [:fs-layout {:missing ["{home}/.claude"
                                   "{home}/.agents"
                                   "{home}/.pi"]}]]}]}

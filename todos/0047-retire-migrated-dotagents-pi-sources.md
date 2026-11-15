@@ -10,6 +10,24 @@ blocked-by: [0046]
 blocks: []
 ---
 
+## Current preservation policy (2026-11-15)
+
+The deletion checklist below is historical and superseded. #0046.1 preserves ALL
+legacy extension/theme/experiment/skill directories and old worktrees, excluding
+them through the native manifest only. Canonical independent `pi/prompts` must
+not be treated as migrated duplicates. Workbench duplicate skills remain untouched
+until the native handoff passes and lead coordinates a separate follow-up.
+
+No source retirement is authorized by this tranche. After explicit live-setup
+approval and recorded adoption, retain the minimum seven-day/five-session/two-project
+soak per actively used OS, inventory preserved history/unfinished work, and obtain
+separate archive/removal approval with exact source/canonical refs.
+Archive candidates include agent-channel/comms, Playwright, Tree-sitter and
+subagent experiments; do not modernize them or assume an obsolete source path
+must remain active. Verification uses native Pi installation, not bootstrap.
+
+## Historical proposal (superseded; do not execute)
+
 ## Context
 
 After package cutover, dotagents retains migrated extension entries plus `pi/themes` and `pi/prompts`

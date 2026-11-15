@@ -9,7 +9,7 @@ This repo maintains parallel agent runtimes and shared helpers:
 - `claude/` -- Claude-facing docs/config
 - `agents/` -- Codex/agents-facing docs/config
 - `shared/` -- shared hooks and helper scripts used by multiple runtimes
-- `pi/` -- Pi extensions and themes
+- `pi/` -- independent prompts and preserved, manifest-excluded legacy Pi sources
 - `scripts/` -- repo-local Babashka entrypoints
 - `test/` -- unit + E2E tests
 
@@ -32,7 +32,9 @@ Do not copy helper logic into multiple runtime directories unless the behavior g
 
 Skills and extensions are cross-platform. Backend auto-detection (cmux, tmux,
 or file-only) handles platform differences at runtime, not at build/bootstrap time.
-Bootstrap links `shared/skills/` into all runtime trees uniformly.
+Bootstrap assembles Claude/Agents trees; native Pi installation uses the explicit
+root manifest. Runtime-specific Claude/Agents add-todo/org-journal docs take
+precedence over generic shared docs.
 
 ### Preserve intentional parity across runtimes
 
@@ -66,7 +68,6 @@ Supported modes:
 ```bash
 bb bootstrap claude
 bb bootstrap agents
-bb bootstrap pi
 bb bootstrap all
 ```
 
@@ -82,7 +83,8 @@ Expected behavior:
 - skip already-correct links
 - replace stale symlinks
 - do not overwrite regular files unless `--force`
-- keep Pi bootstrap limited to extensions + themes via settings, not mirrored install trees
+- default/all means Claude + Agents only; reject pi without writes
+- never read/write Pi settings; native `pi install [-l] <repo-path>` is the only Pi install path
 
 When changing bootstrap behavior:
 - update tests first or alongside the code
