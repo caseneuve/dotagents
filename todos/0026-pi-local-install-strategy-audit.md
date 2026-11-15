@@ -10,6 +10,33 @@ blocked-by: []
 blocks: [0046]
 ---
 
+
+## Delivered audit scope (2026-11-15)
+
+The install-strategy audit is complete for the approved retained/local program:
+native `pi install [-l] <path>`, explicit package allowlists and filters, project
+trust, local-checkout dependency ownership, independent dotagents skills/prompts,
+separate theme ownership, rollback/preservation and deferred adoption gates.
+There is no Pi bootstrap or replacement settings reconciler. The old agent-channel/
+Playwright defaults and custom-bootstrap policy below are superseded, not delivered.
+
+Evidence: `pi/README.md`; approved native implementation34374cc and final1f127bd,
+exact-tree integration3751a53, archive-only integration7610d05; migration
+`~/.cache/pi-migration/evidence/dotagents-native/{handoff,review}.md`,
+`evidence/composition/final-review.md` and `baseline-review.md` at the migration
+cache root. Local source integration is complete; this audit does NOT establish
+global settings cutover, soak, publication, remote Git availability, all-OS
+verification or real authenticated provider behavior. #0046/#0047/#0051 stay open.
+
+- [x] Audit the old broad loaders/default-all Pi writes and native scope/trust/filter alternatives.
+- [x] Record retained ownership, portable helpers, archive exclusions and local native setup.
+- [x] Preserve independent resources and record rollback/adoption/soak/release boundaries.
+
+## Historical policy and criteria (superseded where conflicting)
+
+Original unchecked criteria below remain historical; they are not newly asserted
+as complete, particularly public immutable-ref distribution and obsolete defaults.
+
 ## Current tranche policy (2026-11-15)
 
 #0046.1 implements native independent resources in an isolated worktree only.

@@ -1,6 +1,6 @@
 ---
 title: reorganize Pi extensions into installable packages
-status: open
+status: closed
 priority: high
 type: epic
 labels: [pi, packaging, extraction]
@@ -9,6 +9,36 @@ parent: null
 blocked-by: []
 blocks: []
 ---
+
+
+## Closed: original seven-public-package plan superseded (2026-11-15)
+
+The original epic is CLOSED, not delivered as written. Approved retention replaces
+the seven-package/public-distribution plan: agent-channel and Playwright are
+archive targets, dotagents owns independent prompts/skills, and the resource package
+owns themes only. No archived future functionality or unpushed remote release is
+declared shipped. Original criteria remain unchecked and historical below.
+
+| Child | Reconciled disposition |
+| --- | --- |
+| #0027.1 | done historically; extracted agent-channel is now an archive target |
+| #0027.2 | done for retained assistant-outline/session-notes local package scope |
+| #0027.3 | done for the five retained workbench entries and independent-skill handoff |
+| #0027.4 | done for three retained runtime entries, no provider redesign |
+| #0027.5 | done historically; current native/no-bootstrap policy supersedes conflicting defaults |
+| #0027.6 | closed: Playwright retention/migration abandoned in favor of approved archive |
+| #0027.7 | done historically; local compatibility approved, real provider APIs unverified |
+| #0027.8 | done for two retained themes; canonical independent prompts stay dotagents-owned |
+| #0027.9 | done for revised local/native validation, not remote release availability |
+
+Evidence: migration `status.md`, per-package `evidence/*/{review,handoff}.md`,
+`evidence/themes/README.md`, `evidence/workbench-skill-handoff/review.md` and
+`evidence/composition/final-review.md` under `~/.cache/pi-migration/`.
+The local composition records seven exact snapshots, 12 executable entries,
+five skills, five prompts, two themes and 71 bounded assertions. Source integration
+does not complete settings cutover #0046, soak/retirement #0047 or publication #0051.
+
+## Historical original epic (superseded, not completed as written)
 
 ## Current tranche policy (2026-11-15)
 
