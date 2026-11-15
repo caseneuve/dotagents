@@ -37,14 +37,25 @@ Only tracked files moved. No ignored dependency tree, secret, settings, cache,
 session, untracked review artifact or dirty user work was swept into the archive.
 Git history and original refs remain; the index is not a backup of untracked work.
 
-## Separate soak-gated preparation — not landed here
+## Separate soak-gated preparation — NOT LANDABLE
 
-Remaining manifest-excluded `pi/extensions/`, `pi/themes/` and `test/pi/` are
-still at their original paths on the landable simplification branch. Their
-tracked-only archive moves must be a **separate reviewed branch/commit** with
-its own original-path/blob/mode/owner mapping and retained package refs.
-Conversation/workbench/runtime/theme implementations have standalone owners;
-Playwright/Tree-sitter experiments have no maintained replacement.
+**This is that separate #0069.1 PREPARED branch, NOT LANDABLE YET.** The
+manifest-excluded `pi/extensions/`, `pi/themes/` and `test/pi/` files are archived
+here; they remain at original paths in the approved landable core
+`2dc662c7f1f8ae250266490822b0fac5bf800def`, which is an ancestor of this branch.
+[`pi/retirement-index.json`](pi/retirement-index.json) records all 49 original
+paths/Git blobs/modes, destinations and explicit canonical package/path/reviewed
+ref (or null). Conversation/workbench/runtime/theme entries are historical
+predecessors, not claimed byte-identical to maintained successors. Shared helper
+ownership can name both workbench/runtime copies explicitly. Playwright and
+Tree-sitter experiments have no maintained replacement; their unfinished work,
+tracked lockfiles and design bytes are preserved, not marked delivered.
+
+Only inventoried tracked files move; no ignored dependencies/secrets/local work.
+The active native manifest, all canonical skills/helpers/prompts and the three
+previously archived helper sources remain unchanged. Historical tests move with
+their implementations and are not active runner inputs. `bb test:native` now
+also verifies all 49 prepared blobs/modes and the unchanged, unwaived gate.
 
 The original requirement remains: at least **seven calendar days AND five normal
 sessions across two projects per active OS**, including startup/reload,

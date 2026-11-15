@@ -1,0 +1,680 @@
+{
+  "source_ref": "7a592f9c9290b6f670eda23662da2f52f60187bc",
+  "landable_parent": "2dc662c7f1f8ae250266490822b0fac5bf800def",
+  "scope": "PREPARED ONLY. NOT LANDABLE until existing soak gate AND explicit exact-scope approval.",
+  "gate": {
+    "calendar_days": 7,
+    "normal_sessions": 5,
+    "projects_per_active_os": 2,
+    "cutover": "2026-11-15T16:20:48Z",
+    "earliest_calendar": "2026-11-22T16:20:48Z",
+    "completed": false,
+    "waived": false
+  },
+  "files": [
+    {
+      "original": "pi/extensions/agent-journal.ts",
+      "blob": "d2c0c72c021ea191f40fc4cefa49dda7407de803",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/agent-journal.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/agent-journal.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/command-editor-export.ts",
+      "blob": "4d76ac70018d0224a6d35e5628626d17c8d26791",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/command-editor-export.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/command-editor-export.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/command-export.ts",
+      "blob": "143268c3f1eda9073dcb065d0b5e802c1f1284d8",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/command-export.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/command-export.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/command-extract.ts",
+      "blob": "448988699e0df903061469515842c2d4dc9837a9",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/command-extract.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/command-extract.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/comments.ts",
+      "blob": "011b1cd4b45ac1f38f8e99f198dfbda6fa6a093f",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/comments.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/comments.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/external-editor.ts",
+      "blob": "cf4d54c9afa1001bb5f241b21de17bc249fc592f",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/external-editor.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/external-editor.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/index.ts",
+      "blob": "1fbcfcdfda9b9eef11df4e948778b4bde8f7c406",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/index.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/index.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/markdown-outline.ts",
+      "blob": "f10b9281f1cbde67bac282e705fc293acc40bd34",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/markdown-outline.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/markdown-outline.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/overlay.ts",
+      "blob": "25fcbd75f5f34beb38b89e78c5f49f435d64ab34",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/overlay.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/overlay.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/picker.ts",
+      "blob": "d418474c59ac5e14e900b70d1cc10033bdb602cc",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/picker.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/picker.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/session.ts",
+      "blob": "2a571c35819f2103d5e594df357f4715905a8a1e",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/session.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/session.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/assistant-outline/types.ts",
+      "blob": "11634eb54f67d8a61bd8895972b91203c69a170a",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/assistant-outline/types.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/assistant-outline/types.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/attach-screenshot.ts",
+      "blob": "7f0158b507e19ca81b5ecb0cbd4208414d59fadf",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/attach-screenshot.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/attach-screenshot.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/branch-status.ts",
+      "blob": "d243711750179cb43229a8afc19465b279a74c75",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/branch-status.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "extensions/branch-status.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/cwd-editor.ts",
+      "blob": "c98879bc715b677ef32b1a12b3568184334e62d7",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/cwd-editor.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/cwd-editor.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/diff-review.ts",
+      "blob": "2a128120019373e95baf1e8e179a492a428718f1",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/diff-review.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/diff-review.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/editor-status.ts",
+      "blob": "c8f69bcd8c97812e9475bc5123d3d375967368b6",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/editor-status.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "extensions/editor-status.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/playwright/README.md",
+      "blob": "b7b3176878c2506e15b05f3e7f323ee84c19c26f",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/README.md",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/constants.ts",
+      "blob": "924197b0364d402d509f5573aff4c80c0e5a1c76",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/constants.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/index.ts",
+      "blob": "b25fc85a8b43cfc0782138cc49c2698bc7d1f8b8",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/index.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/package-lock.json",
+      "blob": "bb16f0665f6fb777931c93feeecb0a893c5f1202",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/package-lock.json",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/package.json",
+      "blob": "ad15011b38fc33c30cb124dc6198ce0c404ee5bb",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/package.json",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/policy-config.ts",
+      "blob": "877c6be7f0d24008808ed5b6a574db0324cb9f2f",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/policy-config.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/policy-storage.ts",
+      "blob": "c8fa12244d9c52ef78574227ac15f018c8ee0eef",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/policy-storage.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/policy.ts",
+      "blob": "e65a7601bab836d5f1fe00826947f8bc98435d78",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/policy.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/session.ts",
+      "blob": "4e821ea0d8839f0e59717dca29870b1242d18110",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/session.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/playwright/settings-command.ts",
+      "blob": "c6c9cac8e1590662c6df22f8750274fe4354e298",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/playwright/settings-command.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/repo-todos.ts",
+      "blob": "5df1feb527f5c9cf4221818a3926bff9a20c62d7",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/repo-todos.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/repo-todos.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/runtime-footer.ts",
+      "blob": "238d596abbadaf24279cb962490cafeb297003df",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/runtime-footer.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "extensions/runtime-footer.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/session-notes.ts",
+      "blob": "6a92a484212ba4d33922732f0063c3c4c76fc723",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/session-notes.ts",
+      "owner": "pi-conversation-tools",
+      "replacement": [
+        {
+          "package": "pi-conversation-tools",
+          "path": "extensions/session-notes.ts",
+          "ref": "fcd4be374b7d7cc985d30dd4c812680d1d3b3f5b",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/shared/editor-text.ts",
+      "blob": "3d4cdb072f9c1c9d33ec72a1a076ac8fb54a5ab6",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/shared/editor-text.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/shared/editor-text.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/shared/external-editor.ts",
+      "blob": "17b411a88c73211938dba12ec307a1f8522d0111",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/shared/external-editor.ts",
+      "owner": "pi-workbench + pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "extensions/shared/external-editor.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        },
+        {
+          "package": "pi-runtime-ui",
+          "path": "extensions/shared/external-editor.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/shared/runtime-status-git.ts",
+      "blob": "0f9effef95173afc638c9da4b6b6c36e84c7a883",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/shared/runtime-status-git.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "extensions/shared/runtime-status-git.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/DESIGN.md",
+      "blob": "ea896937faf2a1be17ab9eacc697c62d00d21523",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/DESIGN.md",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/README.md",
+      "blob": "10ee30ce5d85301fd0754a25ff3443b545e7114c",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/README.md",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/adapters/python.ts",
+      "blob": "3cfad0c22fdc950fd3c315a128fd65b44431e8d4",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/adapters/python.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/adapters/types.ts",
+      "blob": "1095bb34cc1b7814c466fe7e85ebc014eea8df47",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/adapters/types.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/contracts.ts",
+      "blob": "bdce4e8b304abf0c88c898ea7abb996c18c54a47",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/contracts.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/index.ts",
+      "blob": "3fd7596a1458fe350cc86ba84825e536af1cfc68",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/index.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/extensions/treesitter/package.json",
+      "blob": "f410abd92d106c11e72423246ae0228ad883712d",
+      "mode": "100644",
+      "archive": "archive/pi/extensions/treesitter/package.json",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "pi/themes/modus-operandi.json",
+      "blob": "43d466a2ad1e851d24c39964fbbebb99fba2280e",
+      "mode": "100644",
+      "archive": "archive/pi/themes/modus-operandi.json",
+      "owner": "pi-dotagents-resources",
+      "replacement": [
+        {
+          "package": "pi-dotagents-resources",
+          "path": "themes/modus-operandi.json",
+          "ref": "984b92744c5d5c193f852b7c54a90b0d6998b490",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "pi/themes/modus-vivendi.json",
+      "blob": "0c82efb46543cfba9220774d829b6c9a7194b0ce",
+      "mode": "100644",
+      "archive": "archive/pi/themes/modus-vivendi.json",
+      "owner": "pi-dotagents-resources",
+      "replacement": [
+        {
+          "package": "pi-dotagents-resources",
+          "path": "themes/modus-vivendi.json",
+          "ref": "984b92744c5d5c193f852b7c54a90b0d6998b490",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/agent-journal.inline.test.ts",
+      "blob": "50154af4376d10923b9dca707059c8cce244fc53",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/agent-journal.inline.test.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "test/agent-journal.inline.test.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/diff-review.test.ts",
+      "blob": "96bee2207d73b09fa09fc67980d62da4552d74bd",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/diff-review.test.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "test/diff-review.test.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/editor-status-ownership.test.ts",
+      "blob": "5d384df0226ea890f6bb44523b795b0ef8d352fe",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/editor-status-ownership.test.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "test/editor-status-ownership.test.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/editor-text.test.ts",
+      "blob": "706b5dec3ada7fe52ddf01b3e751a5b52196967b",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/editor-text.test.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "test/editor-text.test.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/external-editor.test.ts",
+      "blob": "ec69a956789d53ff6bafcba82f4709d61d961091",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/external-editor.test.ts",
+      "owner": "pi-workbench",
+      "replacement": [
+        {
+          "package": "pi-workbench",
+          "path": "test/external-editor.test.ts",
+          "ref": "7bd4220ffd2800d0427b64042340d09fa2612d7c",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    },
+    {
+      "original": "test/pi/playwright.test.ts",
+      "blob": "565f7e07d7f3297111f0bf2e292855fa5868b2fc",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/playwright.test.ts",
+      "owner": "none",
+      "replacement": null,
+      "disposition": "Unfinished/retired experiment preserved inactive; no maintained replacement or delivered-product claim."
+    },
+    {
+      "original": "test/pi/runtime-footer.test.ts",
+      "blob": "19025b61d6ec1a72039bbf009024703e69c5aade",
+      "mode": "100644",
+      "archive": "archive/pi/test/pi/runtime-footer.test.ts",
+      "owner": "pi-runtime-ui",
+      "replacement": [
+        {
+          "package": "pi-runtime-ui",
+          "path": "test/runtime-footer.test.ts",
+          "ref": "254efa513d762c4e5edc1d08e5f720d1b9ed1e1f",
+          "relationship": "Canonical maintained successor; historical bytes are not asserted identical."
+        }
+      ],
+      "disposition": "Superseded legacy source/theme/test; canonical standalone successor at recorded reviewed ref, not a byte-equivalence claim."
+    }
+  ]
+}

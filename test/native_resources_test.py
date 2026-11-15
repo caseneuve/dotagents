@@ -61,6 +61,31 @@ class NativeResourcesTest(unittest.TestCase):
             self.assertIn("replacement", row)
             self.assertIn("disposition", row)
 
+    def test_prepared_retirement_inventory_is_exact_and_still_gated(self):
+        index = json.loads((ROOT / "archive/pi/retirement-index.json").read_text())
+        self.assertEqual("2dc662c7f1f8ae250266490822b0fac5bf800def", index["landable_parent"])
+        self.assertEqual(49, len(index["files"]))
+        self.assertFalse(index["gate"]["completed"])
+        self.assertFalse(index["gate"]["waived"])
+        self.assertEqual((7, 5, 2), (index["gate"]["calendar_days"],
+                                     index["gate"]["normal_sessions"],
+                                     index["gate"]["projects_per_active_os"]))
+        for path in ("pi/extensions", "pi/themes", "test/pi"):
+            self.assertFalse((ROOT / path).exists(), path)
+        for row in index["files"]:
+            path = ROOT / row["archive"]
+            data = path.read_bytes()
+            blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+            self.assertEqual(row["blob"], blob, str(path))
+            mode = "100755" if path.stat().st_mode & 0o111 else "100644"
+            self.assertEqual(row["mode"], mode, str(path))
+            self.assertIn("owner", row)
+            self.assertIn("replacement", row)
+            for replacement in row["replacement"] or []:
+                self.assertEqual(40, len(replacement["ref"]))
+                self.assertIn("path", replacement)
+                self.assertIn("package", replacement)
+
     def test_helpers_work_from_non_git_copy_and_unrelated_cwd(self):
         with tempfile.TemporaryDirectory(prefix="dotagents-native-") as tmp:
             tmp = Path(tmp)

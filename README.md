@@ -11,7 +11,7 @@ skills/   # canonical SKILL.md files, bundled helpers, tests and fixtures
 prompts/  # canonical five Markdown prompt templates
 test/     # layout, native loading and helper regression checks
 archive/  # inactive historical sources and exact recovery index
-pi/       # retired guidance; excluded legacy sources pending the separate soak gate
+pi/       # retired guidance pointer; prepared archive gate described below
 todos/    # work history, including unfinished and transferred work
 ```
 
@@ -124,9 +124,12 @@ old dotagents implementations should be loaded alongside them.
 
 [Archive index and recovery](archive/README.md) preserve obsolete Claude/Agents,
 bootstrap and unused shared resources, including unfinished skills/product work.
-Remaining excluded `pi/extensions`, `pi/themes` and their historical tests have
-**not** been retired on this branch. Their reversible moves are prepared on a
-separate reviewed branch and remain gated by seven calendar days AND five normal
-sessions across two projects per active OS, then explicit exact-scope approval.
-The three previously approved helper archives are unchanged. Do not infer soak
-completion, publication or live handoff from this source simplification.
+**This is the separate #0069.1 PREPARED archive branch, NOT LANDABLE YET.**
+The 49 excluded legacy extension/theme/test files are moved byte/mode-exact into
+`archive/pi/`, indexed by [retirement-index.json](archive/pi/retirement-index.json).
+The approved core branch keeps those files at their original paths. Landing this
+prepared branch still requires seven calendar days AND five normal sessions across
+two projects per active OS, then explicit exact-scope approval. Neither completion
+nor a waiver is recorded. The three previously approved helper archives and all
+canonical skill/helper/prompt bytes remain unchanged. No soak completion,
+publication, live handoff or experiment/product delivery is inferred.

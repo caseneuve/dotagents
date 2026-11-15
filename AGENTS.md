@@ -13,8 +13,9 @@ Typesafe is separately owned and stays untouched.
 - `test/`: maintained skill/helper/native resource tests.
 - `archive/`: inactive history; consult `archive/index.json` for source blob/mode,
   original path and replacement. Historical instructions are not current policy.
-- `pi/`: retired guidance plus manifest-excluded legacy extension/theme sources
-  pending separately gated retirement. No new implementation goes here.
+- `pi/`: retired guidance pointer. This #0069.1 PREPARED branch moves legacy
+  sources to `archive/pi/` but is NOT LANDABLE before its separate soak gate.
+  The approved core still keeps them at original paths. No new code goes here.
 - `todos/`: durable task history; archival never means unfinished work shipped.
 
 Read the relevant **installed Pi documentation and examples in full** before
@@ -63,8 +64,9 @@ node_modules, secrets, local settings, sessions or untracked/dirty user work.
 Never register archive directories as resources. Preserve unfinished testmap,
 review/Linear and other product work honestly; do not mark those todos done.
 
-The remaining legacy `pi/extensions`, `pi/themes` and their tests have a separate
-retirement branch. It is **not landable** before the existing seven-day AND
+This is the distinct #0069.1 prepared retirement branch: legacy `pi/extensions`,
+`pi/themes` and their tests moved to `archive/pi/` with a recovery index. Preparation
+is not adoption; it is **not landable** before the existing seven-day AND
 five-normal-session/two-project-per-active-OS gate plus explicit approval. Tests
 and preview sessions do not count as ordinary-use soak. The three approved helper
 archives are already separate; their approval does not waive the general gate.
