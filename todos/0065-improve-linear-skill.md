@@ -10,6 +10,13 @@ blocked-by: []
 blocks: []
 ---
 
+## Scope clarification (2026-11-15)
+
+This generic shared-runtime redesign remains OPEN. Archiving/excluding Linear
+from the retained Pi surface does not cancel Claude/Codex/shared skill product
+work or authorize source deletion/bootstrap changes described below. No playbooks,
+retirement or redesign criteria are declared complete by the Pi migration.
+
 ## Context
 
 The existing `linear` skill contains broad, monolithic guidance, while

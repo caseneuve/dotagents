@@ -1,6 +1,6 @@
 ---
 title: harden agent-channel relay daemon operations
-status: open
+status: closed
 priority: medium
 type: feature
 labels: [pi, relay, follow-up]
@@ -9,6 +9,23 @@ parent: null
 blocked-by: [0027.1]
 blocks: []
 ---
+
+
+## Closed: approved archive/superseded scope (2026-11-15)
+
+This planned work on the retired agent-channel/comms system is intentionally not completed or
+newly validated by the migration. Approved archive disposition cancels this
+remaining implementation/validation plan; closure is NOT a claim that its
+features shipped, defects were fixed, or acceptance criteria passed.
+
+Sources, referenced history and scoped unfinished artifacts are preserved.
+Evidence: `~/.cache/pi-migration/status.md`,
+`evidence/archive-lead-verification.md` and
+`archives/retired-experiments-20261115T130304Z/REPORT.md` under the same migration
+root. Archive-copy verification is not physical retirement, completed soak or
+permission to remove old worktrees. Broader adoption/removal remains #0046/#0047.
+
+## Historical uncompleted plan and criteria (retained unchecked)
 
 ## Context
 
