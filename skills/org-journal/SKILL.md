@@ -13,8 +13,8 @@ Resolve helper paths relative to this SKILL.md, not the caller's working
 directory. Requirements: Babashka and Emacs with Org. `ORG_JOURNAL_HOME`
 overrides the metadata helper's journal root; the index helper uses
 `~/org/agent-journal/` unless its `shared-journal-base-dir` is explicitly set.
-For Pi, invoke metadata with `ORG_JOURNAL_AGENT=pi`; other runtimes may set
-their own identity explicitly. This avoids relying on the installation path.
+Metadata defaults to agent `pi`; `ORG_JOURNAL_AGENT` can override it explicitly.
+Identity does not depend on the installation path.
 
 ## Process
 
@@ -29,7 +29,7 @@ their own identity explicitly. This avoids relying on the installation path.
 2. If `:last-entry` is non-nil, read it first for prior state and any unfinished next steps.
 
 3. Determine `:LLM_CATEGORY:` (`feature|bug|refactor|chore`) and `FILETAGS`.
-   Always include `:agent-journal:`, the agent tag (for example `:codex:`), and the project name.
+   Always include `:agent-journal:`, the agent tag (normally `:pi:`), and the project name.
 
 4. Write the entry to `:path`, then rebuild the shared index:
    ```bash

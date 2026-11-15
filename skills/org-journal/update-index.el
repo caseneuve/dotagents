@@ -1,10 +1,10 @@
 ;; update-index.el — Rebuild the shared agent journal index from journal entries
 ;;
 ;; Batch usage (from shell / agent):
-;;   emacs --batch -l ~/.agents/skills/org-journal/update-index.el -f shared-journal-update-index
+;;   emacs --batch -Q -l <resolved-skill-directory>/update-index.el
 ;;
 ;; Interactive usage (from Emacs):
-;;   (load "~/.agents/skills/org-journal/update-index.el")
+;;   (load "<resolved-skill-directory>/update-index.el")
 ;;   M-x shared-journal-update-index
 
 (defvar shared-journal-base-dir

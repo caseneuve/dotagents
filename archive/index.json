@@ -1,0 +1,657 @@
+{
+  "source_ref": "7a592f9c9290b6f670eda23662da2f52f60187bc",
+  "scope": "Approved Pi-only layout and obsolete Claude/Agents/bootstrap resources; excludes soak-gated Pi implementations/themes.",
+  "files": [
+    {
+      "original": "AGENTS.md",
+      "mode": "100644",
+      "blob": "22a83e4f2146de4e6e8a2e14eb3f2b87f4c8e1d0",
+      "replacement": "AGENTS.md",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/AGENTS.original.md"
+    },
+    {
+      "original": "Justfile",
+      "mode": "100644",
+      "blob": "9136d8b737996c283118504825c4a0d088237788",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/Justfile"
+    },
+    {
+      "original": "README.md",
+      "mode": "100644",
+      "blob": "8913702df151178354a6231e82703244ed40c32b",
+      "replacement": "README.md",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/README.md"
+    },
+    {
+      "original": "agents/AGENTS.md",
+      "mode": "100644",
+      "blob": "aa5cad541579621b11b13dfc7017c74120c3789c",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/AGENTS.original.md"
+    },
+    {
+      "original": "agents/skills/README.md",
+      "mode": "100644",
+      "blob": "5d907c1463de2800ac09c60f1409e90b472f7864",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/README.md"
+    },
+    {
+      "original": "agents/skills/add-todo/SKILL.md",
+      "mode": "100644",
+      "blob": "0fc3f4af01bd7658f8538b3aa8b31639ca6272ed",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/add-todo/SKILL.md"
+    },
+    {
+      "original": "agents/skills/cicero/SKILL.md",
+      "mode": "100644",
+      "blob": "ce15302404f7c13dcab57b0da24d59f352f7b7e8",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/cicero/SKILL.md"
+    },
+    {
+      "original": "agents/skills/code-review/SKILL.md",
+      "mode": "100644",
+      "blob": "9afd880e2c9f9da8eb0244f09653c2d7a8d2d7f7",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/code-review/SKILL.md"
+    },
+    {
+      "original": "agents/skills/code-review/TEAM_MODE.md",
+      "mode": "100644",
+      "blob": "2cda0937d67568d5a1645e59d3b2712145caf039",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/code-review/TEAM_MODE.md"
+    },
+    {
+      "original": "agents/skills/journal/SKILL.md",
+      "mode": "100644",
+      "blob": "06c79edd7ab258930348e40da658eceee070950d",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/journal/SKILL.md"
+    },
+    {
+      "original": "agents/skills/org-journal/SKILL.md",
+      "mode": "100644",
+      "blob": "071f49fbd609f9c253b552158b60327f416cc666",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/org-journal/SKILL.md"
+    },
+    {
+      "original": "agents/skills/pk-tmux/SKILL.md",
+      "mode": "100644",
+      "blob": "27c66b13ad04d3a63f2409c44c5efbb551e78941",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/pk-tmux/SKILL.md"
+    },
+    {
+      "original": "agents/skills/project-init/SKILL.md",
+      "mode": "100644",
+      "blob": "2116fa5ce18ab459c08da64835a926930bf6633b",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/project-init/SKILL.md"
+    },
+    {
+      "original": "agents/skills/project-init/rules/ui-iteration.md",
+      "mode": "100644",
+      "blob": "47503f4a7f950b74a86361f5e68d83f46a644960",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/project-init/rules/ui-iteration.md"
+    },
+    {
+      "original": "agents/skills/sandbox/SKILL.md",
+      "mode": "100644",
+      "blob": "1a17b52d203ba01b151c69265241bfd3931c53c9",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/sandbox/SKILL.md"
+    },
+    {
+      "original": "agents/skills/self-reflect/SKILL.md",
+      "mode": "100644",
+      "blob": "56dd623072d22d0a68c6da993a93edd8bf0921b7",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/agents/skills/self-reflect/SKILL.md"
+    },
+    {
+      "original": "bb.edn",
+      "mode": "100644",
+      "blob": "5d48078f58dc1ea5faf184d1b7381aef107d374a",
+      "replacement": "bb.edn",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/bb.edn"
+    },
+    {
+      "original": "claude/CLAUDE.md",
+      "mode": "100644",
+      "blob": "dd1ac45f87a92c365318408e3b6283312be9db28",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/CLAUDE.original.md"
+    },
+    {
+      "original": "claude/hooks/smart-lint.sh",
+      "mode": "100755",
+      "blob": "ff71b9ce6543dcd659cdb3be66304429781b7ff5",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/hooks/smart-lint.sh"
+    },
+    {
+      "original": "claude/journal/.gitkeep",
+      "mode": "100644",
+      "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/journal/.gitkeep"
+    },
+    {
+      "original": "claude/skills/README.md",
+      "mode": "100644",
+      "blob": "3e6b56d5f82ad803cdccfb3d829c21255f0372be",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/README.md"
+    },
+    {
+      "original": "claude/skills/add-todo/SKILL.md",
+      "mode": "100644",
+      "blob": "19910c8707e1aceebfcc5e8f480f3e68f59c54fb",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/add-todo/SKILL.md"
+    },
+    {
+      "original": "claude/skills/code-review/SKILL.md",
+      "mode": "100644",
+      "blob": "0a8ac68571d853abfd590d23f4ab4dedb79af4bb",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/code-review/SKILL.md"
+    },
+    {
+      "original": "claude/skills/code-review/TEAM_MODE.md",
+      "mode": "100644",
+      "blob": "ae37932fbe8ddae55b9e9127de2769dc855ebc79",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/code-review/TEAM_MODE.md"
+    },
+    {
+      "original": "claude/skills/journal/SKILL.md",
+      "mode": "100644",
+      "blob": "5e84716add4972a2d21c17bc9c23a844fe4886a9",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/journal/SKILL.md"
+    },
+    {
+      "original": "claude/skills/org-journal/SKILL.md",
+      "mode": "100644",
+      "blob": "7b8ab7508a4cd093e18365f41c603ae78165d702",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/org-journal/SKILL.md"
+    },
+    {
+      "original": "claude/skills/pk-tmux/SKILL.md",
+      "mode": "100644",
+      "blob": "a8fde6e8355e94f80ad4fae67f2900bb0498a41c",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/pk-tmux/SKILL.md"
+    },
+    {
+      "original": "claude/skills/project-init/SKILL.md",
+      "mode": "100644",
+      "blob": "bce4757bd335ac16ff43e296b5efd6a9b6ec47ba",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/project-init/SKILL.md"
+    },
+    {
+      "original": "claude/skills/project-init/rules/ui-iteration.md",
+      "mode": "100644",
+      "blob": "47503f4a7f950b74a86361f5e68d83f46a644960",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/project-init/rules/ui-iteration.md"
+    },
+    {
+      "original": "claude/skills/sandbox/SKILL.md",
+      "mode": "100644",
+      "blob": "e703401e1988a3f5f223439857f653ed2aa1a7cb",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/sandbox/SKILL.md"
+    },
+    {
+      "original": "claude/skills/self-reflect/SKILL.md",
+      "mode": "100644",
+      "blob": "7f709c097d2394e907bb27cf529c373ae6092404",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/skills/self-reflect/SKILL.md"
+    },
+    {
+      "original": "claude/statusline-command.sh",
+      "mode": "100755",
+      "blob": "2884daf7d1931cd256f310a2d05af2c2e5aa4aba",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/claude/statusline-command.sh"
+    },
+    {
+      "original": "docs/bb-rewrite-plan.md",
+      "mode": "100644",
+      "blob": "eeb367b9cc22b83d0cf6b4c76931d9f463bb38da",
+      "replacement": null,
+      "disposition": "Historical extraction/bootstrap design; unfinished or superseded scope is not current setup guidance.",
+      "archive": "archive/legacy/docs/bb-rewrite-plan.md"
+    },
+    {
+      "original": "docs/pi-package-AGENTS.md",
+      "mode": "100644",
+      "blob": "c676c5f491834d878e67f127e0e3efd92322923a",
+      "replacement": null,
+      "disposition": "Historical extraction/bootstrap design; unfinished or superseded scope is not current setup guidance.",
+      "archive": "archive/legacy/docs/pi-package-AGENTS.md"
+    },
+    {
+      "original": "docs/pi-package-conventions.md",
+      "mode": "100644",
+      "blob": "4ab20070f6c46c979ba33164f2509e6ceb819a94",
+      "replacement": null,
+      "disposition": "Historical extraction/bootstrap design; unfinished or superseded scope is not current setup guidance.",
+      "archive": "archive/legacy/docs/pi-package-conventions.md"
+    },
+    {
+      "original": "pi/README.md",
+      "mode": "100644",
+      "blob": "ca882d368bf95f7232fac3a65bda716bc6d73da8",
+      "replacement": "pi/README.md",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/pi/README.md"
+    },
+    {
+      "original": "pi/justfile",
+      "mode": "100644",
+      "blob": "8197b751d26a61786782dc5ca69f4c166497d58e",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/pi/justfile"
+    },
+    {
+      "original": "pi/prompts/README.md",
+      "mode": "100644",
+      "blob": "3cf8c5549bac77f6257df66f2a902b9bd4c4ecf7",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/pi/prompts/README.md"
+    },
+    {
+      "original": "pi/prompts/ask-for-review.md",
+      "mode": "100644",
+      "blob": "926cb73561fee5273e76b89ca43d1d9e8b8a5b64",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/pi/prompts/ask-for-review.md"
+    },
+    {
+      "original": "pi/prompts/implement-todo.md",
+      "mode": "100644",
+      "blob": "f4ff35ef37d5250cccb23064607a271d506fb2e0",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/pi/prompts/implement-todo.md"
+    },
+    {
+      "original": "pi/todos/0001-agent-channel-presence-when-muted.md",
+      "mode": "100644",
+      "blob": "1aa6fb1c42192c87580adfa3e7c6bb268b0d24fd",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/pi/todos/0001-agent-channel-presence-when-muted.md"
+    },
+    {
+      "original": "scripts/bootstrap.clj",
+      "mode": "100644",
+      "blob": "3c92c42a8b8d31984e7417880385164387d9db49",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/scripts/bootstrap.clj"
+    },
+    {
+      "original": "settings-hooks.json",
+      "mode": "100644",
+      "blob": "fee86e93994f31e307fb071f0cdce9317a7557b8",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/settings-hooks.json"
+    },
+    {
+      "original": "settings-permissions.json",
+      "mode": "100644",
+      "blob": "5945404b92006011589c77a7ac62f20e7171f4fc",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/settings-permissions.json"
+    },
+    {
+      "original": "shared/relay/http.test.ts",
+      "mode": "100644",
+      "blob": "80c9f71713015b405e4ea642e146fb572f5f4685",
+      "replacement": null,
+      "disposition": "Unused historical relay; pi-agent-channel is retired/frozen, not a native dependency.",
+      "archive": "archive/legacy/shared/relay/http.test.ts"
+    },
+    {
+      "original": "shared/relay/main.ts",
+      "mode": "100755",
+      "blob": "5ae043ebcabb68ac317f03c109a808099367c3b6",
+      "replacement": null,
+      "disposition": "Unused historical relay; pi-agent-channel is retired/frozen, not a native dependency.",
+      "archive": "archive/legacy/shared/relay/main.ts"
+    },
+    {
+      "original": "shared/relay/server.ts",
+      "mode": "100644",
+      "blob": "a7e4fa502535d1e176dfbe3a62e3081f32c8524b",
+      "replacement": null,
+      "disposition": "Unused historical relay; pi-agent-channel is retired/frozen, not a native dependency.",
+      "archive": "archive/legacy/shared/relay/server.ts"
+    },
+    {
+      "original": "shared/relay/store.test.ts",
+      "mode": "100644",
+      "blob": "e267c93086bbef24f3a8f3c08302c6c3f33e1a32",
+      "replacement": null,
+      "disposition": "Unused historical relay; pi-agent-channel is retired/frozen, not a native dependency.",
+      "archive": "archive/legacy/shared/relay/store.test.ts"
+    },
+    {
+      "original": "shared/relay/store.ts",
+      "mode": "100644",
+      "blob": "a738a173656a6a2811c1331ca10f2705c6d0b82c",
+      "replacement": null,
+      "disposition": "Unused historical relay; pi-agent-channel is retired/frozen, not a native dependency.",
+      "archive": "archive/legacy/shared/relay/store.ts"
+    },
+    {
+      "original": "shared/skills/agent-comms/SKILL.md",
+      "mode": "100644",
+      "blob": "3d6558086f12ba6d5a3d9cf440822df8c43a0b5c",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/agent-comms/SKILL.md"
+    },
+    {
+      "original": "shared/skills/boundaries/SKILL.md",
+      "mode": "100644",
+      "blob": "b82221bd0da5d4a5a99a6775759cfc86ac7d180c",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/boundaries/SKILL.md"
+    },
+    {
+      "original": "shared/skills/code-review/detect-and-lint.sh",
+      "mode": "100755",
+      "blob": "14e37b1825a3a090b24977ba9b8615229071ab1e",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/code-review/detect-and-lint.sh"
+    },
+    {
+      "original": "shared/skills/code-review/review-file.sh",
+      "mode": "100755",
+      "blob": "2f9618ee77045c5ad8697053be957f2613f7dade",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/code-review/review-file.sh"
+    },
+    {
+      "original": "shared/skills/invariants/SKILL.md",
+      "mode": "100644",
+      "blob": "c30da447593ee2169c54cff784e5ea20a2686a3b",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/invariants/SKILL.md"
+    },
+    {
+      "original": "shared/skills/linear-todo/SKILL.md",
+      "mode": "100644",
+      "blob": "f00c38557b6eea9e913ec526e9ec4a6c0cea083b",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/linear-todo/SKILL.md"
+    },
+    {
+      "original": "shared/skills/linear/SKILL.md",
+      "mode": "100644",
+      "blob": "853678eccda5fe0be1b00484dc03fc71b1181b13",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/linear/SKILL.md"
+    },
+    {
+      "original": "shared/skills/pk-tmux/ag-tmux",
+      "mode": "100755",
+      "blob": "877f8c44eab909b88741c2a2b07d4e2b4fec107c",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/pk-tmux/ag-tmux"
+    },
+    {
+      "original": "shared/skills/pk-tmux/bb.edn",
+      "mode": "100644",
+      "blob": "d680b9b0e45455ee7e9ede88ce0f942c2653efa4",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/pk-tmux/bb.edn"
+    },
+    {
+      "original": "shared/skills/pk-tmux/src/tmux_agent/cli.clj",
+      "mode": "100755",
+      "blob": "b70bdf99624f9beb9b5fad1b50fe7fdf61d5a476",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/pk-tmux/src/tmux_agent/cli.clj"
+    },
+    {
+      "original": "shared/skills/sandbox/ag-sandbox",
+      "mode": "100755",
+      "blob": "eb4161bd0ccd5d59d67ba0ec0a20714e0e00b656",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/sandbox/ag-sandbox"
+    },
+    {
+      "original": "shared/skills/sandbox/src/sandbox/cli.clj",
+      "mode": "100755",
+      "blob": "a98c5a2f296ea84da8ce1f7a42125f7d935699de",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/sandbox/src/sandbox/cli.clj"
+    },
+    {
+      "original": "shared/skills/sandbox/src/sandbox/core.clj",
+      "mode": "100644",
+      "blob": "437d7e1f0a085b8e50d937ca3e8055172e9f0f06",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/sandbox/src/sandbox/core.clj"
+    },
+    {
+      "original": "shared/skills/sandbox/test/sandbox/core_test.clj",
+      "mode": "100644",
+      "blob": "4f8d951b96e8bab50f8c650b46f6ad3b188620af",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/sandbox/test/sandbox/core_test.clj"
+    },
+    {
+      "original": "shared/skills/testmap/SKILL.md",
+      "mode": "100644",
+      "blob": "2ecdbdc7aa7f46e6a3f0766ec3d8cd889280881e",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/SKILL.md"
+    },
+    {
+      "original": "shared/skills/testmap/languages/python.md",
+      "mode": "100644",
+      "blob": "d4e722c80b9e58820d5e95a74f4a9967b3c9a5ad",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/languages/python.md"
+    },
+    {
+      "original": "shared/skills/testmap/scripts/_common.py",
+      "mode": "100755",
+      "blob": "f6fd8e97948b8fd058a0cdfca906ac5899fd2d81",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/scripts/_common.py"
+    },
+    {
+      "original": "shared/skills/testmap/scripts/py_testmap.py",
+      "mode": "100755",
+      "blob": "a8d41e070499130c94cfcea835ab743522a369ab",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/scripts/py_testmap.py"
+    },
+    {
+      "original": "shared/skills/testmap/scripts/py_testtarget.py",
+      "mode": "100755",
+      "blob": "7e0a4f38e91c8902c89218f579d9e44125060afd",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/scripts/py_testtarget.py"
+    },
+    {
+      "original": "shared/skills/testmap/test/test_common.py",
+      "mode": "100644",
+      "blob": "38df3520c29a9ffeb6946ca23218caad943028b9",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/testmap/test/test_common.py"
+    },
+    {
+      "original": "shared/skills/ux-review/SKILL.md",
+      "mode": "100644",
+      "blob": "51b5d3aed66ff673fe05f0838e97421d1495fbc4",
+      "replacement": null,
+      "disposition": "Excluded skill/helper preserved inactive, including unfinished product work; not delivered by archival.",
+      "archive": "archive/legacy/shared/skills/ux-review/SKILL.md"
+    },
+    {
+      "original": "test/Containerfile",
+      "mode": "100644",
+      "blob": "6c32e4b635e161006870b743799f4809e9de1f09",
+      "replacement": "test/Containerfile",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/test/Containerfile"
+    },
+    {
+      "original": "test/e2e/cases.edn",
+      "mode": "100644",
+      "blob": "b7f8d21c802780609a783f0665de3d3dc786ae5d",
+      "replacement": "test/native_resources_test.py",
+      "disposition": "Mixed bootstrap/tmux E2E retired; retained todo behaviors tested via actual skill-local helper.",
+      "archive": "archive/legacy/test/e2e/cases.edn"
+    },
+    {
+      "original": "test/e2e/runner.clj",
+      "mode": "100644",
+      "blob": "b200e8a9cc8b168aba57849fa3af538f0eb7ebf6",
+      "replacement": "test/native_resources_test.py",
+      "disposition": "Mixed bootstrap/tmux E2E retired; retained todo behaviors tested via actual skill-local helper.",
+      "archive": "archive/legacy/test/e2e/runner.clj"
+    },
+    {
+      "original": "test/fixtures/claude-settings.json",
+      "mode": "100644",
+      "blob": "aa69405d5bab77378c5e2ba091aba1e58dbeb50a",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/test/fixtures/claude-settings.json"
+    },
+    {
+      "original": "test/unit/bootstrap_pure_test.clj",
+      "mode": "100644",
+      "blob": "77a9fc1c84ad63ea6bc84bf34b87eec900b8cb4e",
+      "replacement": null,
+      "disposition": "Obsolete runtime/workflow, preserved inactive; no maintained replacement.",
+      "archive": "archive/legacy/test/unit/bootstrap_pure_test.clj"
+    },
+    {
+      "original": "test/unit/runner.clj",
+      "mode": "100644",
+      "blob": "c5798cfba6206c6ff147dd91c1226b5c8467adae",
+      "replacement": "test/unit/runner.clj",
+      "disposition": "Historical guidance/runner preserved; same root path replaced with Pi-only current contract.",
+      "archive": "archive/legacy/test/unit/runner.clj"
+    },
+    {
+      "original": "test/fixtures/todos/0001-labeled.md",
+      "mode": "100644",
+      "blob": "a7cf8664c62595e755ff9fdd92e646aa981800f5",
+      "replacement": "test/native_resources_test.py",
+      "disposition": "Historical mixed-suite fixture; retained todo behavior now uses the actual helper to create inputs.",
+      "archive": "archive/legacy/test/fixtures/todos/0001-labeled.md"
+    },
+    {
+      "original": "test/fixtures/todos/0002-no-labels.md",
+      "mode": "100644",
+      "blob": "46d436f121ee391544941f645bb1e952017a8721",
+      "replacement": "test/native_resources_test.py",
+      "disposition": "Historical mixed-suite fixture; retained todo behavior now uses the actual helper to create inputs.",
+      "archive": "archive/legacy/test/fixtures/todos/0002-no-labels.md"
+    },
+    {
+      "original": "pi/extensions/bookmark.ts",
+      "archive": "archive/pi/extensions/bookmark.ts",
+      "blob": "2c5545ab638e9bccc374799b8f1fce5d3865d73d",
+      "mode": "100644",
+      "source_ref": "3751a530ac8943478b573fbdcb60f6874fc7032b",
+      "replacement": null,
+      "disposition": "Already approved/archive #0047.1; UNCHANGED by #0069. Retired picker/label utility; no exact native UX equivalence claim."
+    },
+    {
+      "original": "pi/extensions/herdr-pi-session-name.ts",
+      "archive": "archive/pi/extensions/herdr-pi-session-name.ts",
+      "blob": "7cb02d40890e58c540d5a7a3e3f0e3a54afd1b3a",
+      "mode": "100644",
+      "source_ref": "3751a530ac8943478b573fbdcb60f6874fc7032b",
+      "replacement": null,
+      "disposition": "Already approved/archive #0047.1; UNCHANGED by #0069. Retired legacy companion; external managed Herdr integration remains outside ownership."
+    },
+    {
+      "original": "pi/extensions/bedrock-empty-response-mitigation.ts",
+      "archive": "archive/pi/extensions/bedrock-empty-response-mitigation.ts",
+      "blob": "eb4b34ef51005faf6b6f6a8a032619e86b06f3a2",
+      "mode": "100644",
+      "source_ref": "3751a530ac8943478b573fbdcb60f6874fc7032b",
+      "replacement": null,
+      "disposition": "Already approved/archive #0047.1; UNCHANGED by #0069. Retired opt-in workaround; no native exact-signature recovery claim."
+    }
+  ]
+}

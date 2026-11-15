@@ -7,15 +7,14 @@
             [clojure.string :as str]
             [clojure.test :as t :refer [deftest is testing]]))
 
-(def repo-root (fs/canonicalize (fs/cwd)))
-(def helper-path (fs/path repo-root "shared/skills/callgraph/scripts/clj_callers.clj"))
-(def fixture-root (fs/path repo-root "shared/skills/callgraph/test/fixtures/project"))
+(def skill-root (fs/canonicalize (fs/parent (fs/parent *file*))))
+(def repo-root skill-root)
+(def helper-path (fs/path skill-root "scripts/clj_callers.clj"))
+(def fixture-root (fs/path skill-root "test/fixtures/project"))
 (def expected-contract-path
-  (fs/path repo-root
-           "shared/skills/callgraph/test/fixtures/expected/minimal.edn"))
+  (fs/path skill-root "test/fixtures/expected/minimal.edn"))
 (def expected-populated-contract-path
-  (fs/path repo-root
-           "shared/skills/callgraph/test/fixtures/expected/populated.edn"))
+  (fs/path skill-root "test/fixtures/expected/populated.edn"))
 
 (def helper-loaded?
   (delay (load-file (str helper-path))))

@@ -13,13 +13,14 @@ Use this skill when the user wants to create, split, or update work items stored
 
 Resolve `ag-todo` beside this SKILL.md and invoke it by absolute path; no
 bootstrap or PATH installation is required. Run it from the target project
-(or pass `--dir`). The examples below abbreviate that resolved path as `ag-todo`.
+(or pass `--dir`). Set `TODO` to that resolved absolute helper path first:
 
-```
-ag-todo next-id [--dir DIR] [PARENT]
-ag-todo new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]
-ag-todo list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]
-ag-todo status ID STATUS [--dir DIR]
+```bash
+TODO="<resolved-add-todo-directory>/ag-todo"
+"$TODO" next-id [--dir DIR] [PARENT]
+"$TODO" new --type TYPE --slug SLUG [--priority P] [--labels CSV] [--parent ID] [--dir DIR]
+"$TODO" list [--status S] [--type T] [--priority P] [--label L] [--parent ID] [--dir DIR]
+"$TODO" status ID STATUS [--dir DIR]
 ```
 
 All commands print parseable `key=value` output on stdout.
@@ -80,17 +81,17 @@ When the user wants to resume work rather than create a fresh item:
    bb <resolved-org-journal-skill-directory>/new-entry.bb
    ```
    If the returned map includes `:last-entry`, read it for the prior session's state and next steps.
-2. List open items with `ag-todo list --status open`.
+2. List open items with `"$TODO" list --status open` (using the resolved helper above).
 3. Pick the highest-priority unblocked item.
-4. Move it to `in_progress` with `ag-todo status`.
-5. If the project uses isolated worktrees, start the `sandbox` workflow for that item.
+4. Move it to `in_progress` with `"$TODO" status ID in_progress`.
+5. If the project requires isolation, create its task branch/worktree before implementation.
 
 ## Workflow
 
 0. If `/add-todo` invocation is followed by extra commentary, confirm intent before acting beyond todo management (for example: "todo-only" vs "create todo, then implement").
 1. Assess size first. Split work that spans multiple days, many unrelated files, or vague acceptance criteria.
 2. Gather the title, type, priority, optional labels (for example `MVP`, `NEXT_VER`), and optional parent item. If labels are not provided, default to none.
-3. Create the item with `ag-todo new` (include `--labels` when provided).
+3. Create the item with `"$TODO" new` (include `--labels` when provided).
 4. Edit the generated file to fill in context, acceptance criteria, affected files, and the E2E spec when required.
 5. Show the draft to the user before treating it as finalized.
 

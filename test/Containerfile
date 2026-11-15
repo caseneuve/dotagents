@@ -1,12 +1,16 @@
-FROM docker.io/babashka/babashka
+FROM docker.io/babashka/babashka AS helpers
+
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+      git python3 emacs-nox default-jdk-headless ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM helpers AS analyzer
 
 ARG CLJ_KONDO_VERSION=2026.01.19
 ARG CLJ_KONDO_AMD64_SHA256=4a4e7bde622b0bd8c4fd368d3a8584690faa007f3ce72255ae63d4090f0e7c92
 ARG CLJ_KONDO_AARCH64_SHA256=49b96cfe3d27528b50074226d10b3327412345e5b58d838157177bba45243f3a
 
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-      tmux git python3 emacs-nox default-jdk-headless ca-certificates curl unzip \
-    && arch="$(dpkg --print-architecture)" \
+RUN arch="$(dpkg --print-architecture)" \
     && case "$arch" in \
          amd64) kondo_arch=linux-amd64; kondo_sha="$CLJ_KONDO_AMD64_SHA256" ;; \
          arm64) kondo_arch=linux-aarch64; kondo_sha="$CLJ_KONDO_AARCH64_SHA256" ;; \
@@ -19,11 +23,4 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     && unzip -q "/tmp/$kondo_zip" -d /usr/local/bin \
     && chmod 0755 /usr/local/bin/clj-kondo \
     && clj-kondo --version \
-    && rm -f "/tmp/$kondo_zip" \
-    && rm -rf /var/lib/apt/lists/*
-# Pin dep cache locations so tests that override HOME still find them
-ENV DEPS_CLJ_TOOLS_DIR=/root/.deps.clj
-ENV GITLIBS=/root/.gitlibs
-# Pre-resolve git deps so E2E runs work with --network none
-COPY bb.edn /work/bb.edn
-RUN cd /work && bb -e nil
+    && rm -f "/tmp/$kondo_zip"

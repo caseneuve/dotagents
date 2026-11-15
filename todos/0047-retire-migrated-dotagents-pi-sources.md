@@ -10,21 +10,26 @@ blocked-by: [0046]
 blocks: []
 ---
 
-## Current preservation policy (2026-11-15)
+## Current preservation policy (2026-11-15, Pi-only scope)
 
-The deletion checklist below is historical and superseded. #0046.1 preserves ALL
-legacy extension/theme/experiment/skill directories and old worktrees, excluding
-them through the native manifest only. Canonical independent `pi/prompts` must
-not be treated as migrated duplicates. Workbench duplicate skills remain untouched
-until the native handoff passes and lead coordinates a separate follow-up.
+The deletion checklist below is historical and superseded. #0069 implements the
+new explicitly approved root `skills/` + `prompts/` native-only layout and archives
+obsolete Claude/Agents/bootstrap/unused shared resources. All five canonical
+skills/helpers and five prompts stay active, not migrated duplicates. Workbench
+skill duplicates were already removed during the earlier reviewed ownership handoff.
 
-No source retirement is authorized by this tranche. After explicit live-setup
-approval and recorded adoption, retain the minimum seven-day/five-session/two-project
-soak per actively used OS, inventory preserved history/unfinished work, and obtain
-separate archive/removal approval with exact source/canonical refs.
-Archive candidates include agent-channel/comms, Playwright, Tree-sitter and
-subagent experiments; do not modernize them or assume an obsolete source path
-must remain active. Verification uses native Pi installation, not bootstrap.
+Remaining `pi/extensions/`, `pi/themes/` and their historical `test/pi/` sources
+are a DISTINCT prepared archive branch/commit, not part of landable #0069.
+That branch needs its own exact tracked-file blob/mode/owner inventory and review.
+The seven-calendar-day AND five-normal-session/two-project-per-active-OS gate is
+NOT waived. Cutover was 2026-11-15T16:20:48Z; earliest calendar eligibility is
+2026-11-22T16:20:48Z, with actual use evidence and explicit scope approval still
+required. Three approved #0047.1 helper archives remain unchanged.
+
+Do not mark this general retirement item done for source layout cleanup, a
+preview or archive preparation. Preserve experiments and unfinished skill/product
+work without false completion claims. Verification uses native Pi packages and
+real helpers; bootstrap is retired. Current recovery policy is archive/README.md.
 
 ## Historical proposal (superseded; do not execute)
 

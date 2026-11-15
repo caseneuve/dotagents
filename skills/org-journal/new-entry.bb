@@ -11,18 +11,8 @@
          '[babashka.process :as p]
          '[clojure.string :as str])
 
-(defn script-path []
-  (or (System/getProperty "babashka.file") *file* ""))
-
 (defn agent-name []
-  (or (System/getenv "ORG_JOURNAL_AGENT")
-      (let [path (script-path)]
-        (cond
-          (or (str/includes? path "/.claude/")
-              (str/includes? path "/claude/")) "claude"
-          (or (str/includes? path "/.agents/")
-              (str/includes? path "/agents/")) "codex"
-          :else "unknown"))))
+  (or (System/getenv "ORG_JOURNAL_AGENT") "pi"))
 
 (defn journal-dir []
   (or (System/getenv "ORG_JOURNAL_HOME")

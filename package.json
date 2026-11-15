@@ -2,23 +2,23 @@
   "name": "dotagents",
   "private": true,
   "type": "module",
-  "description": "Independent cross-runtime skills and Pi prompt templates",
+  "description": "Five independent Pi skills and five prompt templates",
   "pi": {
     "extensions": [],
     "themes": [],
     "skills": [
-      "shared/skills/callgraph",
-      "shared/skills/dataflow",
-      "shared/skills/add-todo",
-      "shared/skills/org-journal",
-      "shared/skills/to-skill"
+      "skills/callgraph",
+      "skills/dataflow",
+      "skills/add-todo",
+      "skills/org-journal",
+      "skills/to-skill"
     ],
     "prompts": [
-      "pi/prompts/ans.md",
-      "pi/prompts/be-concise.md",
-      "pi/prompts/handoff.md",
-      "pi/prompts/speak-human.md",
-      "pi/prompts/style.md"
+      "prompts/ans.md",
+      "prompts/be-concise.md",
+      "prompts/handoff.md",
+      "prompts/speak-human.md",
+      "prompts/style.md"
     ]
   }
 }

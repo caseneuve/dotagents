@@ -1,144 +1,132 @@
 # dotagents
 
-![vibe: slopped](.github/badges/vibe-slopped.svg)
-
-*Disclaimer:* WIP. Ideas and guidelines are mine, implementations by the clankers. Text
-below is LLM-generated.
-
----
-
-Personal agent configuration. The repo keeps the original Claude-oriented setup under `claude/`, a Codex-friendly port under `agents/`, shared helper implementations under `shared/`, and independent Pi prompts plus preserved legacy sources under `pi/`.
-
-## Contents
+Five independent skills and five prompt templates for [Pi](https://pi.dev/).
+The root `package.json` is the explicit native resource allowlist: **no
+extensions, themes, installer, lifecycle scripts, PATH shims or parallel runtime
+installation**. Typesafe remains a separately owned skill; this package does not
+replace or configure it.
 
 ```text
-claude/   # Original ~/.claude tree
-agents/   # Ported ~/.agents tree
-pi/       # Pi extensions and themes
-shared/   # Shared hooks and helper scripts used by both
-scripts/  # Repo-local Babashka scripts (e.g. bootstrap)
-test/     # Unit and E2E tests
+skills/   # canonical SKILL.md files, bundled helpers, tests and fixtures
+prompts/  # canonical five Markdown prompt templates
+test/     # layout, native loading and helper regression checks
+archive/  # inactive historical sources and exact recovery index
+pi/       # retired guidance; excluded legacy sources pending the separate soak gate
+todos/    # work history, including unfinished and transferred work
 ```
 
-The native Pi package exposes only five independent skills and five prompts. Legacy TUI/experiment/theme sources remain preserved but excluded; retained extensions and themes live in separate packages. See [pi/README.md](pi/README.md) for scope, filtering and archive gates.
+## Native installation and selection
 
-The `agents/` tree includes:
+Review the source, then choose a scope (replace the example path):
 
-- `AGENTS.md`
-- `hooks/smart-lint.sh`
-- `skills/` with ports of all repo skills
-
-The `shared/` tree holds common skills, helper scripts, and hooks so supported agent runtimes use one implementation. Claude/Agents retain their existing skill selection. Native Pi exposure is a separate explicit allowlist; archived/dropped resources are not implicitly exposed.
-
-## Installation
-
-Run via the Babashka task:
-
-```bash
-bb bootstrap
+```sh
+pi install /absolute/path/to/dotagents       # personal
+pi install -l /absolute/path/to/dotagents    # current project
 ```
 
-Shortcut alias:
+Local packages load in place; update the checkout deliberately. Project settings
+and resources require Pi project trust; trust is not an OS sandbox. Do not commit
+someone else's absolute personal paths as team configuration.
 
-```bash
-bb boot
+Use `pi list` to inspect declarations and `pi config` to select resources (Tab
+switches scope). `/reload` refreshes an intentionally changed resource selection;
+installation does not require restarting another user's running Pi. `pi remove
+<source>` removes a declaration. `pi update --extensions` reconciles packages;
+`pi update` without a target updates Pi itself. This repository never writes user
+settings or performs a live cutover automatically.
+
+Example native filter in your chosen settings scope:
+
+```json
+{
+  "packages": [{
+    "source": "/absolute/path/to/dotagents",
+    "skills": ["skills/add-todo"],
+    "prompts": ["prompts/ans.md"]
+  }]
+}
 ```
 
-Modes:
+Omitted resource types use the manifest; `[]` disables that type. Filters narrow
+the allowlist and cannot expose archive/legacy resources. Enable only what you
+want. Remove obsolete broad loader declarations deliberately, after reviewing
+ownership and preserving local work; do not add compatibility links or install
+anything into `~/.agents` or a bin directory. Existing external installations and
+unrelated skills/auth/editor/model preferences are not managed here.
 
-- `bb bootstrap claude` links the Claude setup into `~/.claude/` and merges Claude settings fragments into `~/.claude/settings.json`
-- `bb bootstrap agents` installs the agent setup into `~/.agents/` and links `~/.codex/AGENTS.md`
-- `bb bootstrap` defaults to `all` (Claude + Agents only); `pi` is not a supported mode
-- all modes accept `--force` to overwrite existing non-symlink files
-- all modes accept `--dry-run` to print planned changes without writing
+## Resources and helpers
 
-Behavior:
+| Skill | Bundled helpers / prerequisites |
+| --- | --- |
+| [callgraph](skills/callgraph/SKILL.md) | Python 3; Clojure/Babashka analyzer needs Babashka and clj-kondo **v2026.01.19** |
+| [dataflow](skills/dataflow/SKILL.md) | Python 3 static type/purity evidence |
+| [add-todo](skills/add-todo/SKILL.md) | Skill-local `ag-todo`, Babashka; invoked by agents via absolute path, not PATH |
+| [org-journal](skills/org-journal/SKILL.md) | `new-entry.bb`, `update-index.el`; Babashka and Emacs/Org |
+| [to-skill](skills/to-skill/SKILL.md) | Instructions for distilling verified lessons |
 
-- preserve directory structure where runtime install trees are still used
-- skip already-correct links
-- replace stale symlinks
-- avoid overwriting regular files unless forced
-- never read or write Pi settings, including in default/all mode
+Resolve each helper **beside the discovered SKILL.md**, not relative to your cwd,
+HOME or a fixed Git checkout. Run against the target project. For example, after
+resolving the skill directories:
 
-Install independent Pi resources natively, without bootstrap:
-
-```bash
-pi install /absolute/path/to/dotagents      # personal
-pi install -l /absolute/path/to/dotagents   # current project; requires trust
+```sh
+"<resolved-add-todo-directory>/ag-todo" list --status open
+bb "<resolved-org-journal-directory>/new-entry.bb" --mkdir project-name
+emacs --batch -Q -l "<resolved-org-journal-directory>/update-index.el"
 ```
 
-No live configuration migration or active-root cutover is performed automatically.
+Journal metadata defaults to agent `pi`; `ORG_JOURNAL_AGENT` overrides identity.
+Entries/index default to `~/org/agent-journal/`. `ORG_JOURNAL_HOME` overrides only
+the metadata helper; set the Emacs helper's `shared-journal-base-dir` explicitly
+if using a different index root. Never point tests at the real journal.
+
+Prompts: [ans](prompts/ans.md), [be-concise](prompts/be-concise.md),
+[handoff](prompts/handoff.md), [speak-human](prompts/speak-human.md),
+[style](prompts/style.md). Invoke them as `/ans`, `/handoff`, etc. Loading tests
+are not a substitute for the still-open human prompt-content audit.
 
 ## Testing
 
-Tests run in podman so they do not touch the host environment.
+Run from this checkout. Tests mount source read-only and use private HOME and
+non-Git project/copy paths outside `/home`, without credentials or network:
 
-```bash
-bb test
-bb test:unit
-bb test:callgraph
-bb test:e2e
-bb test:native
+```sh
+bb build:test-image
+bb test:unit       # todo core, Python callgraph and dataflow
+bb test:native     # exact 5+5 layout, archive blobs/modes, actual portable helpers
+PI_PACKAGE_DIR=/path/to/node_modules/@earendil-works/pi-coding-agent bb test:pi
+
+bb build:callgraph-image
+bb test:callgraph # pinned analyzer-backed Clojure suite
+bb test           # unit + native/helpers + pinned Clojure suite
 ```
 
-`bb test:callgraph` runs the deterministic Clojure/Babashka callgraph suite.
-Locally it runs inside the pinned Podman test image; CI uses the same skill-local
-runner directly after checking for `clj-kondo v2026.01.19`.
+`test:pi` uses the installed Pi SDK resource loader and prompt expansion, including
+exact positive filters and empty selections, from a non-Git package copy. It
+mounts that installation's `node_modules` read-only in a Node 22 container; no npm
+or Pi installation/lifecycle runs. No AgentSession, auth or provider API calls.
+It is separate from `bb test` because Pi is externally installed, not a root
+dependency. `bb test:ci` runs all suites directly only in an already isolated CI
+with tools, private HOME and `PI_PACKAGE_DIR` supplied; there are no active CI
+workflows in this repository.
 
-The native resource package needs no npm/TypeScript toolchain. Legacy extension
-sources/tests are retained as preservation material, not maintained by root Pi
-upgrade tasks. `bb test:native` validates the allowlist and actual portable
-helpers; rebuild the test image first after dependency changes.
+The inherited Clojure analyzer contract remains pinned: another clj-kondo version
+does **not** satisfy it. If the pinned download is unavailable, helper/native
+checks can still run, but report the analyzer/aggregate gate as blocked rather
+than repinning it or claiming all tests passed. No npm/TypeScript tooling is
+needed for this resource-only package.
 
-E2E tests live in `test/e2e/cases.edn` and use the declarative `end2edn` authoring format:
+## Ownership and historical recovery
 
-- suites use `:cases`, not legacy `:tests`
-- scenarios use `:when` / `:then`
-- prefer `:given` / `:cleanup` fixtures over shell-heavy setup/teardown
-- use `:given :vars` placeholders like `{home}` and `{work}` to keep paths readable
-- prefer built-in `:fs-layout` assertions for filesystem and JSON layout checks
+Retained extensions belong to `pi-conversation-tools`, `pi-workbench`,
+`pi-runtime-ui`, `pi-usage` and `pi-emacs-bridge`; themes belong to
+`pi-dotagents-resources`. Select those native packages separately. None of the
+old dotagents implementations should be loaded alongside them.
 
-When adding or refactoring E2E coverage, follow the existing style in `test/e2e/cases.edn`: keep repeated roots in vars, push setup into fixtures, and avoid custom assertions unless the built-in API is genuinely insufficient.
-
-## Port Assessment
-
-The Claude skills were mostly portable because their real behavior lives in shell and Babashka helper scripts. The main incompatibilities were:
-
-- Claude-specific frontmatter fields such as `triggers` and `allowedPrompts`
-- slash-command phrasing like `/sandbox` and `/code-review`
-- references to Claude-specific APIs such as `AskUserQuestion`, `SendMessage`, and team control commands
-- hard-coded paths under `~/.claude`, `.claude`, `/tmp/claude-*`, and the old per-agent journal roots such as `~/org/claude`
-- the `project-init` skill targeting `CLAUDE.md` instead of `AGENTS.md`
-
-The `agents/` port removes or rewrites those assumptions while preserving the existing helper scripts and workflows. The shared org-journal helpers now write to `~/org/agent-journal/` for every agent and record the writing agent in each entry.
-
-To reduce maintenance overhead, the helper scripts and hooks now live once under `shared/` and the bootstrap assembles the final `~/.claude` and `~/.agents` layouts from platform-specific docs plus shared executables.
-
-## Skills
-
-The bootstrap installs each runtime's specific skills from its own tree, and
-shared skills from `shared/skills/` into both supported runtimes.
-
-| Skill | Source | Claude tree | Agents tree |
-| ----- | ------ | ----------- | ----------- |
-| add-todo | Runtime-specific ([Claude](claude/skills/add-todo/SKILL.md), [Agents](agents/skills/add-todo/SKILL.md)) | Yes | Yes |
-| agent-comms | [Shared](shared/skills/agent-comms/SKILL.md) | Yes | Yes |
-| boundaries | [Shared](shared/skills/boundaries/SKILL.md) | Yes | Yes |
-| callgraph | [Shared](shared/skills/callgraph/SKILL.md) | Yes | Yes |
-| cicero | [Agents](agents/skills/cicero/SKILL.md) | No | Yes |
-| code-review | Runtime-specific ([Claude](claude/skills/code-review/SKILL.md), [Agents](agents/skills/code-review/SKILL.md)) | Yes | Yes |
-| dataflow | [Shared](shared/skills/dataflow/SKILL.md) | Yes | Yes |
-| invariants | [Shared](shared/skills/invariants/SKILL.md) | Yes | Yes |
-| journal | Runtime-specific ([Claude](claude/skills/journal/SKILL.md), [Agents](agents/skills/journal/SKILL.md)) | Yes | Yes |
-| linear | [Shared](shared/skills/linear/SKILL.md) | Yes | Yes |
-| linear-todo | [Shared](shared/skills/linear-todo/SKILL.md) | Yes | Yes |
-| org-journal | Runtime-specific ([Claude](claude/skills/org-journal/SKILL.md), [Agents](agents/skills/org-journal/SKILL.md)) | Yes | Yes |
-| pk-tmux | Runtime-specific ([Claude](claude/skills/pk-tmux/SKILL.md), [Agents](agents/skills/pk-tmux/SKILL.md)) | Yes | Yes |
-| project-init | Runtime-specific ([Claude](claude/skills/project-init/SKILL.md), [Agents](agents/skills/project-init/SKILL.md)) | Yes | Yes |
-| sandbox | Runtime-specific ([Claude](claude/skills/sandbox/SKILL.md), [Agents](agents/skills/sandbox/SKILL.md)) | Yes | Yes |
-| self-reflect | Runtime-specific ([Claude](claude/skills/self-reflect/SKILL.md), [Agents](agents/skills/self-reflect/SKILL.md)) | Yes | Yes |
-| testmap | [Shared](shared/skills/testmap/SKILL.md) | Yes | Yes |
-| to-skill | [Shared](shared/skills/to-skill/SKILL.md) | Yes | Yes |
-| ux-review | [Shared](shared/skills/ux-review/SKILL.md) | Yes | Yes |
-
-See [claude/skills/README.md](claude/skills/README.md) and [agents/skills/README.md](agents/skills/README.md).
+[Archive index and recovery](archive/README.md) preserve obsolete Claude/Agents,
+bootstrap and unused shared resources, including unfinished skills/product work.
+Remaining excluded `pi/extensions`, `pi/themes` and their historical tests have
+**not** been retired on this branch. Their reversible moves are prepared on a
+separate reviewed branch and remain gated by seven calendar days AND five normal
+sessions across two projects per active OS, then explicit exact-scope approval.
+The three previously approved helper archives are unchanged. Do not infer soak
+completion, publication or live handoff from this source simplification.

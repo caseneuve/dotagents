@@ -1,0 +1,120 @@
+{:paths ["scripts" "test"
+         "shared/skills/add-todo/src"
+         "shared/skills/add-todo/test"
+         "shared/skills/pk-tmux/src"
+         "shared/skills/sandbox/src"
+         "shared/skills/sandbox/test"]
+
+ :deps {io.github.caseneuve/mux-bb
+        {:git/url "https://github.com/caseneuve/mux-bb.git"
+         :git/sha "117af6d76850346ef95ff696e18920338df37b54"}}
+
+ :tasks
+ {:init
+  (do
+    (require '[clojure.string :as str])
+    (require '[clojure.java.shell :as jsh])
+    (def end2edn-root (str (System/getenv "HOME") "/git/end2edn"))
+    (def podman-args
+      (str "podman run --rm "
+           "--network none "
+           "-v " (System/getProperty "user.dir") ":/work:ro "
+           "-v " end2edn-root ":" end2edn-root ":ro "
+           "--tmpfs /tmp:rw,mode=1777 "
+           "--tmpfs /var/tmp:rw,mode=1777 "
+           "-w /work "))
+    (def base-image "docker.io/babashka/babashka")
+    (def test-image "localhost/dotagents-test")
+    (def podman-base (str podman-args base-image))
+    (def podman-test (str podman-args test-image))
+    (def unit-runner "bb -cp scripts:test:shared/skills/add-todo/src:shared/skills/add-todo/test:shared/skills/pk-tmux/src:shared/skills/sandbox/src:shared/skills/sandbox/test test/unit/runner.clj")
+    (def callgraph-runner "bb --config shared/skills/callgraph/bb.edn test")
+    (def testmap-runner "python3 -m unittest shared.skills.testmap.test.test_common")
+    (def e2e-runner (str "bb -cp scripts:test:" end2edn-root "/src test/e2e/runner.clj"))
+    ;; ── Relay config ──
+    ;; Temporary compatibility wrappers delegate to the extracted package.
+    (def relay-manager (str (System/getenv "HOME")
+                            "/git/pi/pi-agent-channel/scripts/relay-manager.ts")))
+
+  build:test-image
+  {:doc "Build the podman test image (with tmux)"
+   :task (shell "podman build -t dotagents-test -f test/Containerfile .")}
+
+  test
+  {:doc "Run unit, testmap, callgraph, and E2E tests in isolated podman containers"
+   :task (do
+           (run 'test:unit)
+           (run 'test:testmap)
+           (run 'test:native)
+           (run 'test:callgraph)
+           (println)
+           (run 'test:e2e))}
+
+  test:unit
+  {:doc "Run pure unit tests in isolated podman container"
+   :task (shell (str podman-test " " unit-runner))}
+
+  test:testmap
+  {:doc "Run testmap Python unit tests in an isolated container"
+   :task (shell (str podman-args " python:3.13-slim " testmap-runner))}
+
+  test:native
+  {:doc "Validate native manifest and portable helpers in isolated podman (rebuild test image first)"
+   :task (shell (str podman-test " python3 test/native_resources_test.py"))}
+
+  test:callgraph
+  {:doc "Run callgraph analyzer-backed tests in isolated podman container"
+   :task (shell (str podman-test " " callgraph-runner))}
+
+  test:e2e
+  {:doc "Run end2edn E2E tests in isolated podman container"
+   :task (shell (str podman-test " " e2e-runner
+                     (when (seq *command-line-args*)
+                       (str " " (str/join " " *command-line-args*)))))}
+
+  bootstrap
+  {:doc "Set up Claude/Agents only (default: both); Pi uses native pi install"
+   :task (apply shell "bb" "-m" "bootstrap" *command-line-args*)}
+
+  boot
+  {:doc "Alias for bootstrap"
+   :task (run 'bootstrap)}
+
+  test:ci
+  {:doc "Run tests directly (CI only)"
+   :task (do
+           (when-not (System/getenv "CI")
+             (println "Error: test:ci can only run in CI environments")
+             (println "Use 'bb test' locally to run in isolated podman")
+             (System/exit 1))
+           (shell unit-runner)
+           (shell testmap-runner)
+           (shell "python3 test/native_resources_test.py")
+           (shell callgraph-runner)
+           (println)
+           (shell (str e2e-runner
+                       (when (seq *command-line-args*)
+                         (str " " (str/join " " *command-line-args*))))))}
+
+  ;; ── Relay management ──
+  ;; Compatibility wrappers; pi-agent-channel owns the implementation.
+
+  relay:status
+  {:doc "Show relay process status (PID, uptime, socket, log tail)"
+   :task (shell "bun" relay-manager "status")}
+
+  relay:start
+  {:doc "Start the package-owned relay detached; logs to /tmp/agent-relay.log"
+   :task (shell "bun" relay-manager "start")}
+
+  relay:stop
+  {:doc "Stop the running relay (SIGTERM, clean shutdown)"
+   :task (shell "bun" relay-manager "stop")}
+
+  relay:restart
+  {:doc "Restart the relay (stop + short pause + start)"
+   :task (shell "bun" relay-manager "restart")}
+
+  relay:logs
+  {:doc "Tail the relay log (Ctrl+C to stop)"
+   :task (shell "bun" relay-manager "logs")}}}

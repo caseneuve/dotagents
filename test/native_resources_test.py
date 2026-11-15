@@ -33,6 +33,9 @@ class NativeResourcesTest(unittest.TestCase):
                      "test/unit/bootstrap_pure_test.clj", "settings-hooks.json",
                      "settings-permissions.json", "Justfile"):
             self.assertFalse((ROOT / path).exists(), path)
+        skill = (ROOT / "skills/add-todo/SKILL.md").read_text()
+        self.assertNotRegex(skill, r"(?m)^ag-todo\\s")
+        self.assertIn('TODO="<resolved-add-todo-directory>/ag-todo"', skill)
         tasks = (ROOT / "bb.edn").read_text()
         for obsolete in ("bootstrap", "relay:", "mux-bb", "end2edn", "shared/"):
             self.assertNotIn(obsolete, tasks)
@@ -45,6 +48,8 @@ class NativeResourcesTest(unittest.TestCase):
         index = json.loads((ROOT / "archive/index.json").read_text())
         self.assertEqual("7a592f9c9290b6f670eda23662da2f52f60187bc", index["source_ref"])
         self.assertTrue(index["files"])
+        for name in ("AGENTS.md", "CLAUDE.md", "AGENTS.override.md"):
+            self.assertEqual([], list((ROOT / "archive").rglob(name)))
         self.assertEqual(len(index["files"]), len({r["original"] for r in index["files"]}))
         for row in index["files"]:
             path = ROOT / row["archive"]

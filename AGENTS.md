@@ -1,275 +1,110 @@
 # AGENTS.md
 
-Guidance for agents working in this `dotagents` repo.
+## Scope and layout
 
-## Project shape
+Dotagents is **Pi only**. `package.json` explicitly exposes five `skills/`
+directories (with helpers/tests) and five `prompts/` files; no extensions/themes.
+Native Pi packages are the only installation path. No bootstrap, PATH shim,
+settings writer, parallel Claude/Agents tree or `~/.agents` installation.
+Typesafe is separately owned and stays untouched.
 
-This repo maintains parallel agent runtimes and shared helpers:
+- `skills/`: canonical callgraph, dataflow, add-todo, org-journal and to-skill.
+- `prompts/`: canonical ans, be-concise, handoff, speak-human and style.
+- `test/`: maintained skill/helper/native resource tests.
+- `archive/`: inactive history; consult `archive/index.json` for source blob/mode,
+  original path and replacement. Historical instructions are not current policy.
+- `pi/`: retired guidance plus manifest-excluded legacy extension/theme sources
+  pending separately gated retirement. No new implementation goes here.
+- `todos/`: durable task history; archival never means unfinished work shipped.
 
-- `claude/` -- Claude-facing docs/config
-- `agents/` -- Codex/agents-facing docs/config
-- `shared/` -- shared hooks and helper scripts used by multiple runtimes
-- `pi/` -- independent prompts and preserved, manifest-excluded legacy Pi sources
-- `scripts/` -- repo-local Babashka entrypoints
-- `test/` -- unit + E2E tests
+Read the relevant **installed Pi documentation and examples in full** before
+changing package discovery, skills, prompts or SDK tests. Keep README/manifest,
+helper examples and active tasks/tests aligned. Do not update another repository
+or live settings/installations as an incidental path fix: provide a lead handoff.
 
-## Design principles (for scripting)
+## Engineering
 
-### Push I/O to the boundary
+Prefer FCIS: pure transformations/planning, small I/O/CLI boundaries, direct tests
+of pure logic. Keep helpers beside SKILL.md and resolve them by discovered absolute
+skill path. No helper should need the caller's Git root, a fixed HOME, a root
+config or an `ag-todo` PATH installation. Avoid duplicate implementations and
+compatibility shims. Preserve skill responsibility unless scope explicitly changes.
 
-Prefer FCIS-style structure:
-- keep planning, transformation, merge, and formatting logic pure when possible
-- keep filesystem writes, process execution, and CLI exits at the edges
+Testable changes use RED → GREEN → REFACTOR. Keep meaningful RED/GREEN checkpoint
+commits separate; fixes and later review findings use new commits, never rewriting
+reviewed/pushed history. Tests must use actual helpers, not substitutes.
 
-For Babashka scripts in this repo:
-- pure logic should be easy to require from tests
-- impure logic should stay in small executor / CLI layers
+## Validation
 
-### Prefer shared helpers over duplication
+Prefer the `bb.edn` tasks documented in README:
 
-If behavior is the same across runtimes, put it in `shared/` and wire runtime-specific trees around it.
-Do not copy helper logic into multiple runtime directories unless the behavior genuinely diverges.
-
-Skills and extensions are cross-platform. Backend auto-detection (cmux, tmux,
-or file-only) handles platform differences at runtime, not at build/bootstrap time.
-Bootstrap assembles Claude/Agents trees; native Pi installation uses the explicit
-root manifest. Runtime-specific Claude/Agents add-todo/org-journal docs take
-precedence over generic shared docs.
-
-### Preserve intentional parity across runtimes
-
-When changing shared workflows, check whether the change should also affect:
-- `claude/`
-- `agents/`
-- `shared/`
-- `pi/`
-
-In particular:
-- agent-facing skill docs should stay meaningfully aligned across `claude/skills/` and `agents/skills/`
-- shared executable helpers should live under `shared/` when they are not runtime-specific
-- avoid silent capability drift between runtimes
-
-## Bootstrap
-
-Canonical entrypoint:
-
-```bash
-bb bootstrap
-```
-
-Shortcut alias:
-
-```bash
-bb boot
-```
-
-Supported modes:
-
-```bash
-bb bootstrap claude
-bb bootstrap agents
-bb bootstrap all
-```
-
-Supported flags:
-
-```bash
-bb bootstrap --dry-run
-bb bootstrap --force
-```
-
-Expected behavior:
-- preserve directory structure where runtime install trees are still used
-- skip already-correct links
-- replace stale symlinks
-- do not overwrite regular files unless `--force`
-- default/all means Claude + Agents only; reject pi without writes
-- never read/write Pi settings; native `pi install [-l] <repo-path>` is the only Pi install path
-
-When changing bootstrap behavior:
-- update tests first or alongside the code
-- keep README/docs in sync
-- preserve idempotence
-
-## Testing
-
-### Use `bb.edn` tasks
-Prefer repo tasks over ad hoc commands.
-
-```bash
-bb test
+```sh
+bb build:test-image
 bb test:unit
-bb test:e2e
+bb test:native
+PI_PACKAGE_DIR=/path/to/node_modules/@earendil-works/pi-coding-agent bb test:pi
+bb build:callgraph-image
+bb test:callgraph
 ```
 
-### Containerized E2E is the default
-E2E tests are intended to run in podman and should not touch the host environment.
+Containers are the default: source read-only, private HOME/project ancestors
+outside `/home`, network disabled for execution, no credential/provider API calls.
+`test:ci` is only for an already isolated CI. Native resource tests must exercise
+the explicit allowlist and real package loader, including selective loading.
+Pinned clj-kondo v2026.01.19 is required for the analyzer suite; missing/different
+versions are a disclosed baseline blocker, not permission to repin or fake green.
+Keep only dependencies actually needed by maintained tests/skills.
 
-When adding tests:
-- keep host writes out of the test flow
-- use temporary paths under `/tmp` inside the container
-- prefer assertions on resulting state over fragile output scraping
+## Preservation and gate
 
-### Unit-test pure functions directly
-If logic can be tested without shelling out, do that.
+Archive only explicitly inventoried tracked files, preserving bytes/modes with
+an original-path/blob/mode/replacement recovery index. Do not sweep ignored
+node_modules, secrets, local settings, sessions or untracked/dirty user work.
+Never register archive directories as resources. Preserve unfinished testmap,
+review/Linear and other product work honestly; do not mark those todos done.
 
-Good unit-test targets:
-- pure planning helpers
-- merge/transformation functions
-- formatting logic
-- normalization helpers
+The remaining legacy `pi/extensions`, `pi/themes` and their tests have a separate
+retirement branch. It is **not landable** before the existing seven-day AND
+five-normal-session/two-project-per-active-OS gate plus explicit approval. Tests
+and preview sessions do not count as ordinary-use soak. The three approved helper
+archives are already separate; their approval does not waive the general gate.
 
-### Use fixtures for readable E2E setup
-When E2E tests need static input files:
-- prefer `test/fixtures/` over giant inline shell blobs
-- avoid escaped JSON in `sh -c` when a fixture file is enough
+## Work tracking and commits
 
-## Relay management
+Every non-trivial change has a focused `todos/NNNN-*.md`; sub-tasks use `NNNN.M`.
+Mark open → in_progress in the first branch commit:
+`[chore] mark #NNNN in_progress`. Use frontmatter `blocked-by`/`blocks` for real
+sequencing. Reference the ID in every later subject, e.g.
+`[test(#NNNN)] RED portable helper regression`. The final task commit marks only
+its completed scope done: `[chore] mark #NNNN done`. Trivial typo/whitespace chores
+need no todo. Invoke `skills/add-todo/ag-todo` by resolved absolute path.
 
-The agent-channel relay (`bun shared/relay/main.ts`) is a long-running
-per-user daemon. Manage it through `bb` tasks, not by hand-starting
-shells:
+Non-trivial multi-commit work uses a flat `NNNN-slug` feature branch off clean
+`master` (sub-task `NNNN.M-slug`), preferably a standalone clone or dedicated task
+worktree. **Never run npm lifecycle scripts in a linked worktree.** Never edit
+canonical master, merge, push, tag or change live user installations without
+explicit human authorization. Approved integrations use `git merge --ff-only`;
+rebase first if needed, then re-review any changed source.
 
-```bash
-bb relay:status    # PID, uptime, socket, log tail
-bb relay:start     # start detached; logs to /tmp/agent-relay.log
-bb relay:stop      # SIGTERM, clean shutdown
-bb relay:restart   # stop + 700ms pause + start
-bb relay:logs      # tail -f the log
-```
+## Independent review
 
-Use `bb relay:restart` after any change to `shared/relay/server.ts`
-(or anything it imports) — the relay caches modules at startup, so
-edits don't take effect until the process restarts.
+Implementation is incomplete until another agent reviews the **exact final ref**.
+Coordinate with the assigned independent reviewer through available agent
+messaging; do not require retired channel tools/daemons or install a replacement.
+If no transport/reviewer is available, notify the human instead of claiming review.
+No subagent spawning when the task forbids it.
 
-Relay state is in-memory only (`ChannelStore`). A restart wipes every
-channel's message history. Active UdsTransport / HttpTransport clients
-auto-reconnect and re-subscribe on the next operation.
+1. Send the lead/reviewer branch, clone location, base and candidate SHA, problem,
+   acceptance checklist, commit list, test commands/results and limitations.
+2. Acknowledge requests promptly; keep the review conversation active. Re-ping
+   around two minutes and notify the human around five if no response.
+3. Reviewer runs relevant tests and walks manifest, helper paths, archive inventory,
+   docs/tasks/references and safety boundaries; replies APPROVED or concrete
+   CHANGES-REQUESTED. Address findings in new commits and request exact-ref review.
+4. No source changes after approval without renewed review. Close with mutual
+   acknowledgment; approval is not merge/live-handoff authorization.
 
-## end2edn usage in this repo
-The E2E suite is intentionally dogfooding-oriented.
-
-When working on E2E tests here:
-- use `end2edn` features idiomatically
-- prefer setup/teardown plus assertions over one-off shell tricks
-- add custom assertions only when they are genuinely useful
-- if custom assertions prove broadly useful, consider upstreaming them to `end2edn`
-
-## Pi extension work
-
-### Format TypeScript consistently
-
-When editing Pi extensions, use Prettier with spaces, not tabs:
-
-```bash
-bunx prettier --write --parser typescript --use-tabs false pi/extensions/*.ts
-```
-
-Check formatting with:
-
-```bash
-bunx prettier --check --parser typescript --use-tabs false pi/extensions/*.ts
-```
-
-### Preserve extension responsibilities
-
-When changing extensions:
-- do not silently repurpose an existing extension without confirmation
-- prefer adding a new extension over changing the responsibility of an old one
-- treat current runtime UX as a contract unless the user asks to redesign it
-
-Keep responsibilities separated unless explicitly requested otherwise. For example, do not merge footer concerns and conversational branch-status concerns by accident.
-
-## Documentation
-
-When behavior changes, update the relevant docs:
-- `README.md`
-- `pi/README.md`
-- skill docs when applicable
-- task/test docs when commands change
-
-Docs should describe the canonical current path, not legacy entrypoints or historical behavior.
-
-## Work tracking
-
-Every non-trivial change references an item in `todos/NNNN-*.md` (sub-tasks use `NNNN.M-*.md`).
-
-- `status: open` → `in_progress` when work starts, with a `[chore] mark #NNNN in_progress` commit as the first commit on the branch.
-- `status: in_progress` → `done` in the final commit: `[chore] mark #NNNN done`.
-- Use `blocked-by` / `blocks` frontmatter to model sequencing.
-- Reference the todo ID in every commit subject on the branch (e.g. `[pi(#0018)] …`, `[relay(#0020)] …`).
-
-**Trivial exceptions** (no todo required): typo fixes, removing a committed temp file, trailing-whitespace or import-order cleanup. Use `[chore] ...` with no todo id. If in doubt, file a todo — takes 30 seconds via `bb -cp ~/.agents/skills/add-todo/src -m todo.cli new`.
-
-## Branches & merges
-
-- The trunk branch is whatever the current default is on this host (today: `master`). References to "trunk" below mean that branch.
-- Single-commit chore-style work lands directly on the trunk branch.
-- Multi-commit scope uses a flat feature branch named `NNNN-slug`; sub-task scope uses `NNNN.M-slug`. Never `trunk/NNNN-slug` — git refuses nested refs when the parent branch exists.
-- Merge feature branches with `git merge --ff-only` to keep history linear; if ff is refused, rebase on trunk first.
-- Delete the feature branch after merge.
-- Never `git push` without explicit human approval. Never `git commit --amend` a commit that has been reviewed or pushed.
-
-## Commits
-
-Use commit messages in this format:
-
-```text
-[category] short description
-```
-
-Examples:
-- `[pi] fix repo-todos overlay height clipping`
-- `[shared] add bootstrap symlink helper`
-- `[test] cover stale symlink replacement`
-
-Prefer the narrowest useful category for the area changed, such as:
-- `pi`
-- `shared`
-- `agents`
-- `claude`
-- `scripts`
-- `test`
-- `docs`
-- `bootstrap`
-
-### Checkpoint commits
-
-When the RED commit is independently meaningful — e.g. a characterization test for a bug that was already passing, or a failing test written before implementation — keep RED and GREEN in separate commits so `git bisect` can distinguish “was the test there?” from “was it passing?” Refactors after green are their own commits.
-
-For bug fixes where the regression test and the fix are logically one unit (test fails only because the fix isn’t applied yet), one commit is fine. Doc-only and refactor-only changes have no test phase to split.
-
-Never squash unrelated concerns into one commit. One logical change per commit.
-
-## Peer review
-
-Implementation is not complete until another agent has reviewed it. The agent-comms flow (see `~/.agents/skills/agent-comms/SKILL.md` for OVER/OUT sign-off conventions and ack-first protocol):
-
-1. **Announce** on the lobby: `review-request` naming the branch, todo ID, and a sub-channel `<your-agent>/review-<NNNN>`.
-2. **Sub-channel message** carries: problem statement, commit list, acceptance-criteria checklist, test results, any known warts or deferred items.
-3. **Reviewer acks** on the sub-channel (`type: "ack"`), runs tests locally, walks the diff, replies with `code-review` → `APPROVED` or `CHANGES-REQUESTED` with concrete items.
-4. **Implementer addresses findings** in new commits (not `amend`). Re-request review by sending a short `status` message on the same sub-channel listing the new commit shas and which findings each addresses; no need to repeat the full `review-request`.
-5. **Merge only after `APPROVED`** — and only with explicit human merge authorization.
-6. Close the review cycle with mutual OUT: implementer `ack. OUT` once reviewer has approved.
-
-Sub-channels are task-scoped (`pqdw/review-0042`, not `pqdw/review`). A closed channel is dead — new task, new channel.
-
-**Hard guardrails (must):**
-- Do not start non-trivial multi-commit work on trunk; create `NNNN-slug` / `NNNN.M-slug` first.
-- For review, start `channel_watch(<review-channel>, catch_up=true)` before (or immediately with) the first review-request message and keep it watched until review is resolved.
-- After requesting review, stay active on that channel; if blocked/silent, follow timeout escalation (re-ping ~2m, notify human ~5m).
-
-The protocol mechanics (ack-first, OVER/OUT, turn-suppression for `type: "ack"`) are defined once in `~/.agents/skills/agent-comms/SKILL.md`. If that skill and this section disagree, the skill wins — these AGENTS.md notes are repo-specific overrides, not a second source of truth.
-
-**If the reviewer goes silent**, follow the timeout pattern from the skill: re-ping the sub-channel at ~2 min, notify the human at ~5 min. Do not block the branch indefinitely on an unresponsive reviewer.
-
-## Final check before finishing a change
-
-Before wrapping up, verify:
-- there is one obvious canonical implementation for the behavior you changed
-- docs match behavior
-- tests exercise the canonical entrypoint
-- obsolete paths were not accidentally kept alive
-- runtime parity is still preserved where it should be
-- branch was reviewed and approved before merging; merge was `--ff-only`
-- referenced todo is marked `done` in the final commit
+Before finishing, verify one canonical implementation, current docs, actual native
+and helper proof, unchanged historical payloads/user work, honest unfinished/gated
+scope, exact-ref approval and a bounded lead handoff. Clearly separate landable-now
+source changes from soak-gated archive preparation.

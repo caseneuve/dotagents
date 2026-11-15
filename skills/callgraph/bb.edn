@@ -26,4 +26,8 @@
                (System/exit 2))
 
              :else
-             (babashka.process/shell "bb" "shared/skills/callgraph/test/test_clj_callers.clj")))}}}
+             (babashka.process/shell
+               "bb"
+               (str (babashka.fs/path
+                      (babashka.fs/parent (System/getProperty "babashka.config"))
+                      "test/test_clj_callers.clj")))))}}}
