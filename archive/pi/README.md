@@ -1,6 +1,7 @@
 # Historical Pi sources — user-authorized reversible retirement
 
-**#0069.2 source-retirement candidate; exact review and lead adoption required.**
+**#0069.2 completes authorized source retirement on this revision.**
+Exact review and actual lead-owned integration/host verification remain separate.
 This is not an installation package. Nothing here is exposed by
 the native manifest or executed by active tasks. No source/API modernization is
 part of the archive moves.
@@ -26,8 +27,10 @@ waives the old seven-calendar-day AND five-normal-session/two-project-per-active
 gate only for this reversible scope. `completed:false` and `waived:true` are
 intentional; tests/previews do not prove ordinary-use soak. Original cutover
 2026-11-15T16:20:48Z/earliest-calendar2026-11-22T16:20:48Z remain historical metadata.
-#0069.1 remains completed historical preparation; source review is not a claim
-of lead integration, live adoption, product/API delivery or publication.
+#0069.1 remains completed historical preparation; #0047 is done for source
+retirement with its old checklist superseded/waived. No further retirement gate
+or user decision remains. Source completion is not a claim of lead integration,
+live adoption, ordinary-use soak, product/API delivery or publication.
 
 ## Three previously approved helper archives (UNCHANGED)
 

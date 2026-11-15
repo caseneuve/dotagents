@@ -39,7 +39,7 @@ Git history and original refs remain; the index is not a backup of untracked wor
 
 ## User-authorized reversible Pi retirement (#0069.2)
 
-This candidate builds on independently reviewed #0069.1 preparation
+This completed source retirement builds on independently reviewed #0069.1 preparation
 c46016aca34051c3855d51ada9c0764cb1aeab21, with approved core
 2dc662c7f1f8ae250266490822b0fac5bf800def as ancestor. The entire active `pi/`
 root is absent, with no empty directory or compatibility link.
@@ -70,9 +70,11 @@ per active OS** gate only for this reversible scope. `waived:true` and
 `completed:false` are intentional; tests/previews are not ordinary-use evidence.
 Original cutover2026-11-15T16:20:48Z and earliest-calendar2026-11-22T16:20:48Z
 are retained as historical gate metadata, not a completed eligibility claim.
-#0069.1 remains historical preparation; exact-final review and lead-owned
-integration/host verification remain required. No live adoption, product/API or
-publication completion is certified by this source candidate.
+#0069.1 remains historical preparation; #0047 is done for source retirement on
+this revision, with its old checklist superseded/waived. No further retirement
+gate/user decision remains. Exact-final review and lead-owned integration/host
+verification remain required; source completion is not live adoption, product/API
+delivery or publication certification.
 
 The [three previously approved helper archives](pi/README.md) remain unchanged.
 That approval does not establish general retirement or equivalent native behavior.

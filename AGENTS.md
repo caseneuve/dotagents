@@ -111,5 +111,5 @@ No subagent spawning when the task forbids it.
 
 Before finishing, verify one canonical implementation, current docs, actual native
 and helper proof, unchanged historical payloads/user work, honest unfinished/gated
-scope, exact-ref approval and a bounded lead handoff. Clearly separate landable-now
-source candidates from historical preparation, actual live adoption and uncompleted soak.
+scope, exact-ref approval and a bounded lead handoff. Clearly separate completed
+source retirement from historical preparation, actual live adoption and uncompleted soak.

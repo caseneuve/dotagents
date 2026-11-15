@@ -1,7 +1,7 @@
 {
   "source_ref": "7a592f9c9290b6f670eda23662da2f52f60187bc",
   "landable_parent": "2dc662c7f1f8ae250266490822b0fac5bf800def",
-  "scope": "User-authorized reversible source retirement of entire dotagents/pi plus historical test/pi. Candidate for lead adoption after exact-ref review; soak waived for this scope, not completed.",
+  "scope": "User-authorized reversible source retirement of entire dotagents/pi plus historical test/pi is complete on this revision. Lead owns exact-reviewed-ref integration and actual host verification; soak waived for this scope, not completed.",
   "gate": {
     "calendar_days": 7,
     "normal_sessions": 5,

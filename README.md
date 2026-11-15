@@ -123,7 +123,7 @@ old dotagents implementations should be loaded alongside them.
 
 [Archive index and recovery](archive/README.md) preserve obsolete Claude/Agents,
 bootstrap and unused shared resources, including unfinished skills/product work.
-**#0069.2 is the user-authorized reversible source-retirement candidate.**
+**#0069.2 completes the user-authorized reversible source retirement on this revision.**
 The entire `pi/` directory is absent, with no compatibility directory or link.
 [retirement-index.json](archive/pi/retirement-index.json) verifies all 50 archived
 files: the 49 previously reviewed extension/theme/test payloads (seven old tests)
@@ -138,5 +138,7 @@ scope** (`waived:true`, `completed:false`). No ordinary-use soak completion is
 claimed. #0069.1 remains the completed historical preparation, not retroactive
 adoption. The three previously approved helper archives, all earlier historical
 payloads and canonical skills/helpers/prompts/manifest remain unchanged. Lead
-alone integrates the exact reviewed candidate and verifies the host. No product,
-API, publication, authenticated-provider or live-adoption completion is inferred.
+alone integrates the exact reviewed revision and verifies actual host adoption.
+No further source-retirement gate/user decision remains. This source completion
+does not certify ordinary-use soak, product/API delivery, publication,
+authenticated-provider behavior or live host adoption.

@@ -1,6 +1,6 @@
 ---
-title: retire migrated Pi sources from dotagents after package soak
-status: open
+title: Complete user-authorized reversible archive of the legacy Pi source tree
+status: done
 priority: medium
 type: chore
 labels: [pi, packaging, cleanup]
@@ -31,11 +31,15 @@ and no remaining pi root or compatibility directory. Index `waived:true` /
 2026-11-15T16:20:48Z/earliest2026-11-22T16:20:48Z remain historical gate metadata.
 Three approved #0047.1 helper archives and earlier historical payloads are unchanged.
 
-This general retirement item stays OPEN; #0069.2 DONE covers only the authorized
-reversible source candidate/review/handoff, not general soak, product/API work,
-publication, lead integration or final live host verification. Do not infer those
-outcomes from source layout cleanup, a preview or archive preparation. Preserve experiments and unfinished skill/product
-work without false completion claims. Verification uses native Pi packages and
+This item is DONE for complete user-authorized reversible SOURCE retirement on
+this revision, including Tree-sitter archive under its explicit no-maintained-
+replacement disposition. The historical checklist below is superseded/waived for
+this source scope, NOT satisfied by invented ordinary-use evidence. No further
+retirement gate or user decision remains. #0069.2 records implementation, isolated
+proof, independent review and handoff. Lead alone integrates and verifies actual
+host adoption; DONE does not claim ordinary-use soak, product/API delivery,
+publication or live host verification. Experiments and unfinished skill/product
+work remain preserved without false completion claims. Verification uses native Pi packages and
 real helpers; bootstrap is retired. Current recovery policy is archive/README.md.
 
 ## Historical proposal (superseded; do not execute)
@@ -48,7 +52,12 @@ is excluded from extraction and must remain under `pi/extensions/treesitter` unl
 gives it an explicit disposition. Removal happens only after explicit soak evidence shows the
 package-based configuration is stable.
 
-## Acceptance Criteria
+## Historical acceptance checklist (superseded/waived, not evidence of completion)
+
+These unchecked historical criteria are retained verbatim as context, not an
+active gate or unfinished source-retirement requirement. The explicit user waiver
+above authorizes reversible archival of the entire tree, including Tree-sitter;
+it does not assert ordinary-use observations or implementation of experiments.
 
 - [ ] At least seven calendar days have elapsed since the recorded `0046` cutover.
 - [ ] Soak evidence records at least five normal Pi sessions across at least two projects on each routinely used OS (Linux and macOS when both are in active use).
