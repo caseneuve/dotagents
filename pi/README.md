@@ -65,8 +65,10 @@ Lead coordinates removal of workbench duplicates only after this handoff passes.
 
 ## Excluded, preserved, and deferred
 
-All legacy source directories remain physically present, **not exposed by
-this native manifest**. Themes are owned by `pi-dotagents-resources`.
+Legacy sources remain preserved, **not exposed by this native manifest**.
+The three helpers explicitly approved in #0047.1 are staged under
+[`archive/pi/`](../archive/pi/README.md); other legacy sources remain in place.
+Themes are owned by `pi-dotagents-resources`.
 Retained executable capabilities are owned by the extracted conversation-tools,
 workbench, runtime-ui, usage, and emacs-bridge packages; select those separately.
 
@@ -82,10 +84,11 @@ preserved archive candidates, not upgrade targets.
 `all`; `pi` is rejected without writes. Existing user Pi settings are neither
 migrated nor cleaned up. Integrating this branch into the active root checkout
 and changing live selections requires later explicit live-setup approval.
-No source retirement is authorized: #0047's preservation/soak gate remains
-(at least seven days and five sessions over two projects per active OS),
-followed by separately approved archive/removal planning. Independent prompts
-are not retired copies.
+Only #0047.1's three named helper moves have explicit staging approval; this
+does not authorize active-root adoption, settings changes or any other retirement.
+#0047's broader preservation/soak gate remains (at least seven days and five
+sessions over two projects per active OS), followed by separately approved
+archive/removal planning. Independent prompts are not retired copies.
 
 ## Verification
 
@@ -302,27 +305,13 @@ Focused alias commands (no arguments needed):
 - `/diff-latest` — shorthand for `/diff latest`
 - `/diff-vs-master` — shorthand for `/diff master`
 
-### `extensions/bookmark.ts`
+### Archived bookmark helper
 
-Adds a `/bookmark` command for quickly labeling a prompt on the current branch.
-
-What it does:
-
-- shows a simple picker of user prompts from the active branch only
-- lets the user choose which prompt should receive a label
-- prompts for a label name, unless one is provided as an argument
-- applies the label using pi bookmarks so it appears in `/tree`
-- emits an update event so `branch-status` refreshes immediately after adding a bookmark
-
-Usage:
-
-- `/bookmark`
-- `/bookmark my-label`
-
-Notes:
-
-- prompt selection is restricted to the current branch path
-- labels can later be edited or removed in the standard `/tree` UI
+The custom `/bookmark` picker/label utility is intentionally dropped and its
+unchanged source is preserved at
+[`archive/pi/extensions/bookmark.ts`](../archive/pi/extensions/bookmark.ts).
+See the [archive rationale and recovery guide](../archive/pi/README.md).
+This is not a claim of identical native bookmark UX.
 
 ### `extensions/last-assistant-block.ts`
 
@@ -527,28 +516,22 @@ pi install git:github.com/caseneuve/pi-usage@v2026.9.13
 The former dotagents implementation is preserved by the annotated
 `pre-pi-usage-cutover-2026-09-13` tag for rollback.
 
-### `extensions/herdr-pi-session-name.ts`
+### Archived Herdr companion
 
-Mirrors Pi session metadata into Herdr's visible agent label and sidebar.
+The unchanged legacy sender is preserved at
+[`archive/pi/extensions/herdr-pi-session-name.ts`](../archive/pi/extensions/herdr-pi-session-name.ts).
+It used `HERDR_*` and `pane.report_metadata`, not hc's terminal protocol.
+Pi's native name/title/status support is only a partial replacement; the external
+sidebar model token is not replaced. The separate global Herdr-managed
+`herdr-agent-state.ts` is untouched. See the [archive guide](../archive/pi/README.md).
 
-What it does:
+### Archived Bedrock empty-response workaround
 
-- reports the Pi `/name` value as display-only Herdr pane metadata
-- reports the active Pi model as the Herdr `$model` token
-- updates the label when Pi emits `session_info_changed`
-- updates the model when Pi emits `model_select`
-- clears its label when the Pi session name is cleared
-- does nothing unless Pi is running in a Herdr-managed pane (`HERDR_ENV=1`)
-
-Notes:
-
-- requires Herdr's bundled Pi integration for its socket environment
-- use `$model` in the Pi-specific agent-sidebar row to display the model, for
-  example `pi = [["state_icon", "workspace", "tab"], ["agent", "$model"]]`
-- this is a companion extension; do not modify Herdr's managed
-  `herdr-agent-state.ts`, which may be overwritten by integration updates
-- Pi's `session_info_changed` event is required for live rename updates;
-  session start still reports the current name on older runtimes
+The unchanged, previously excluded workaround is preserved at
+[`archive/pi/extensions/bedrock-empty-response-mitigation.ts`](../archive/pi/extensions/bedrock-empty-response-mitigation.ts).
+Its successful-stop/empty-content/all-zero-usage trigger is not known fixed by
+native Pi error retry; no real AWS recovery or equivalent replacement is claimed.
+See the [archive rationale and recovery guide](../archive/pi/README.md).
 
 ### `extensions/assistant-outline/`
 
