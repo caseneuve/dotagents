@@ -1,6 +1,31 @@
 # dotagents
 
-Five independent skills and five prompt templates for [Pi](https://pi.dev/).
+The entry point for my supported [Pi](https://pi.dev/) packages. Each package
+can be installed independently; this repository also supplies five skills and
+five prompt templates.
+
+## Supported packages
+
+| Repository | Resources / purpose |
+| --- | --- |
+| [dotagents](https://github.com/caseneuve/dotagents) | Five skills with bundled helpers; five prompt templates |
+| [pi-conversation-tools](https://github.com/caseneuve/pi-conversation-tools) | Conversation outline and session notes |
+| [pi-workbench](https://github.com/caseneuve/pi-workbench) | Diff review, repo todos, journal browsing, cwd editor and screenshots |
+| [pi-runtime-ui](https://github.com/caseneuve/pi-runtime-ui) | Branch status, editor status and runtime footer |
+| [pi-usage](https://github.com/caseneuve/pi-usage) | Subscription usage and credit visibility |
+| [pi-emacs-bridge](https://github.com/caseneuve/pi-emacs-bridge) | On-demand Emacs attach bridge for Pi |
+| [pi-dotagents-resources](https://github.com/caseneuve/pi-dotagents-resources) | Modus Operandi and Modus Vivendi themes; themes only |
+
+Together these provide **12 extensions, five skills, five prompts and two themes**.
+Choose the packages you need; the table is not a bootstrap or an aggregate installer.
+Retired experiments are not part of this supported set.
+
+For package development, see
+[template-pi-package](https://github.com/caseneuve/template-pi-package), the Copier
+scaffold. It is development tooling, not another runtime package.
+
+## This repository
+
 The root `package.json` is the explicit native resource allowlist: **no
 extensions, themes, installer, lifecycle scripts, PATH shims or parallel runtime
 installation**. Typesafe remains a separately owned skill; this package does not
@@ -16,7 +41,16 @@ todos/    # work history, including unfinished and transferred work
 
 ## Native installation and selection
 
-Review the source, then choose a scope (replace the example path):
+Review a package's source and prerequisites, then install it using its GitHub
+repository. For example:
+
+```sh
+pi install git:github.com/caseneuve/dotagents
+pi install git:github.com/caseneuve/pi-workbench
+```
+
+Use any repository from the supported-package table the same way. Add `-l` for
+project scope. Local checkouts are also native package sources:
 
 ```sh
 pi install /absolute/path/to/dotagents       # personal
@@ -52,6 +86,11 @@ want. Remove obsolete broad loader declarations deliberately, after reviewing
 ownership and preserving local work; do not add compatibility links or install
 anything into `~/.agents` or a bin directory. Existing external installations and
 unrelated skills/auth/editor/model preferences are not managed here.
+
+Prompt and skill names share a namespace across packages. Keep one enabled owner
+per name: if a project package also provides `speak-human`, use `pi config --local`
+or that package's resource filters to disable the duplicate, rather than copying
+or deleting another package's source.
 
 ## Resources and helpers
 
@@ -116,29 +155,14 @@ needed for this resource-only package.
 
 ## Ownership and historical recovery
 
-Retained extensions belong to `pi-conversation-tools`, `pi-workbench`,
-`pi-runtime-ui`, `pi-usage` and `pi-emacs-bridge`; themes belong to
-`pi-dotagents-resources`. Select those native packages separately. None of the
-old dotagents implementations should be loaded alongside them.
+The supported-package table identifies the maintained owners. The old `pi/`
+source tree is gone; its extensions, themes, tests and README are preserved under
+`archive/pi/`, not loaded alongside their maintained successors.
 
-[Archive index and recovery](archive/README.md) preserve obsolete Claude/Agents,
-bootstrap and unused shared resources, including unfinished skills/product work.
-**#0069.2 completes the user-authorized reversible source retirement on this revision.**
-The entire `pi/` directory is absent, with no compatibility directory or link.
-[retirement-index.json](archive/pi/retirement-index.json) verifies all 50 archived
-files: the 49 previously reviewed extension/theme/test payloads (seven old tests)
-plus the exact live master2dc662c `pi/README.md`, preserved as a clearly named
-[historical pointer](archive/pi/README.master-2dc662c.historical-pointer.md).
-Its old links/gate text are history, not current guidance.
-
-After being told nothing active remains there, the user explicitly approved
-archiving the entire directory and removing it. That reply waives the old
-seven-day/five-session/two-project-per-active-OS gate **only for this reversible
-scope** (`waived:true`, `completed:false`). No ordinary-use soak completion is
-claimed. #0069.1 remains the completed historical preparation, not retroactive
-adoption. The three previously approved helper archives, all earlier historical
-payloads and canonical skills/helpers/prompts/manifest remain unchanged. Lead
-alone integrates the exact reviewed revision and verifies actual host adoption.
-No further source-retirement gate/user decision remains. This source completion
-does not certify ordinary-use soak, product/API delivery, publication,
-authenticated-provider behavior or live host adoption.
+[Archive guidance and recovery](archive/README.md), the
+[obsolete-runtime index](archive/index.json) and the
+[50-file Pi retirement index](archive/pi/retirement-index.json) retain original
+paths, Git blobs, modes and replacement references. Archives also preserve
+unfinished experiments and former Claude/Agents/bootstrap material. They are
+historical records, not active instructions or supported packages. Archival does
+not mean unfinished features shipped or that ordinary-use soak was completed.
