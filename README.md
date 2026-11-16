@@ -83,8 +83,8 @@ ownership and preserving local work; do not add compatibility links or install
 anything into `~/.agents` or a bin directory. Existing external installations and
 unrelated skills/auth/editor/model preferences are not managed here.
 
-Prompt and skill names share a namespace across packages. Keep one enabled owner
-per name: if a project package also provides `speak-human`, use `pi config --local`
+Within each resource type, names are shared across packages. Keep one enabled
+owner per name: if a project package also provides `speak-human`, use `pi config --local`
 or that package's resource filters to disable the duplicate, rather than copying
 or deleting another package's source.
 
