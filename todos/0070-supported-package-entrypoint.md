@@ -21,7 +21,7 @@ No push, tag, npm publication, installation or runtime changes are included.
 ## Acceptance
 
 - [ ] Link all seven supported packages with accurate ownership/capabilities.
-- [ ] List template-pi-package separately as development tooling, not a runtime package.
+- [ ] Keep the entry point limited to supported public packages, without private tooling links.
 - [ ] Explain independent native installation and resource-name ownership; no bootstrap.
 - [ ] Keep archive recovery linked, without a long obsolete migration narrative.
 - [ ] Verify links/manifest descriptions and obtain independent exact-ref docs review.

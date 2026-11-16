@@ -20,10 +20,6 @@ Together these provide **12 extensions, five skills, five prompts and two themes
 Choose the packages you need; the table is not a bootstrap or an aggregate installer.
 Retired experiments are not part of this supported set.
 
-For package development, see
-[template-pi-package](https://github.com/caseneuve/template-pi-package), the Copier
-scaffold. It is development tooling, not another runtime package.
-
 ## This repository
 
 The root `package.json` is the explicit native resource allowlist: **no
